@@ -40,6 +40,25 @@ const CARS = [
   { name: 'BRUTE',   body: 0x9b59b6, accent: 0x4a2266, topMul: 1.15, steerMul: 0.85, accelMul: 1.50, cost: 200, desc: 'Acceleration +' },
   { name: 'GHOST',   body: 0xecf0f1, accent: 0x34495e, topMul: 1.30, steerMul: 1.30, accelMul: 1.20, cost: 400, desc: 'Top-tier all-rounder' },
 ];
+const SHOP_PAINTS = [
+  { id: 'paint_stock',   name: 'STOCK',    color: null,     cost: 0   },
+  { id: 'paint_crimson', name: 'CRIMSON',  color: 0xe74c3c, cost: 50  },
+  { id: 'paint_ocean',   name: 'OCEAN',    color: 0x2980b9, cost: 50  },
+  { id: 'paint_emerald', name: 'EMERALD',  color: 0x27ae60, cost: 50  },
+  { id: 'paint_gold',    name: 'GOLD',     color: 0xf1c40f, cost: 75  },
+  { id: 'paint_violet',  name: 'VIOLET',   color: 0x8e44ad, cost: 75  },
+  { id: 'paint_stealth', name: 'STEALTH',  color: 0x111118, cost: 100 },
+  { id: 'paint_snow',    name: 'SNOW',     color: 0xecf0f1, cost: 50  },
+  { id: 'paint_inferno', name: 'INFERNO',  color: 0xe67e22, cost: 75  },
+];
+const SHOP_TRAILS = [
+  { id: 'trail_default', name: 'DEFAULT',    color: '#333333', cost: 0   },
+  { id: 'trail_neon',    name: 'NEON CYAN',  color: '#00ffee', cost: 100 },
+  { id: 'trail_fire',    name: 'FIRE',       color: '#ff6600', cost: 100 },
+  { id: 'trail_violet',  name: 'VIOLET HAZE',color: '#cc44ff', cost: 100 },
+  { id: 'trail_ice',     name: 'ICE',        color: '#aaddff', cost: 75  },
+];
+
 const ENEMY_TYPES = [
   { kind: 'sedan', weight: 5, palette: [0xe74c3c,0xf39c12,0x9b59b6,0x1abc9c,0x34495e,0xc0392b] },
   { kind: 'sport', weight: 3, palette: [0xff5e3a,0xffd700,0x2ecc71,0xe91e63,0x1a1a1a,0xff66cc] },
@@ -95,14 +114,30 @@ try { unlocked = JSON.parse(localStorage.getItem('headon_unlocked')) || [0]; } c
 if (!Array.isArray(unlocked) || !unlocked.includes(0)) unlocked = [0];
 if (!unlocked.includes(carIdx)) carIdx = 0;
 let best = +localStorage.getItem('headon_best') || 0;
+let owned;
+try { owned = JSON.parse(localStorage.getItem('headon_owned')) || ['paint_stock','trail_default']; } catch(e){ owned=['paint_stock','trail_default']; }
+if (!owned.includes('paint_stock'))   owned.unshift('paint_stock');
+if (!owned.includes('trail_default')) owned.push('trail_default');
+let equippedPaint = localStorage.getItem('headon_paint') || 'paint_stock';
+let equippedTrail = localStorage.getItem('headon_trail') || 'trail_default';
+if (!owned.includes(equippedPaint)) equippedPaint = 'paint_stock';
+if (!owned.includes(equippedTrail)) equippedTrail = 'trail_default';
 
 function isUnlocked(i){ return unlocked.includes(i); }
 function unlockCar(i){ if (!unlocked.includes(i)) { unlocked.push(i); localStorage.setItem('headon_unlocked', JSON.stringify(unlocked)); } }
 function setCoins(n){ coins = Math.max(0, n); localStorage.setItem('headon_coins', coins); }
+function isOwned(id){ return owned.includes(id); }
+function ownItem(id){ if (!owned.includes(id)){ owned.push(id); localStorage.setItem('headon_owned', JSON.stringify(owned)); } }
+function equipPaint(id){ equippedPaint = id; localStorage.setItem('headon_paint', id); rebuildPlayerCar(); }
+function equipTrail(id){ equippedTrail = id; localStorage.setItem('headon_trail', id); }
+function getPlayerBodyColor(){ const p = SHOP_PAINTS.find(p => p.id === equippedPaint); return (p && p.color != null) ? p.color : CARS[carIdx].body; }
+function getTrailColor(){ const t = SHOP_TRAILS.find(t => t.id === equippedTrail); return t ? t.color : '#333333'; }
 
 // ===== runtime state =====
-const STATE = { MENU: 'menu', HELP: 'help', PLAYING: 'playing', DEAD: 'dead', ARENA: 'arena' };
+const STATE = { MENU: 'menu', HELP: 'help', PLAYING: 'playing', DEAD: 'dead', ARENA: 'arena', GARAGE: 'garage' };
 let state = STATE.MENU;
+let garageTab = 'cars'; // 'cars' | 'paint' | 'trails'
+let garageButtons = [];
 let menuBlink = 0;
 let lastEarned = 0;
 
@@ -633,7 +668,7 @@ function applyDamageVisual(group, dmgLevel) {
   const d = Math.max(0, Math.min(1, dmgLevel));
   const u = group.userData;
   // body color darken
-  const baseColor = new THREE.Color(CARS[carIdx].body);
+  const baseColor = new THREE.Color(getPlayerBodyColor());
   baseColor.multiplyScalar(1 - d * 0.5);
   u.bodyMat.color.copy(baseColor);
   // mirrors snap off
@@ -675,7 +710,7 @@ function rebuildPlayerCar() {
   if (playerCarGroup) {
     scene.remove(playerCarGroup);
   }
-  playerCarGroup = buildCar({ kind: 'sedan', color: CARS[carIdx].body, accent: CARS[carIdx].accent, isPlayer: true });
+  playerCarGroup = buildCar({ kind: 'sedan', color: getPlayerBodyColor(), accent: CARS[carIdx].accent, isPlayer: true });
   playerCarGroup.position.set(0, 0, 0);
   scene.add(playerCarGroup);
 }
@@ -769,10 +804,10 @@ window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   keys[k] = true;
   if (state === STATE.MENU && (k === ' ' || k === 'enter')) {
-    if (isUnlocked(carIdx)) startGame();
-    else tryBuy();
+    startGame();
   }
   if (state === STATE.HELP && (k === ' ' || k === 'enter' || k === 'escape')) state = STATE.MENU;
+  if (state === STATE.GARAGE && k === 'escape') state = STATE.MENU;
   if (state === STATE.DEAD) {
     if (k === ' ' || k === 'enter') state = STATE.MENU;
     else if (k === 'r') startGame();
@@ -786,18 +821,26 @@ canvas3d.addEventListener('mousemove', e => {
   const r = canvas3d.getBoundingClientRect();
   mouse.x = (e.clientX - r.left) * (W / r.width);
   mouse.y = (e.clientY - r.top)  * (H / r.height);
-  canvas3d.style.cursor = (state === STATE.MENU && btnAt(mouse.x, mouse.y)) ? 'pointer' : 'default';
+  const hovering = (state === STATE.MENU && btnAt(mouse.x, mouse.y)) ||
+                   (state === STATE.GARAGE && garageButtons.find(b => !b.disabled && mouse.x >= b.x && mouse.x <= b.x+b.w && mouse.y >= b.y && mouse.y <= b.y+b.h));
+  canvas3d.style.cursor = hovering ? 'pointer' : 'default';
 });
 canvas3d.addEventListener('click', e => {
   ensureAudio();
   const r = canvas3d.getBoundingClientRect();
   const x = (e.clientX - r.left) * (W / r.width);
   const y = (e.clientY - r.top)  * (H / r.height);
-  if (state === STATE.MENU) { const b = btnAt(x, y); if (b && !b.disabled && b.action) b.action(); }
-  else if (state === STATE.HELP) state = STATE.MENU;
+  if (state === STATE.MENU) {
+    const b = btnAt(x, y);
+    if (b && !b.disabled && b.action) { b.action(); return; }
+    // click car model to open garage
+    if (x >= W/2 - 80 && x <= W/2 + 80 && y >= 100 && y <= 260) { state = STATE.GARAGE; garageTab = 'cars'; }
+  } else if (state === STATE.GARAGE) {
+    const b = garageButtons.find(btn => !btn.disabled && x >= btn.x && x <= btn.x+btn.w && y >= btn.y && y <= btn.y+btn.h);
+    if (b && b.action) b.action();
+  } else if (state === STATE.HELP) state = STATE.MENU;
   else if (state === STATE.DEAD) state = STATE.MENU;
   else if (state === STATE.PLAYING) {
-    // top-left camera toggle button hit-test
     if (x >= 8 && x <= 8 + 88 && y >= 8 && y <= 8 + 28) cockpitView = !cockpitView;
   }
 });
@@ -856,7 +899,6 @@ function playCrashSound() {
 
 // ===== lifecycle =====
 function startGame() {
-  if (!isUnlocked(carIdx)) return;
   // remove all enemy meshes
   for (const e of enemies) scene.remove(e.mesh);
   enemies = [];
@@ -965,7 +1007,6 @@ function updateBot(bot, dt) {
 }
 
 function startArena() {
-  if (!isUnlocked(carIdx)) return;
   // reset arena tiles
   for (const t of arenaTiles) {
     t.state = 'alive'; t.timer = 0; t.baseY = 0;
@@ -1456,7 +1497,7 @@ function updateParticles(dt) {
 
 // ===== sync 3D scene =====
 function syncScene() {
-  const inShowroom = (state === STATE.MENU || state === STATE.HELP);
+  const inShowroom = (state === STATE.MENU || state === STATE.HELP || state === STATE.GARAGE);
   const inArena = (state === STATE.ARENA) || (state === STATE.DEAD && earnings && earnings.mode === 'ARENA');
   roadMesh.visible = !inShowroom && !inArena;
   grassMesh.visible = !inShowroom && !inArena;
@@ -1537,6 +1578,7 @@ function drawHud2D() {
   if (state === STATE.HELP) drawHelp();
   if (state === STATE.DEAD) drawCrash();
   if (state === STATE.ARENA) drawArenaHud();
+  if (state === STATE.GARAGE) drawGarage();
 }
 
 function drawArenaHud() {
@@ -1547,7 +1589,7 @@ function drawArenaHud() {
     if (p.behind) continue;
     const alpha = (s.life / s.maxLife) * 0.5 * s.intensity;
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = '#222';
+    ctx.fillStyle = getTrailColor();
     ctx.beginPath();
     ctx.ellipse(p.x, p.y, 4, 2, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -1765,56 +1807,48 @@ function drawMenu() {
   ctx.fillText('COINS', W - 14, 52);
 
   const car = CARS[carIdx];
-  const locked = !isUnlocked(carIdx);
 
   // info card under the rotating car (compact)
   const cardY = 268;
   ctx.fillStyle = 'rgba(10,10,20,0.55)';
   roundedRect(20, cardY, W - 40, 96, 8);
   ctx.fill();
-  ctx.strokeStyle = locked ? '#ff5566' : '#ff44dd';
+  ctx.strokeStyle = '#ff44dd';
   ctx.lineWidth = 2;
   roundedRect(20, cardY, W - 40, 96, 8);
   ctx.stroke();
 
   ctx.textAlign = 'center';
-  ctx.fillStyle = locked ? '#ff8888' : '#ffd54a';
+  ctx.fillStyle = '#ffd54a';
   ctx.font = 'bold 16px system-ui';
-  ctx.fillText(car.name + (locked ? ' · LOCKED' : ''), W/2, cardY + 18);
+  ctx.fillText(car.name, W/2, cardY + 18);
   ctx.fillStyle = '#fff';
   ctx.font = '11px system-ui';
   ctx.fillText(car.desc, W/2, cardY + 33);
-  if (locked) {
-    ctx.fillStyle = '#ff8888';
-    ctx.font = 'bold 11px system-ui';
-    ctx.fillText('● ' + car.cost + ' to unlock', W/2, cardY + 48);
+  const pnt = SHOP_PAINTS.find(p => p.id === equippedPaint);
+  if (pnt && pnt.color != null) {
+    ctx.fillStyle = '#' + pnt.color.toString(16).padStart(6,'0');
+    ctx.fillText('● ' + pnt.name + ' PAINT', W/2, cardY + 48);
   }
   drawCarStats(car, W/2 - 90, cardY + 64);
 
-  // bottom row: 4 main buttons (PLAY/BUY, CAR, BG, GARAGE/MODE)
+  // click-car hint
+  ctx.textAlign = 'center';
+  ctx.font = '10px system-ui';
+  ctx.fillStyle = 'rgba(255,213,74,0.65)';
+  ctx.fillText('▲ TAP CAR TO OPEN GARAGE', W/2, 264);
+
+  // bottom row: PLAY, GARAGE, BG, MODE
   const bw = 100, bh = 36, gap = 6;
   const totalW = bw * 4 + gap * 3;
   const bx = (W - totalW) / 2;
   const by = H - 50;
 
-  let firstBtn;
-  if (locked) {
-    const canAfford = coins >= car.cost;
-    firstBtn = {
-      label: 'BUY ● ' + car.cost,
-      x: bx, y: by, w: bw, h: bh,
-      action: canAfford ? tryBuy : null,
-      disabled: !canAfford,
-    };
-  } else {
-    firstBtn = { label: 'PLAY', x: bx, y: by, w: bw, h: bh, action: startGame };
-  }
-
   menuButtons = [
-    firstBtn,
-    { label: 'CAR ▶',  sub: car.name,                       x: bx + (bw + gap),     y: by, w: bw, h: bh, action: cycleCar },
-    { label: 'BG ▶',   sub: BACKGROUNDS[bgIdx].name,        x: bx + (bw + gap)*2,   y: by, w: bw, h: bh, action: cycleBg },
-    { label: 'MODE ▶', sub: MODES[modeIdx],                 x: bx + (bw + gap)*3,   y: by, w: bw, h: bh, action: cycleMode },
+    { label: 'PLAY',    x: bx,               y: by, w: bw, h: bh, action: startGame },
+    { label: 'GARAGE',  sub: car.name,        x: bx+(bw+gap),   y: by, w: bw, h: bh, action: () => { state = STATE.GARAGE; garageTab = 'cars'; } },
+    { label: 'BG ▶',   sub: BACKGROUNDS[bgIdx].name, x: bx+(bw+gap)*2, y: by, w: bw, h: bh, action: cycleBg },
+    { label: 'MODE ▶', sub: MODES[modeIdx],  x: bx+(bw+gap)*3, y: by, w: bw, h: bh, action: cycleMode },
   ];
 
   // secondary row above main row
@@ -1824,7 +1858,7 @@ function drawMenu() {
   const sBy = by - 30;
   const secondary = [
     { label: 'DIFFICULTY: ' + DIFFICULTIES[difficultyIdx].name, x: sBx,                 y: sBy, w: sBw, h: sBh, action: cycleDifficulty },
-    { label: '⬢ ARENA',                                         x: sBx + sBw + gap,     y: sBy, w: sBw, h: sBh, action: locked ? null : startArena, disabled: locked },
+    { label: '⬢ ARENA',                                         x: sBx + sBw + gap,     y: sBy, w: sBw, h: sBh, action: startArena },
     { label: 'HOW TO PLAY',                                     x: sBx + (sBw + gap)*2, y: sBy, w: sBw, h: sBh, action: () => state = STATE.HELP },
   ];
   for (const b of secondary) menuButtons.push(b);
@@ -1832,18 +1866,173 @@ function drawMenu() {
   for (const b of menuButtons) drawMenuButton(b);
 
   // hint
-  if (!locked && Math.floor(menuBlink / 500) % 2 === 0) {
+  if (Math.floor(menuBlink / 500) % 2 === 0) {
     ctx.fillStyle = '#ffd54a';
     ctx.font = 'bold 10px system-ui';
     ctx.textAlign = 'center';
     ctx.fillText('PRESS SPACE TO START', W/2, H - 6);
-  } else if (locked && coins < car.cost) {
-    ctx.fillStyle = '#ff8888';
-    ctx.font = 'bold 10px system-ui';
-    ctx.textAlign = 'center';
-    ctx.fillText('Need ' + (car.cost - coins) + ' more coins!', W/2, H - 6);
   }
   ctx.textAlign = 'left';
+}
+
+function garageBtn(label, x, y, w, h, action, opts={}) {
+  const hov = mouse.x>=x && mouse.x<=x+w && mouse.y>=y && mouse.y<=y+h && !opts.disabled;
+  ctx.fillStyle = opts.disabled ? 'rgba(40,40,50,0.6)'
+                : opts.active   ? 'rgba(255,68,221,0.9)'
+                : hov           ? 'rgba(255,68,221,0.7)'
+                                : 'rgba(20,20,30,0.75)';
+  roundedRect(x, y, w, h, 5); ctx.fill();
+  ctx.strokeStyle = opts.disabled ? '#444' : (opts.active ? '#fff' : '#ff44dd');
+  ctx.lineWidth = opts.active ? 2.5 : 1.5;
+  roundedRect(x, y, w, h, 5); ctx.stroke();
+  ctx.fillStyle = opts.disabled ? '#888' : '#fff';
+  ctx.font = opts.small ? 'bold 10px system-ui' : 'bold 12px system-ui';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(label, x+w/2, y+h/2);
+  ctx.textBaseline = 'alphabetic';
+  garageButtons.push({ x, y, w, h, action, disabled: !!opts.disabled });
+}
+
+function drawGarage() {
+  garageButtons = [];
+  // full overlay
+  ctx.fillStyle = 'rgba(6,8,20,0.93)';
+  ctx.fillRect(0, 0, W, H);
+
+  // title + coins
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd54a';
+  ctx.font = 'bold 26px system-ui';
+  ctx.fillText('GARAGE', W/2, 38);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 16px system-ui';
+  ctx.fillText('● ' + coins, W-14, 36);
+  ctx.font = '9px system-ui'; ctx.fillStyle = '#bbb';
+  ctx.fillText('COINS', W-14, 48);
+
+  // tabs
+  const tabW=138, tabH=30, tabGap=4, tabY=52;
+  const tabX0=(W-(tabW*3+tabGap*2))/2;
+  const TABS=[['cars','CARS'],['paint','PAINT'],['trails','TRAILS']];
+  for(let i=0;i<TABS.length;i++){
+    const [id,label]=TABS[i];
+    const tx=tabX0+i*(tabW+tabGap);
+    garageBtn(label,tx,tabY,tabW,tabH,()=>{garageTab=id;},{active:garageTab===id});
+  }
+
+  const contentY=90, contentH=H-90-48;
+
+  if(garageTab==='cars'){
+    const cardH=74, gap=5;
+    CARS.forEach((car,i)=>{
+      const cy=contentY+i*(cardH+gap);
+      const owned_=isUnlocked(i);
+      const equipped=carIdx===i;
+      // card bg
+      ctx.fillStyle=equipped?'rgba(255,68,221,0.18)':'rgba(255,255,255,0.04)';
+      roundedRect(14,cy,W-28,cardH,7); ctx.fill();
+      ctx.strokeStyle=equipped?'#ff44dd':'rgba(255,255,255,0.12)';
+      ctx.lineWidth=equipped?2:1; roundedRect(14,cy,W-28,cardH,7); ctx.stroke();
+      // color swatch
+      ctx.fillStyle='#'+car.body.toString(16).padStart(6,'0');
+      ctx.beginPath(); ctx.roundRect(22,cy+8,18,18,3); ctx.fill();
+      // name & desc
+      ctx.textAlign='left'; ctx.fillStyle=owned_?'#ffd54a':'#aaa';
+      ctx.font='bold 13px system-ui';
+      ctx.fillText(car.name+(equipped?' · EQUIPPED':''),46,cy+20);
+      ctx.fillStyle='#bbb'; ctx.font='10px system-ui';
+      ctx.fillText(car.desc,46,cy+34);
+      // stats
+      drawCarStats(car,22,cy+cardH-8);
+      // action button
+      const bw=72,bh=24,bx=W-14-bw-4,by_=cy+cardH/2-bh/2;
+      if(equipped){
+        garageBtn('EQUIPPED',bx,by_,bw,bh,null,{active:true,small:true});
+      }else if(owned_){
+        garageBtn('EQUIP',bx,by_,bw,bh,()=>{carIdx=i;localStorage.setItem('headon_car',i);rebuildPlayerCar();},{small:true});
+      }else{
+        const canAfford=coins>=car.cost;
+        garageBtn('BUY ●'+car.cost,bx,by_,bw,bh,canAfford?()=>{setCoins(coins-car.cost);unlockCar(i);}:null,{disabled:!canAfford,small:true});
+      }
+    });
+  }
+
+  if(garageTab==='paint'){
+    const cols=3, swW=(W-28-cols*6)/cols, swH=88, gap=6;
+    SHOP_PAINTS.forEach((paint,i)=>{
+      const col=i%cols, row=Math.floor(i/cols);
+      const px=14+col*(swW+gap), py=contentY+row*(swH+gap);
+      const owned_=isOwned(paint.id);
+      const equipped=equippedPaint===paint.id;
+      // card
+      ctx.fillStyle=equipped?'rgba(255,68,221,0.2)':'rgba(255,255,255,0.04)';
+      roundedRect(px,py,swW,swH,7); ctx.fill();
+      ctx.strokeStyle=equipped?'#ff44dd':'rgba(255,255,255,0.12)';
+      ctx.lineWidth=equipped?2:1; roundedRect(px,py,swW,swH,7); ctx.stroke();
+      // color swatch
+      const swatchColor=paint.color!=null?'#'+paint.color.toString(16).padStart(6,'0'):'#'+CARS[carIdx].body.toString(16).padStart(6,'0');
+      ctx.fillStyle=swatchColor;
+      ctx.beginPath(); ctx.roundRect(px+swW/2-18,py+8,36,28,4); ctx.fill();
+      if(paint.color==null){ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1;ctx.beginPath();ctx.roundRect(px+swW/2-18,py+8,36,28,4);ctx.stroke();}
+      // name
+      ctx.textAlign='center'; ctx.fillStyle='#eee'; ctx.font='bold 10px system-ui';
+      ctx.fillText(paint.name,px+swW/2,py+48);
+      // cost/owned
+      ctx.fillStyle='#aaa'; ctx.font='9px system-ui';
+      ctx.fillText(paint.cost===0?'FREE':'●'+paint.cost,px+swW/2,py+60);
+      // button
+      const bw2=swW-12,bh2=18,bx2=px+6,by2=py+swH-22;
+      if(equipped){
+        garageBtn('ON',bx2,by2,bw2,bh2,null,{active:true,small:true});
+      }else if(owned_){
+        garageBtn('EQUIP',bx2,by2,bw2,bh2,()=>equipPaint(paint.id),{small:true});
+      }else{
+        const canAfford=coins>=paint.cost;
+        garageBtn('BUY',bx2,by2,bw2,bh2,canAfford?()=>{setCoins(coins-paint.cost);ownItem(paint.id);equipPaint(paint.id);}:null,{disabled:!canAfford,small:true});
+      }
+    });
+  }
+
+  if(garageTab==='trails'){
+    const tH=62, gap=6;
+    SHOP_TRAILS.forEach((trail,i)=>{
+      const ty=contentY+i*(tH+gap);
+      const owned_=isOwned(trail.id);
+      const equipped=equippedTrail===trail.id;
+      ctx.fillStyle=equipped?'rgba(255,68,221,0.2)':'rgba(255,255,255,0.04)';
+      roundedRect(14,ty,W-28,tH,7); ctx.fill();
+      ctx.strokeStyle=equipped?'#ff44dd':'rgba(255,255,255,0.12)';
+      ctx.lineWidth=equipped?2:1; roundedRect(14,ty,W-28,tH,7); ctx.stroke();
+      // trail preview (dots)
+      for(let d=0;d<6;d++){
+        const a=0.15+d*0.14;
+        ctx.globalAlpha=a;
+        ctx.fillStyle=trail.color;
+        ctx.beginPath(); ctx.ellipse(28+d*14,ty+tH/2,5,3,0,0,Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha=1;
+      // name
+      ctx.textAlign='left'; ctx.fillStyle='#eee'; ctx.font='bold 13px system-ui';
+      ctx.fillText(trail.name,120,ty+22);
+      ctx.fillStyle='#aaa'; ctx.font='10px system-ui';
+      ctx.fillText(trail.cost===0?'FREE':'● '+trail.cost+' coins',120,ty+38);
+      // button
+      const bw3=70,bh3=24,bx3=W-14-bw3-4,by3=ty+tH/2-bh3/2;
+      if(equipped){
+        garageBtn('ACTIVE',bx3,by3,bw3,bh3,null,{active:true,small:true});
+      }else if(owned_){
+        garageBtn('EQUIP',bx3,by3,bw3,bh3,()=>equipTrail(trail.id),{small:true});
+      }else{
+        const canAfford=coins>=trail.cost;
+        garageBtn('BUY',bx3,by3,bw3,bh3,canAfford?()=>{setCoins(coins-trail.cost);ownItem(trail.id);equipTrail(trail.id);}:null,{disabled:!canAfford,small:true});
+      }
+    });
+  }
+
+  // back button
+  const backW=120,backH=32,backX=W/2-60,backY=H-42;
+  garageBtn('← BACK',backX,backY,backW,backH,()=>{state=STATE.MENU;});
+  ctx.textAlign='left';
 }
 
 function drawHelp() {

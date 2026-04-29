@@ -21,7 +21,7 @@
     <canvas id="game3d" width="480" height="560"></canvas>
     <canvas id="hud" width="480" height="560"></canvas>
   </div>
-  <div id="controls">← → steer · ↑ ↓ accelerate (Head On) · Space start · R restart</div>
+  <div id="controls">← → steer · ↑ ↓ accelerate · Space start/jump (Arena) · R restart</div>
 </div>
 
 <script type="module">
@@ -147,11 +147,15 @@ const camera = new THREE.PerspectiveCamera(70, W/H, 0.3, 600);
 camera.position.set(0, 2.5, -7);
 camera.lookAt(0, 1.6, 8);
 
-const hemi = new THREE.HemisphereLight(0xffffff, 0x222222, 0.55);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x333344, 0.6);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xffffff, 0.85);
+const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+sun.position.set(30, 60, -40);
 scene.add(sun);
-const ambient = new THREE.AmbientLight(0xffffff, 0.25);
+const fillLight = new THREE.DirectionalLight(0x8899cc, 0.4);
+fillLight.position.set(-20, 10, 20);
+scene.add(fillLight);
+const ambient = new THREE.AmbientLight(0xffffff, 0.2);
 scene.add(ambient);
 
 // road texture
@@ -332,8 +336,17 @@ const arenaGroup = new THREE.Group();
 const arenaTiles = [];
 const HEX_SIZE = 2.0;
 const HEX_RADIUS = 9;
-const arenaPlayer = { x: 0, z: 0, y: 0, vy: 0, heading: 0, fwd: 0 };
+const arenaPlayer = { x: 0, z: 0, y: 0, vy: 0, vx: 0, vz: 0, heading: 0, fwd: 0, onGround: false };
 const arenaTileGeom = new THREE.CylinderGeometry(HEX_SIZE * 0.97, HEX_SIZE * 0.97, 0.35, 6);
+
+// bot colours and starting positions (120° apart, radius 7)
+const BOT_COLORS  = [0xe74c3c, 0x2ecc71, 0x9b59b6];
+const BOT_ACCENTS = [0x7c1d12, 0x125a30, 0x4a2266];
+const BOT_STARTS  = [[7, 0], [-3.5, 6.06], [-3.5, -6.06]];
+let arenaBots = [];
+let arenaElimOrder = []; // pushed in order of elimination (first-in = last place)
+let arenaPlacement = null;
+let skidMarks = []; // { wx, wy, wz, life, maxLife }
 
 function buildArena() {
   for (const t of arenaTiles) arenaGroup.remove(t.mesh);
@@ -390,145 +403,229 @@ function buildCar(opts) {
   const { kind = 'sedan', color = 0xff4444, accent = 0x222222, isPlayer = false } = opts;
   const g = new THREE.Group();
 
-  const dim = {
-    sedan: { l: 4.4, w: 1.8, h: 0.9, roofL: 2.2, roofW: 1.6, roofH: 0.7, roofZ: 0.0 },
-    sport: { l: 4.2, w: 1.95, h: 0.7, roofL: 1.7, roofW: 1.7, roofH: 0.45, roofZ: 0.1 },
-    hatch: { l: 3.7, w: 1.7, h: 1.0, roofL: 2.4, roofW: 1.55, roofH: 0.85, roofZ: -0.2 },
-    van:   { l: 4.6, w: 1.95, h: 1.4, roofL: 3.5, roofW: 1.85, roofH: 1.1, roofZ: -0.1 },
-    truck: { l: 5.0, w: 2.3, h: 1.6, roofL: 0, roofW: 0, roofH: 0, roofZ: 0 },
-  }[kind] || { l: 4.4, w: 1.8, h: 0.9, roofL: 2.2, roofW: 1.6, roofH: 0.7, roofZ: 0.0 };
+  // l=length w=width gc=ground-clearance lh=lower-body-height ch=cabin-height
+  // cw=cabin-width cl=cabin-length cz=cabin Z offset from car centre
+  const S = {
+    sedan: { l:4.2, w:1.82, gc:0.16, lh:0.52, ch:0.50, cw:1.72, cl:2.02, cz:-0.12 },
+    sport: { l:4.0, w:1.90, gc:0.13, lh:0.44, ch:0.40, cw:1.78, cl:1.66, cz:-0.06 },
+    hatch: { l:3.8, w:1.76, gc:0.16, lh:0.54, ch:0.56, cw:1.66, cl:2.28, cz:-0.20 },
+    van:   { l:4.5, w:1.92, gc:0.20, lh:0.68, ch:0.80, cw:1.86, cl:3.20, cz:-0.10 },
+    truck: { l:5.0, w:2.20, gc:0.26, lh:0.78, ch:0.70, cw:2.04, cl:1.70, cz: 0.80 },
+  }[kind] || { l:4.2, w:1.82, gc:0.16, lh:0.52, ch:0.50, cw:1.72, cl:2.02, cz:-0.12 };
 
-  const baseY = 0.4;
+  const { l, w, gc, lh, ch, cw, cl, cz } = S;
+  const wl = gc + lh;   // window-line Y (top of lower body = bottom of cabin)
+  const rl = wl + ch;   // roof-line Y
+  const wr = 0.34;      // wheel radius
+  const ww = 0.22;      // wheel width
 
-  const bodyMat = new THREE.MeshLambertMaterial({ color });
-  const accentMat = new THREE.MeshLambertMaterial({ color: accent });
-  const darkMat = new THREE.MeshLambertMaterial({ color: 0x0a0a0a });
-  const glassMat = new THREE.MeshPhongMaterial({ color: 0x101418, shininess: 80 });
-  const lightOn = new THREE.MeshBasicMaterial({ color: 0xfffae0 });
-  const lightOff = new THREE.MeshBasicMaterial({ color: 0x222222 });
-  const tailOn = new THREE.MeshBasicMaterial({ color: 0xff2030 });
+  // keep a compat dim object so the rest of the codebase doesn't break
+  const dim = { l, w, h: lh + ch, roofL: cl, roofW: cw, roofH: ch, roofZ: cz };
 
-  // body
-  const body = new THREE.Mesh(new THREE.BoxGeometry(dim.w, dim.h, dim.l), bodyMat);
-  body.position.y = baseY + dim.h/2;
+  // ── Materials ─────────────────────────────────────────────────────────────────
+  const bodyMat    = new THREE.MeshPhongMaterial({ color, shininess:100, specular:0x334466 });
+  const accentMat  = new THREE.MeshPhongMaterial({ color:accent, shininess:60 });
+  const glassMat   = new THREE.MeshPhongMaterial({ color:0x0e1820, shininess:120, transparent:true, opacity:0.88 });
+  const darkMat    = new THREE.MeshLambertMaterial({ color:0x0e0e0e });
+  const tireMat    = new THREE.MeshLambertMaterial({ color:0x111111 });
+  const rimMat     = new THREE.MeshPhongMaterial({ color:0xe4e4e4, shininess:90 });
+  const caliperMat = new THREE.MeshLambertMaterial({ color:0xcc1111 });
+  const lightMat   = new THREE.MeshBasicMaterial({ color:0xfffae0 });
+  const tailMat    = new THREE.MeshBasicMaterial({ color:0xff1818 });
+
+  // ── Lower body (chassis) — full car length & width ────────────────────────────
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, lh, l), bodyMat);
+  body.position.y = gc + lh / 2;
   g.add(body);
 
-  // accent stripe (along sides)
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(dim.w + 0.02, 0.06, dim.l * 0.7), accentMat);
-  stripe.position.y = baseY + dim.h * 0.45;
-  g.add(stripe);
+  // ── Cabin — sits flush on top of lower body ────────────────────────────────────
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(cw, ch, cl), bodyMat);
+  cabin.position.set(0, wl + ch / 2, cz);
+  g.add(cabin);
 
-  // roof (cabin)
-  let roof = null, glass = null;
-  if (dim.roofL > 0) {
-    roof = new THREE.Mesh(new THREE.BoxGeometry(dim.roofW, dim.roofH, dim.roofL), bodyMat);
-    roof.position.set(0, baseY + dim.h + dim.roofH/2, dim.roofZ);
-    g.add(roof);
-    glass = new THREE.Mesh(new THREE.BoxGeometry(dim.roofW * 0.95, dim.roofH * 0.7, dim.roofL * 0.95), glassMat);
-    glass.position.copy(roof.position);
-    g.add(glass);
-  }
+  // ── Roof panel (thin cap) ──────────────────────────────────────────────────────
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(cw, 0.05, cl), bodyMat);
+  roof.position.set(0, rl - 0.02, cz);
+  g.add(roof);
 
-  // wheels
-  const wheelGeom = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 14);
-  const tireMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
-  const rimMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
-  const wxOff = dim.w/2 + 0.05;
-  const wzs = [dim.l/2 - 0.7, -dim.l/2 + 0.7];
-  const wheels = [];
-  for (const wx of [-wxOff, wxOff]) for (const wz of wzs) {
-    const wheel = new THREE.Group();
-    const tire = new THREE.Mesh(wheelGeom, tireMat);
-    tire.rotation.z = Math.PI/2;
-    wheel.add(tire);
-    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.32, 8), rimMat);
-    rim.rotation.z = Math.PI/2;
-    wheel.add(rim);
-    wheel.position.set(wx, 0.4, wz);
-    g.add(wheel);
-    wheels.push(wheel);
-  }
+  // ── Glass ─────────────────────────────────────────────────────────────────────
+  let glass = null;
+  if (kind !== 'truck') {
+    const wsH = ch * 0.82;
+    const wsAngle = kind === 'van' ? -0.08 : kind === 'sport' ? -0.42 : -0.30;
+    const ws = new THREE.Mesh(new THREE.BoxGeometry(cw * 0.86, wsH, 0.05), glassMat);
+    ws.position.set(0, wl + wsH * 0.5 + ch * 0.03, cz + cl / 2);
+    ws.rotation.x = wsAngle;
+    g.add(ws);
+    glass = ws;
 
-  // headlights / tail lights
-  const lightGeom = new THREE.BoxGeometry(0.4, 0.2, 0.15);
-  if (isPlayer) {
-    // tail lights on -z (rear, toward camera)
-    const tlL = new THREE.Mesh(lightGeom, tailOn);
-    tlL.position.set(-dim.w/2 + 0.35, baseY + dim.h * 0.55, -dim.l/2 - 0.05);
-    g.add(tlL);
-    const tlR = new THREE.Mesh(lightGeom, tailOn);
-    tlR.position.set(dim.w/2 - 0.35, baseY + dim.h * 0.55, -dim.l/2 - 0.05);
-    g.add(tlR);
-    // brake light strip
-    const brake = new THREE.Mesh(new THREE.BoxGeometry(dim.w * 0.5, 0.08, 0.1), new THREE.MeshBasicMaterial({ color: 0xff5050 }));
-    brake.position.set(0, baseY + dim.h * 0.85, -dim.l/2 - 0.05);
-    g.add(brake);
-    g.userData.tailLeft = tlL;
-    g.userData.tailRight = tlR;
-    g.userData.brakeStrip = brake;
-  } else {
-    // headlights on +z (front, oncoming faces away)
-    const hl = new THREE.Mesh(lightGeom, lightOn);
-    hl.position.set(-dim.w/2 + 0.35, baseY + dim.h * 0.55, dim.l/2 + 0.05);
-    g.add(hl);
-    const hr = new THREE.Mesh(lightGeom, lightOn);
-    hr.position.set(dim.w/2 - 0.35, baseY + dim.h * 0.55, dim.l/2 + 0.05);
-    g.add(hr);
-    // grille
-    const grille = new THREE.Mesh(new THREE.BoxGeometry(dim.w * 0.55, dim.h * 0.4, 0.08), new THREE.MeshLambertMaterial({ color: 0x0e0e0e }));
-    grille.position.set(0, baseY + dim.h * 0.45, dim.l/2 + 0.04);
-    g.add(grille);
-  }
+    const rwH = ch * (kind === 'hatch' ? 0.88 : 0.72);
+    const rw = new THREE.Mesh(new THREE.BoxGeometry(cw * 0.80, rwH, 0.05), glassMat);
+    rw.position.set(0, wl + rwH * 0.5 + ch * 0.06, cz - cl / 2);
+    rw.rotation.x = kind === 'hatch' ? 0.50 : 0.28;
+    g.add(rw);
 
-  // bumpers
-  const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(dim.w * 1.05, 0.18, 0.18), darkMat);
-  frontBumper.position.set(0, baseY + 0.12, dim.l/2 + 0.07);
-  g.add(frontBumper);
-  const rearBumper = new THREE.Mesh(new THREE.BoxGeometry(dim.w * 1.05, 0.18, 0.18), darkMat);
-  rearBumper.position.set(0, baseY + 0.12, -dim.l/2 - 0.07);
-  g.add(rearBumper);
-
-  // mirrors
-  const mirrorGeom = new THREE.BoxGeometry(0.16, 0.12, 0.18);
-  const mirrorL = new THREE.Mesh(mirrorGeom, bodyMat);
-  mirrorL.position.set(-dim.w/2 - 0.08, baseY + dim.h + 0.05, dim.l * 0.15);
-  g.add(mirrorL);
-  const mirrorR = new THREE.Mesh(mirrorGeom, bodyMat);
-  mirrorR.position.set(dim.w/2 + 0.08, baseY + dim.h + 0.05, dim.l * 0.15);
-  g.add(mirrorR);
-
-  // license plate
-  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.15, 0.04), new THREE.MeshBasicMaterial({ color: 0xdcdcdc }));
-  plate.position.set(0, baseY + 0.25, isPlayer ? -dim.l/2 - 0.1 : dim.l/2 + 0.1);
-  g.add(plate);
-
-  // truck-specific trailer
-  if (kind === 'truck') {
-    const trailerL = 5.5;
-    const trailer = new THREE.Mesh(new THREE.BoxGeometry(dim.w * 0.95, dim.h + 0.6, trailerL), new THREE.MeshLambertMaterial({ color: 0xcccccc }));
-    trailer.position.set(0, baseY + (dim.h + 0.6) / 2, -dim.l/2 - trailerL/2 - 0.5);
-    g.add(trailer);
-    // trailer wheels
-    for (const wx of [-wxOff, wxOff]) for (const wz of [-dim.l/2 - 1.5, -dim.l/2 - 5.0]) {
-      const wheel = new THREE.Mesh(wheelGeom, tireMat);
-      wheel.rotation.z = Math.PI/2;
-      wheel.position.set(wx, 0.4, wz);
-      g.add(wheel);
+    for (const sx of [-1, 1]) {
+      const sw = new THREE.Mesh(new THREE.BoxGeometry(0.05, ch * 0.70, cl * 0.78), glassMat);
+      sw.position.set(sx * (cw / 2 + 0.01), wl + ch * 0.42, cz);
+      g.add(sw);
     }
   }
 
-  g.userData.dim = dim;
-  g.userData.body = body;
-  g.userData.roof = roof;
-  g.userData.glass = glass;
-  g.userData.frontBumper = frontBumper;
-  g.userData.rearBumper = rearBumper;
-  g.userData.mirrorL = mirrorL;
-  g.userData.mirrorR = mirrorR;
-  g.userData.plate = plate;
-  g.userData.stripe = stripe;
-  g.userData.bodyMat = bodyMat;
-  g.userData.kind = kind;
+  // ── Wheels ─────────────────────────────────────────────────────────────────────
+  const wxOff = w / 2 + ww / 2 - 0.04;
+  for (const wx of [-wxOff, wxOff]) {
+    for (const wz of [l / 2 - 0.76, -l / 2 + 0.76]) {
+      const wg = new THREE.Group();
+      wg.position.set(wx, wr, wz);
+
+      const tire = new THREE.Mesh(new THREE.CylinderGeometry(wr, wr, ww, 20), tireMat);
+      tire.rotation.z = Math.PI / 2;
+      wg.add(tire);
+
+      const rim = new THREE.Mesh(new THREE.CylinderGeometry(wr * 0.72, wr * 0.72, ww + 0.01, 20), rimMat);
+      rim.rotation.z = Math.PI / 2;
+      wg.add(rim);
+
+      for (let i = 0; i < 10; i++) {
+        const spoke = new THREE.Mesh(new THREE.BoxGeometry(wr * 1.2, 0.04, 0.034), rimMat);
+        spoke.rotation.x = (i / 10) * Math.PI * 2;
+        wg.add(spoke);
+      }
+
+      const cal = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.15, 0.10), caliperMat);
+      cal.position.set(wx < 0 ? 0.07 : -0.07, 0.07, 0);
+      wg.add(cal);
+
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, ww + 0.02, 8), rimMat);
+      hub.rotation.z = Math.PI / 2;
+      wg.add(hub);
+
+      g.add(wg);
+    }
+  }
+
+  // ── Lights ─────────────────────────────────────────────────────────────────────
+  let tailLeft = null, tailRight = null, brakeStrip = null;
+  if (isPlayer) {
+    const tailBar = new THREE.Mesh(new THREE.BoxGeometry(w * 0.70, 0.05, 0.07), tailMat);
+    tailBar.position.set(0, wl - 0.09, -l / 2 - 0.01);
+    g.add(tailBar);
+    for (const sx of [-1, 1]) {
+      const tl = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.20, 0.07), tailMat);
+      tl.position.set(sx * (w / 2 - 0.17), wl - 0.20, -l / 2 - 0.01);
+      g.add(tl);
+      if (sx === -1) tailLeft = tl; else tailRight = tl;
+    }
+    brakeStrip = new THREE.Mesh(new THREE.BoxGeometry(w * 0.48, 0.05, 0.06),
+      new THREE.MeshBasicMaterial({ color:0xff5050 }));
+    brakeStrip.position.set(0, wl - 0.03, -l / 2 - 0.01);
+    g.add(brakeStrip);
+  } else {
+    for (const sx of [-1, 1]) {
+      const hl = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.06, 0.07), lightMat);
+      hl.position.set(sx * (w / 2 - 0.23), wl - 0.09, l / 2 + 0.01);
+      g.add(hl);
+      const drl = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.04, 0.06), lightMat);
+      drl.position.set(sx * (w / 2 - 0.23), wl - 0.21, l / 2 + 0.01);
+      g.add(drl);
+    }
+    const grilleBg   = new THREE.MeshLambertMaterial({ color:0x080808 });
+    const grilleEdge = new THREE.MeshLambertMaterial({ color:0x222222 });
+    const gH = lh * 0.52, gW = w * 0.20;
+    for (const sx of [-1, 1]) {
+      const gx = sx * w * 0.14, gY = gc + lh * 0.40;
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(gW + 0.08, gH + 0.07, 0.09), grilleEdge);
+      frame.position.set(gx, gY, l / 2 + 0.01);
+      g.add(frame);
+      const fill = new THREE.Mesh(new THREE.BoxGeometry(gW, gH, 0.09), grilleBg);
+      fill.position.set(gx, gY, l / 2 + 0.015);
+      g.add(fill);
+      for (let b = 0; b < 4; b++) {
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(gW - 0.02, 0.025, 0.10), grilleEdge);
+        bar.position.set(gx, gY - gH / 2 + (b + 0.8) * gH / 4.5, l / 2 + 0.015);
+        g.add(bar);
+      }
+    }
+    const intake = new THREE.Mesh(new THREE.BoxGeometry(w * 0.66, 0.09, 0.07),
+      new THREE.MeshLambertMaterial({ color:0x0a0a0a }));
+    intake.position.set(0, gc + 0.07, l / 2 + 0.01);
+    g.add(intake);
+  }
+
+  // ── Bumpers — body-coloured, flush with front/rear faces ──────────────────────
+  const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(w + 0.06, lh * 0.36, 0.14), bodyMat);
+  frontBumper.position.set(0, gc + lh * 0.18, l / 2 + 0.07);
+  frontBumper.userData.initY = frontBumper.position.y;
+  g.add(frontBumper);
+
+  const rearBumper = new THREE.Mesh(new THREE.BoxGeometry(w + 0.06, lh * 0.32, 0.13), bodyMat);
+  rearBumper.position.set(0, gc + lh * 0.16, -l / 2 - 0.06);
+  g.add(rearBumper);
+
+  // ── Side skirts ───────────────────────────────────────────────────────────────
+  const skirtH = lh * 0.22;
+  const skirtL = new THREE.Mesh(new THREE.BoxGeometry(0.05, skirtH, l * 0.76), accentMat);
+  skirtL.position.set(-w / 2 - 0.015, gc + skirtH / 2, 0);
+  g.add(skirtL);
+  const skirtR = new THREE.Mesh(new THREE.BoxGeometry(0.05, skirtH, l * 0.76), accentMat);
+  skirtR.position.set(w / 2 + 0.015, gc + skirtH / 2, 0);
+  g.add(skirtR);
+
+  // ── Mirrors — mounted on cabin sides ─────────────────────────────────────────
+  const mirrorMat = new THREE.MeshLambertMaterial({ color:0x111111 });
+  const mirrorL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.11, 0.18), mirrorMat);
+  mirrorL.position.set(-cw / 2 - 0.06, wl + ch * 0.78, cz + cl * 0.32);
+  g.add(mirrorL);
+  const mirrorR = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.11, 0.18), mirrorMat);
+  mirrorR.position.set(cw / 2 + 0.06, wl + ch * 0.78, cz + cl * 0.32);
+  g.add(mirrorR);
+
+  // ── Exhaust ────────────────────────────────────────────────────────────────────
+  const exMat  = new THREE.MeshLambertMaterial({ color:0x888888 });
+  const exGeom = new THREE.CylinderGeometry(0.055, 0.055, 0.16, 8);
+  for (const exX of [w * 0.22, w * 0.34]) {
+    const pipe = new THREE.Mesh(exGeom, exMat);
+    pipe.rotation.x = Math.PI / 2;
+    pipe.position.set(exX, gc + 0.04, -l / 2 - 0.07);
+    g.add(pipe);
+  }
+
+  // ── License plate ─────────────────────────────────────────────────────────────
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.13, 0.03),
+    new THREE.MeshBasicMaterial({ color:0xe0e0e0 }));
+  plate.position.set(0, gc + lh * 0.28, isPlayer ? -l / 2 - 0.07 : l / 2 + 0.07);
+  g.add(plate);
+
+  // ── Truck trailer ─────────────────────────────────────────────────────────────
+  if (kind === 'truck') {
+    const tl = 5.5;
+    const trailer = new THREE.Mesh(new THREE.BoxGeometry(w * 0.95, (lh + ch) * 0.85, tl),
+      new THREE.MeshLambertMaterial({ color:0xcccccc }));
+    trailer.position.set(0, gc + (lh + ch) * 0.425, -l / 2 - tl / 2 - 0.25);
+    g.add(trailer);
+    const txOff = w / 2 + ww / 2 - 0.04;
+    for (const tx of [-txOff, txOff]) {
+      for (const tz of [-l / 2 - 1.5, -l / 2 - 4.5]) {
+        const tw = new THREE.Mesh(new THREE.CylinderGeometry(wr, wr, ww, 12), tireMat);
+        tw.rotation.z = Math.PI / 2;
+        tw.position.set(tx, wr, tz);
+        g.add(tw);
+      }
+    }
+  }
+
+  // ── userData ──────────────────────────────────────────────────────────────────
+  g.userData = {
+    dim, body, roof, glass,
+    frontBumper, rearBumper,
+    mirrorL, mirrorR,
+    skirtL, skirtR,
+    tailLeft, tailRight, brakeStrip,
+    plate,
+    stripe: null,
+    bodyMat, kind,
+  };
   return g;
 }
 
@@ -545,7 +642,7 @@ function applyDamageVisual(group, dmgLevel) {
   // bumper hangs / tears off
   if (u.frontBumper) {
     u.frontBumper.rotation.x = d * 0.6;
-    u.frontBumper.position.y = 0.4 + 0.12 - d * 0.15;
+    u.frontBumper.position.y = (u.frontBumper.userData.initY ?? 0.26) - d * 0.15;
     u.frontBumper.visible = d < 0.95;
   }
   if (u.rearBumper) {
@@ -561,6 +658,9 @@ function applyDamageVisual(group, dmgLevel) {
   if (u.glass) u.glass.rotation.x = d > 0.6 ? (d - 0.6) * 0.4 : 0;
   // plate falls off
   if (u.plate) u.plate.visible = d < 0.7;
+  // skirts crack off
+  if (u.skirtL) u.skirtL.visible = d < 0.55;
+  if (u.skirtR) u.skirtR.visible = d < 0.7;
   // stripe (accent) fades — set opacity? Lambert doesn't support transparency by default; set color toward black
   if (u.stripe && u.stripe.material) {
     const ac = new THREE.Color(CARS[carIdx].accent);
@@ -678,7 +778,8 @@ window.addEventListener('keydown', e => {
     else if (k === 'r') startGame();
   }
   if (state === STATE.PLAYING && k === 'c') cockpitView = !cockpitView;
-  if (state === STATE.ARENA && (k === 'escape')) state = STATE.MENU;
+  if (state === STATE.ARENA && k === 'escape') state = STATE.MENU;
+  if (state === STATE.ARENA && k === ' ' && arenaPlayer.onGround) { arenaPlayer.vy = 10; arenaPlayer.onGround = false; }
 });
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 canvas3d.addEventListener('mousemove', e => {
@@ -782,6 +883,87 @@ function tryBuy() {
   unlockCar(carIdx);
 }
 
+function randomAliveTilePos() {
+  const alive = arenaTiles.filter(t => t.state === 'alive');
+  if (!alive.length) return { x: 0, z: 0 };
+  const t = alive[Math.floor(Math.random() * alive.length)];
+  return { x: t.x, z: t.z };
+}
+
+function updateBot(bot, dt) {
+  const dts = dt / 1000;
+  bot.jumpCooldown = Math.max(0, bot.jumpCooldown - dt);
+
+  // pick a new wander target when the old one is reached or timer expires
+  bot.targetTimer -= dt;
+  const tdx = bot.targetX - bot.x, tdz = bot.targetZ - bot.z;
+  if (bot.targetTimer <= 0 || (tdx*tdx + tdz*tdz) < 4) {
+    const pos = randomAliveTilePos();
+    bot.targetX = pos.x + (Math.random()-0.5) * 6;
+    bot.targetZ = pos.z + (Math.random()-0.5) * 6;
+    bot.targetTimer = 2000 + Math.random() * 2000;
+  }
+
+  // steer toward target
+  const angleToTarget = Math.atan2(bot.targetX - bot.x, bot.targetZ - bot.z);
+  let diff = angleToTarget - bot.heading;
+  while (diff >  Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  bot.heading += Math.sign(diff) * Math.min(Math.abs(diff), 2.8 * dts);
+
+  // drive forward
+  bot.fwd += 12 * dts;
+  bot.fwd *= Math.pow(0.55, dts);
+  bot.fwd = Math.min(14, bot.fwd);
+  bot.x += Math.sin(bot.heading) * bot.fwd * dts + bot.vx * dts;
+  bot.z += Math.cos(bot.heading) * bot.fwd * dts + bot.vz * dts;
+  bot.vx *= Math.pow(0.1, dts);
+  bot.vz *= Math.pow(0.1, dts);
+
+  // gravity / tile support
+  const bt = arenaTileAt(bot.x, bot.z);
+  const botOnSolid = bt && (bt.state === 'alive' || bt.state === 'fading');
+  const botSupportY = bt ? bt.mesh.position.y + 0.2 : -100;
+  if (botOnSolid && bot.y <= botSupportY + 0.05 && bot.vy <= 0) {
+    bot.y = botSupportY; bot.vy = 0; bot.onGround = true;
+  } else {
+    bot.onGround = false;
+    bot.vy -= 18 * dts;
+    bot.y += bot.vy * dts;
+  }
+
+  // trigger tile (only when grounded on alive tile)
+  if (bt && bt.state === 'alive' && bot.onGround) {
+    bt.state = 'fading'; bt.timer = 0;
+  }
+
+  // hole-detection: look ahead ~3 units; jump ~65% of the time (imperfect)
+  if (bot.onGround && bot.jumpCooldown <= 0) {
+    const lx = bot.x + Math.sin(bot.heading) * 3;
+    const lz = bot.z + Math.cos(bot.heading) * 3;
+    const ahead = arenaTileAt(lx, lz);
+    if (!ahead || ahead.state === 'gone' ||
+        (ahead.state === 'fading' && ahead.timer > 700)) {
+      if (Math.random() < 0.65) {
+        bot.vy = 10; bot.onGround = false; bot.jumpCooldown = 1400;
+      }
+    }
+  }
+
+  // sync mesh
+  if (bot.mesh) {
+    bot.mesh.position.set(bot.x, bot.y, bot.z);
+    bot.mesh.rotation.set(0, bot.heading, 0);
+  }
+
+  // death
+  if (bot.y < -3) {
+    bot.state = 'dead';
+    if (!arenaElimOrder.includes(bot.id)) arenaElimOrder.push(bot.id);
+    if (bot.mesh) bot.mesh.visible = false;
+  }
+}
+
 function startArena() {
   if (!isUnlocked(carIdx)) return;
   // reset arena tiles
@@ -791,10 +973,29 @@ function startArena() {
     t.mesh.material.color.setHex(0xfafafa);
   }
   arenaPlayer.x = 0; arenaPlayer.z = 0; arenaPlayer.y = 0;
-  arenaPlayer.vy = 0; arenaPlayer.heading = 0; arenaPlayer.fwd = 0;
-  // remove any leftover enemies
+  arenaPlayer.vy = 0; arenaPlayer.vx = 0; arenaPlayer.vz = 0;
+  arenaPlayer.heading = 0; arenaPlayer.fwd = 0; arenaPlayer.onGround = false;
+  // remove any leftover enemies/bots
   for (const e of enemies) scene.remove(e.mesh);
+  for (const b of arenaBots) { if (b.mesh) scene.remove(b.mesh); }
   enemies = []; particles = [];
+  // build 3 bots
+  arenaBots = BOT_COLORS.map((col, i) => {
+    const mesh = buildCar({ kind: 'sedan', color: col, accent: BOT_ACCENTS[i] });
+    mesh.position.set(BOT_STARTS[i][0], 0, BOT_STARTS[i][1]);
+    scene.add(mesh);
+    return {
+      id: 'bot' + i,
+      x: BOT_STARTS[i][0], z: BOT_STARTS[i][1],
+      y: 0, vy: 0, vx: 0, vz: 0,
+      heading: Math.random() * Math.PI * 2,
+      fwd: 0, onGround: false,
+      state: 'alive',
+      mesh,
+      targetX: 0, targetZ: 0, targetTimer: 0, jumpCooldown: 0,
+    };
+  });
+  arenaElimOrder = []; arenaPlacement = null; skidMarks = [];
   dmg = { body: 0, tires: 0, engine: 0 };
   invulnTime = 0; crashes = 0; gameTime = 0; score = 0;
   earnings = null; lastEarned = 0;
@@ -810,15 +1011,38 @@ function updateArena(dt) {
   // free driving input
   const turn = ((keys['arrowleft']||keys['a']) ? 1 : 0) - ((keys['arrowright']||keys['d']) ? 1 : 0);
   const accel = ((keys['arrowup']||keys['w']) ? 1 : 0) - ((keys['arrowdown']||keys['s']) ? 1 : 0);
-  // turn rate scales with current speed for arcade feel
-  const turnRate = 1.8 + Math.min(1.2, Math.abs(arenaPlayer.fwd) / 12);
-  arenaPlayer.heading += turn * turnRate * dts;
-  arenaPlayer.fwd += accel * 14 * dts;
-  arenaPlayer.fwd *= Math.pow(0.6, dts); // friction
-  arenaPlayer.fwd = Math.max(-6, Math.min(20, arenaPlayer.fwd));
 
-  arenaPlayer.x += Math.sin(arenaPlayer.heading) * arenaPlayer.fwd * dts;
-  arenaPlayer.z += Math.cos(arenaPlayer.heading) * arenaPlayer.fwd * dts;
+  // drift physics: velocity vector is separate from heading
+  const speed = Math.hypot(arenaPlayer.vx, arenaPlayer.vz);
+  const turnRate = 1.6 + Math.min(1.4, speed / 10);
+  arenaPlayer.heading += turn * turnRate * dts;
+
+  // accelerate in the heading direction
+  arenaPlayer.vx += Math.sin(arenaPlayer.heading) * accel * 14 * dts;
+  arenaPlayer.vz += Math.cos(arenaPlayer.heading) * accel * 14 * dts;
+
+  // grip: gradually bleed lateral velocity back toward heading (low = more slide)
+  if (speed > 0.2) {
+    const gripRate = 2.2;          // lower value = more drift
+    const f = 1 - Math.exp(-gripRate * dts);
+    const alignedVx = Math.sin(arenaPlayer.heading) * speed;
+    const alignedVz = Math.cos(arenaPlayer.heading) * speed;
+    arenaPlayer.vx += (alignedVx - arenaPlayer.vx) * f;
+    arenaPlayer.vz += (alignedVz - arenaPlayer.vz) * f;
+  }
+
+  // friction & speed cap
+  arenaPlayer.vx *= Math.pow(0.55, dts);
+  arenaPlayer.vz *= Math.pow(0.55, dts);
+  const newSpeed = Math.hypot(arenaPlayer.vx, arenaPlayer.vz);
+  if (newSpeed > 18) { arenaPlayer.vx *= 18 / newSpeed; arenaPlayer.vz *= 18 / newSpeed; }
+
+  // keep fwd as signed speed for camera/compat
+  arenaPlayer.fwd = (Math.sin(arenaPlayer.heading) * arenaPlayer.vx +
+                     Math.cos(arenaPlayer.heading) * arenaPlayer.vz);
+
+  arenaPlayer.x += arenaPlayer.vx * dts;
+  arenaPlayer.z += arenaPlayer.vz * dts;
 
   // tile under player determines support
   const tile = arenaTileAt(arenaPlayer.x, arenaPlayer.z);
@@ -828,59 +1052,137 @@ function updateArena(dt) {
   if (onSolid && arenaPlayer.y <= supportY + 0.05 && arenaPlayer.vy <= 0) {
     arenaPlayer.y = supportY;
     arenaPlayer.vy = 0;
+    arenaPlayer.onGround = true;
   } else {
+    arenaPlayer.onGround = false;
     arenaPlayer.vy -= 18 * dts;
     arenaPlayer.y += arenaPlayer.vy * dts;
   }
 
-  // mark tile to start fading after a short stand-on time
-  if (tile && tile.state === 'alive') {
-    tile.timer += dt;
-    if (tile.timer > 500) {
-      tile.state = 'fading';
-      tile.timer = 0;
-    }
+  // tile starts falling only when the player is physically standing on it
+  if (tile && tile.state === 'alive' && arenaPlayer.onGround) {
+    tile.state = 'fading';
+    tile.timer = 0;
   }
 
-  // tile state machine — touched tiles slowly fall and stay gone
+  // tile state machine
   for (const t of arenaTiles) {
     if (t.state === 'fading') {
       t.timer += dt;
-      const p = Math.min(1, t.timer / 2200);
-      // turn red/pink as it falls, then drop with accelerating gravity
-      const r = 255 - p * 60;
-      const g = 255 - p * 220;
-      const b = 255 - p * 220;
-      t.mesh.material.color.setRGB(r/255, g/255, b/255);
-      // slow at first, then plummet
-      const drop = p < 0.4 ? p * 1.5 : (0.6 + Math.pow((p - 0.4) / 0.6, 2) * 30);
+      const p = Math.min(1, t.timer / 1800);
+      const flash = Math.min(1, p / 0.4);
+      t.mesh.material.color.setRGB(1, 1 - flash * 0.85, 1 - flash * 0.85);
+      const holdFrac = 0.39;
+      const drop = p < holdFrac ? 0 : Math.pow((p - holdFrac) / (1 - holdFrac), 2) * 38;
       t.mesh.position.y = -drop;
-      if (t.timer > 2200) {
+      if (t.timer > 1800) {
         t.state = 'gone';
+        t.timer = 0;       // reuse timer for respawn countdown
         t.mesh.visible = false;
       }
+    } else if (t.state === 'gone') {
+      t.timer += dt;
+      if (t.timer >= 5000) {           // 5-second respawn delay
+        t.state = 'rising';
+        t.timer = 0;
+        t.mesh.position.y = -5;        // start just below the platform
+        t.mesh.material.color.setHex(0xfafafa);
+        t.mesh.visible = true;
+      }
+    } else if (t.state === 'rising') {
+      t.timer += dt;
+      const p = Math.min(1, t.timer / 500);   // rise over 500 ms
+      t.mesh.position.y = -5 * (1 - p);
+      if (p >= 1) {
+        t.state = 'alive';
+        t.mesh.position.y = 0;
+      }
     }
-    // 'gone' tiles stay gone — single-shot platform
   }
 
-  // death by falling
-  if (arenaPlayer.y < -20) {
+  // update bots
+  for (const bot of arenaBots) {
+    if (bot.state === 'alive') updateBot(bot, dt);
+  }
+
+  // player-bot collision (soft circle push)
+  const COLL_R = 1.4;
+  for (const bot of arenaBots) {
+    if (bot.state !== 'alive') continue;
+    const dx = arenaPlayer.x - bot.x;
+    const dz = arenaPlayer.z - bot.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist < COLL_R * 2 && dist > 0.001) {
+      const nx = dx / dist, nz = dz / dist;
+      const overlap = COLL_R * 2 - dist;
+      arenaPlayer.x += nx * overlap * 0.55;
+      arenaPlayer.z += nz * overlap * 0.55;
+      bot.x -= nx * overlap * 0.45;
+      bot.z -= nz * overlap * 0.45;
+      const relVx = arenaPlayer.vx - bot.vx;
+      const relVz = arenaPlayer.vz - bot.vz;
+      const dot = relVx * nx + relVz * nz;
+      if (dot < 0) {
+        const impulse = dot * 0.6;
+        arenaPlayer.vx -= impulse * nx;
+        arenaPlayer.vz -= impulse * nz;
+        bot.vx += impulse * nx;
+        bot.vz += impulse * nz;
+      }
+    }
+  }
+
+  // drift trail: emit skid marks when sliding sideways
+  if (arenaPlayer.onGround) {
+    const lateralVx = arenaPlayer.vx - Math.sin(arenaPlayer.heading) * arenaPlayer.fwd;
+    const lateralVz = arenaPlayer.vz - Math.cos(arenaPlayer.heading) * arenaPlayer.fwd;
+    const lateralSpeed = Math.hypot(lateralVx, lateralVz);
+    if (lateralSpeed > 2.0) {
+      const rx = arenaPlayer.x - Math.sin(arenaPlayer.heading) * 1.6;
+      const rz = arenaPlayer.z - Math.cos(arenaPlayer.heading) * 1.6;
+      skidMarks.push({ wx: rx, wy: arenaPlayer.y + 0.05, wz: rz, life: 1800, maxLife: 1800, intensity: Math.min(1, lateralSpeed / 8) });
+    }
+  }
+  for (const s of skidMarks) s.life -= dt;
+  if (skidMarks.length > 250) skidMarks = skidMarks.filter(s => s.life > 0).slice(-220);
+
+  const PLACEMENT_COINS = [200, 100, 50, 15]; // 1st→4th
+  const allBotsDead = arenaBots.every(b => b.state === 'dead');
+
+  // player wins — all bots eliminated first
+  if (allBotsDead && !arenaElimOrder.includes('player')) {
+    arenaElimOrder.push('player');
+    arenaPlacement = (BOT_COLORS.length + 1) - arenaElimOrder.indexOf('player');
     state = STATE.DEAD;
-    addShake(0.4, 600);
-    playCrashSound();
-    crashes = 1;
     if (score > best) { best = Math.floor(score); localStorage.setItem('headon_best', best); }
+    const placeCoin = PLACEMENT_COINS[arenaPlacement - 1] || 15;
+    const total = placeCoin + Math.floor(gameTime * 3);
     earnings = {
-      distanceKm: 0, distanceCoins: 0,
-      speedingSec: gameTime, speedCoins: Math.floor(gameTime * 4),
-      overtakes: 0, overtakeCoins: 0,
-      waves: 0, waveCoins: 0,
-      topSpeedKmh: arenaPlayer.fwd * 3.6, topSpeedBonus: 0,
-      total: Math.floor(gameTime * 4),
-      mode: 'ARENA',
+      distanceKm:0, distanceCoins:0, speedingSec:gameTime,
+      speedCoins: Math.floor(gameTime * 3), overtakes:0, overtakeCoins:0,
+      waves:0, waveCoins:0, topSpeedKmh:0, topSpeedBonus: placeCoin,
+      total, mode:'ARENA', placement: arenaPlacement,
     };
-    lastEarned = earnings.total;
-    if (lastEarned > 0) setCoins(coins + lastEarned);
+    lastEarned = total; if (total > 0) setCoins(coins + total);
+    return;
+  }
+
+  // player death by falling
+  if (arenaPlayer.y < -3 && !arenaElimOrder.includes('player')) {
+    arenaElimOrder.push('player');
+    arenaPlacement = (BOT_COLORS.length + 1) - arenaElimOrder.indexOf('player');
+    state = STATE.DEAD;
+    addShake(0.4, 600); playCrashSound(); crashes = 1;
+    if (score > best) { best = Math.floor(score); localStorage.setItem('headon_best', best); }
+    const placeCoin = PLACEMENT_COINS[arenaPlacement - 1] || 15;
+    const total = placeCoin + Math.floor(gameTime * 3);
+    earnings = {
+      distanceKm:0, distanceCoins:0, speedingSec:gameTime,
+      speedCoins: Math.floor(gameTime * 3), overtakes:0, overtakeCoins:0,
+      waves:0, waveCoins:0, topSpeedKmh: arenaPlayer.fwd * 3.6, topSpeedBonus: placeCoin,
+      total, mode:'ARENA', placement: arenaPlacement,
+    };
+    lastEarned = total; if (total > 0) setCoins(coins + total);
   }
 }
 function cycleDifficulty() { difficultyIdx = (difficultyIdx + 1) % DIFFICULTIES.length; localStorage.setItem('headon_diff', difficultyIdx); }
@@ -1161,6 +1463,7 @@ function syncScene() {
   mountains.visible = !inShowroom && !inArena;
   showroomGroup.visible = inShowroom;
   arenaGroup.visible = inArena;
+  for (const b of arenaBots) { if (b.mesh) b.mesh.visible = inArena && b.state === 'alive'; }
   for (const s of scenery) s.mesh.visible = !inShowroom && !inArena;
   stars.visible = !inShowroom && !inArena && BACKGROUNDS[bgIdx].stars;
   // background color override for arena
@@ -1233,6 +1536,54 @@ function drawHud2D() {
   if (state === STATE.MENU) drawMenu();
   if (state === STATE.HELP) drawHelp();
   if (state === STATE.DEAD) drawCrash();
+  if (state === STATE.ARENA) drawArenaHud();
+}
+
+function drawArenaHud() {
+  // skid marks — drawn first (behind HUD)
+  for (const s of skidMarks) {
+    if (s.life <= 0) continue;
+    const p = project3D(s.wx, s.wy, s.wz);
+    if (p.behind) continue;
+    const alpha = (s.life / s.maxLife) * 0.5 * s.intensity;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#222';
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, 4, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  const aliveBots = arenaBots.filter(b => b.state === 'alive').length;
+  const livePlacement = aliveBots + 1; // 3 bots alive = 4th, 0 alive = 1st
+  const labels  = ['', '1ST', '2ND', '3RD', '4TH'];
+  const colours = ['', '#ffd700', '#c0c0c0', '#cd7f32', '#ff6666'];
+  const label   = labels[livePlacement]  || '4TH';
+  const col     = colours[livePlacement] || '#ff6666';
+
+  // pill background
+  ctx.save();
+  ctx.globalAlpha = 0.72;
+  ctx.fillStyle = '#111';
+  const pw = 130, ph = 32, px = W / 2 - pw / 2, py = 10;
+  ctx.beginPath();
+  ctx.roundRect(px, py, pw, ph, 8);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // placement text
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 18px system-ui';
+  ctx.fillStyle = col;
+  ctx.fillText(label + ' PLACE', W / 2, py + 22);
+
+  // time
+  ctx.font = '11px system-ui';
+  ctx.fillStyle = '#aaa';
+  ctx.fillText(Math.floor(gameTime) + 's  ·  ' + aliveBots + ' rivals left', W / 2, py + ph + 14);
+
+  ctx.textAlign = 'left';
+  ctx.restore();
 }
 function drawParticles() {
   for (const p of particles) {
@@ -1531,6 +1882,7 @@ function drawHelp() {
 }
 
 function drawCrash() {
+  if (earnings && earnings.mode === 'ARENA') { drawArenaCrash(); return; }
   ctx.fillStyle = 'rgba(0,0,0,0.7)';
   ctx.fillRect(0, H/2 - 110, W, 230);
   ctx.textAlign = 'center';
@@ -1546,6 +1898,31 @@ function drawCrash() {
   ctx.fillText('Total: ● ' + coins, W/2, H/2 + 42);
   ctx.fillStyle = '#fff'; ctx.font = '14px system-ui';
   ctx.fillText('R to restart · Space for menu', W/2, H/2 + 88);
+  ctx.textAlign = 'left';
+}
+
+function drawArenaCrash() {
+  const placement = earnings.placement || 4;
+  const labels = ['', '1ST PLACE!', '2ND PLACE', '3RD PLACE', '4TH PLACE'];
+  const colors  = ['', '#ffd700',   '#c0c0c0',  '#cd7f32',  '#ff5555'];
+  ctx.fillStyle = 'rgba(0,0,0,0.78)';
+  ctx.fillRect(0, H/2 - 125, W, 258);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = colors[placement];
+  ctx.font = 'bold 48px system-ui';
+  ctx.fillText(labels[placement], W/2, H/2 - 60);
+  ctx.fillStyle = '#fff'; ctx.font = '13px system-ui';
+  ctx.fillText('Survived: ' + Math.floor(gameTime) + 's  ·  ' +
+    arenaBots.filter(b => b.state === 'dead').length + ' / 3 bots eliminated', W/2, H/2 - 28);
+  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 18px system-ui';
+  ctx.fillText('+ ' + lastEarned + ' coins', W/2, H/2 + 5);
+  ctx.fillStyle = '#aaa'; ctx.font = '11px system-ui';
+  ctx.fillText('placement bonus ' + (earnings.topSpeedBonus || 0) +
+    ' + survival ' + (earnings.speedCoins || 0), W/2, H/2 + 24);
+  ctx.fillStyle = '#bbb'; ctx.font = '12px system-ui';
+  ctx.fillText('Total: ● ' + coins, W/2, H/2 + 44);
+  ctx.fillStyle = '#fff'; ctx.font = '14px system-ui';
+  ctx.fillText('R to restart · Space for menu', W/2, H/2 + 90);
   ctx.textAlign = 'left';
 }
 

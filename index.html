@@ -1923,9 +1923,11 @@ function drawGarage() {
   const contentY=90, contentH=H-90-48;
 
   if(garageTab==='cars'){
-    const cardH=74, gap=5;
+    const cardH=52, gap=6;
+    const listH=CARS.length*(cardH+gap)-gap;
+    const startY=contentY+Math.max(0,(contentH-listH)/2);
     CARS.forEach((car,i)=>{
-      const cy=contentY+i*(cardH+gap);
+      const cy=startY+i*(cardH+gap);
       const owned_=isUnlocked(i);
       const equipped=carIdx===i;
       // card bg
@@ -1935,17 +1937,20 @@ function drawGarage() {
       ctx.lineWidth=equipped?2:1; roundedRect(14,cy,W-28,cardH,7); ctx.stroke();
       // color swatch
       ctx.fillStyle='#'+car.body.toString(16).padStart(6,'0');
-      ctx.beginPath(); ctx.roundRect(22,cy+8,18,18,3); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(22,cy+cardH/2-10,20,20,4); ctx.fill();
       // name & desc
       ctx.textAlign='left'; ctx.fillStyle=owned_?'#ffd54a':'#aaa';
       ctx.font='bold 13px system-ui';
-      ctx.fillText(car.name+(equipped?' · EQUIPPED':''),46,cy+20);
-      ctx.fillStyle='#bbb'; ctx.font='10px system-ui';
-      ctx.fillText(car.desc,46,cy+34);
-      // stats
-      drawCarStats(car,22,cy+cardH-8);
+      ctx.fillText(car.name,50,cy+cardH/2-4);
+      ctx.fillStyle='#888'; ctx.font='10px system-ui';
+      ctx.fillText(car.desc,50,cy+cardH/2+11);
+      // cost for locked cars
+      if(!owned_){
+        ctx.fillStyle='#ff8888'; ctx.font='9px system-ui';
+        ctx.fillText('● '+car.cost+' coins',50,cy+cardH/2+23);
+      }
       // action button
-      const bw=72,bh=24,bx=W-14-bw-4,by_=cy+cardH/2-bh/2;
+      const bw=76,bh=26,bx=W-14-bw-4,by_=cy+cardH/2-bh/2;
       if(equipped){
         garageBtn('EQUIPPED',bx,by_,bw,bh,null,{active:true,small:true});
       }else if(owned_){

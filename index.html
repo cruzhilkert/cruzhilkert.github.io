@@ -370,7 +370,7 @@ showroomGroup.visible = false;
 const arenaGroup = new THREE.Group();
 const arenaTiles = [];
 const HEX_SIZE = 1.55;
-const HEX_RADIUS = 9;
+const HEX_RADIUS = 13;
 const arenaPlayer = { x: 0, z: 0, y: 0, vy: 0, vx: 0, vz: 0, heading: 0, fwd: 0, onGround: false };
 const arenaTileGeom = new THREE.CylinderGeometry(HEX_SIZE * 0.92, HEX_SIZE * 0.92, 0.28, 6);
 
@@ -975,9 +975,9 @@ function updateBot(bot, dt) {
   bot.heading += Math.sign(diff) * Math.min(Math.abs(diff), 2.8 * dts);
 
   // drive forward
-  bot.fwd += 12 * dts;
+  bot.fwd += 18 * dts;
   bot.fwd *= Math.pow(0.55, dts);
-  bot.fwd = Math.min(14, bot.fwd);
+  bot.fwd = Math.min(22, bot.fwd);
   bot.x += Math.sin(bot.heading) * bot.fwd * dts + bot.vx * dts;
   bot.z += Math.cos(bot.heading) * bot.fwd * dts + bot.vz * dts;
   bot.vx *= Math.pow(0.1, dts);
@@ -1080,8 +1080,8 @@ function updateArena(dt) {
   arenaPlayer.heading += turn * turnRate * dts;
 
   // accelerate in the heading direction
-  arenaPlayer.vx += Math.sin(arenaPlayer.heading) * accel * 14 * dts;
-  arenaPlayer.vz += Math.cos(arenaPlayer.heading) * accel * 14 * dts;
+  arenaPlayer.vx += Math.sin(arenaPlayer.heading) * accel * 22 * dts;
+  arenaPlayer.vz += Math.cos(arenaPlayer.heading) * accel * 22 * dts;
 
   // grip: gradually bleed lateral velocity back toward heading (low = more slide)
   if (speed > 0.2) {
@@ -1097,7 +1097,7 @@ function updateArena(dt) {
   arenaPlayer.vx *= Math.pow(0.55, dts);
   arenaPlayer.vz *= Math.pow(0.55, dts);
   const newSpeed = Math.hypot(arenaPlayer.vx, arenaPlayer.vz);
-  if (newSpeed > 18) { arenaPlayer.vx *= 18 / newSpeed; arenaPlayer.vz *= 18 / newSpeed; }
+  if (newSpeed > 28) { arenaPlayer.vx *= 28 / newSpeed; arenaPlayer.vz *= 28 / newSpeed; }
 
   // keep fwd as signed speed for camera/compat
   arenaPlayer.fwd = (Math.sin(arenaPlayer.heading) * arenaPlayer.vx +
@@ -1408,17 +1408,19 @@ function update(dt) {
   if (player.worldX < -limit) { player.worldX = -limit; player.vx *= -0.2; }
   if (player.worldX > limit)  { player.worldX = limit;  player.vx *= -0.2; }
 
-  // tire smoke trail when steering hard
-  if (Math.abs(player.vx) > 5) {
-    const intensity = Math.min(1, (Math.abs(player.vx) - 5) / 9);
+  // continuous tire trail — always while driving, stronger when sliding sideways
+  if (speed > 8) {
+    const slideBoost = Math.min(1, Math.abs(player.vx) / 12);
     const trailColor = getTrailColor();
     for (let side = -1; side <= 1; side += 2) {
       const wp = project3D(player.worldX + side * 0.75, 0.05, -1.8);
       if (!wp.behind) {
         particles.push({ x: wp.x, y: wp.y,
-          vx: (Math.random()-0.5) * 1.5, vy: -(0.4 + Math.random() * 0.6),
-          life: 500 + Math.random()*300, max: 800,
-          size: 5 + intensity * 5 + Math.random() * 3,
+          vx: (Math.random()-0.5) * (0.8 + slideBoost * 2),
+          vy: -(0.3 + Math.random() * 0.5),
+          life: 300 + slideBoost * 400 + Math.random() * 200,
+          max: 900,
+          size: 3 + slideBoost * 6 + Math.random() * 3,
           color: trailColor, gravity: 0, kind: 'spark' });
       }
     }
@@ -1584,8 +1586,8 @@ function syncScene() {
     const sy = (Math.random()*2-1) * shakeMag * 0.5;
     if (inArena) {
       // chase camera, pulled high & back so you can see most of the platform
-      const dist = 16;
-      const camY = 11;
+      const dist = 24;
+      const camY = 17;
       const cx = arenaPlayer.x - Math.sin(arenaPlayer.heading) * dist + sx;
       const cy = Math.max(arenaPlayer.y, 0) + camY + sy;
       const cz = arenaPlayer.z - Math.cos(arenaPlayer.heading) * dist;

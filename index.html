@@ -52,11 +52,13 @@ const SHOP_PAINTS = [
   { id: 'paint_inferno', name: 'INFERNO',  color: 0xe67e22, cost: 75  },
 ];
 const SHOP_TRAILS = [
-  { id: 'trail_default', name: 'DEFAULT',    color: '#333333', cost: 0   },
-  { id: 'trail_neon',    name: 'NEON CYAN',  color: '#00ffee', cost: 100 },
-  { id: 'trail_fire',    name: 'FIRE',       color: '#ff6600', cost: 100 },
-  { id: 'trail_violet',  name: 'VIOLET HAZE',color: '#cc44ff', cost: 100 },
-  { id: 'trail_ice',     name: 'ICE',        color: '#aaddff', cost: 75  },
+  { id: 'trail_default', name: 'DEFAULT',    color: '#333333', cost: 0,   special: null },
+  { id: 'trail_neon',    name: 'NEON CYAN',  color: '#00ffee', cost: 100, special: null },
+  { id: 'trail_fire',    name: 'FIRE',       color: '#ff6600', cost: 100, special: null },
+  { id: 'trail_violet',  name: 'VIOLET HAZE',color: '#cc44ff', cost: 100, special: null },
+  { id: 'trail_ice',     name: 'ICE',        color: '#aaddff', cost: 75,  special: null },
+  { id: 'trail_rainbow', name: 'RAINBOW',    color: '#ff0000', cost: 300, special: 'rainbow' },
+  { id: 'trail_hyper',   name: 'HYPER',      color: '#cc44ff', cost: 400, special: 'hyper'   },
 ];
 
 const ENEMY_TYPES = [
@@ -131,7 +133,8 @@ function ownItem(id){ if (!owned.includes(id)){ owned.push(id); localStorage.set
 function equipPaint(id){ equippedPaint = id; localStorage.setItem('headon_paint', id); rebuildPlayerCar(); }
 function equipTrail(id){ equippedTrail = id; localStorage.setItem('headon_trail', id); }
 function getPlayerBodyColor(){ const p = SHOP_PAINTS.find(p => p.id === equippedPaint); return (p && p.color != null) ? p.color : CARS[carIdx].body; }
-function getTrailColor(){ const t = SHOP_TRAILS.find(t => t.id === equippedTrail); return t ? t.color : '#333333'; }
+function getTrailColor(t){ const tr = SHOP_TRAILS.find(x => x.id === equippedTrail); if (!tr) return '#333333'; if (tr.special === 'rainbow') { const h = Math.floor(t * 280) % 360; return `hsl(${h},100%,55%)`; } if (tr.special === 'hyper') { const h = 270 + Math.sin(t * 4) * 60; return `hsl(${Math.floor(h)},100%,60%)`; } return tr.color; }
+let _trailT = 0; // global trail time for color cycling
 
 // ===== runtime state =====
 const STATE = { MENU: 'menu', HELP: 'help', PLAYING: 'playing', DEAD: 'dead', ARENA: 'arena', GARAGE: 'garage' };
@@ -365,6 +368,141 @@ showroomGroup.add(showKey, showKey.target);
 
 scene.add(showroomGroup);
 showroomGroup.visible = false;
+
+// ===== GARAGE 3D scene =====
+const garageSceneGroup = new THREE.Group();
+
+// concrete floor with subtle grid texture
+const concC = document.createElement('canvas');
+concC.width = concC.height = 256;
+{ const c = concC.getContext('2d');
+  c.fillStyle = '#80808a'; c.fillRect(0,0,256,256);
+  c.strokeStyle = '#6a6a74'; c.lineWidth = 1;
+  for (let i = 0; i <= 256; i += 64) {
+    c.beginPath(); c.moveTo(i,0); c.lineTo(i,256); c.stroke();
+    c.beginPath(); c.moveTo(0,i); c.lineTo(256,i); c.stroke();
+  } }
+const concTex = new THREE.CanvasTexture(concC);
+concTex.wrapS = concTex.wrapT = THREE.RepeatWrapping;
+concTex.repeat.set(5, 5);
+const gFloor = new THREE.Mesh(
+  new THREE.PlaneGeometry(24, 26),
+  new THREE.MeshLambertMaterial({ map: concTex })
+);
+gFloor.rotation.x = -Math.PI/2; gFloor.position.set(0, 0, 1);
+garageSceneGroup.add(gFloor);
+
+// oil stain under car
+const oilMat = new THREE.MeshBasicMaterial({ color: 0x2a2a30, transparent: true, opacity: 0.55 });
+const oil = new THREE.Mesh(new THREE.CircleGeometry(1.1, 16), oilMat);
+oil.rotation.x = -Math.PI/2; oil.position.set(0.4, 0.01, 1.2);
+garageSceneGroup.add(oil);
+
+// walls
+const wallMat = new THREE.MeshLambertMaterial({ color: 0xb0b0b8, side: THREE.FrontSide });
+// back wall (z=+13)
+const gBackWall = new THREE.Mesh(new THREE.PlaneGeometry(24, 10), wallMat);
+gBackWall.position.set(0, 5, 13); gBackWall.rotation.y = Math.PI;
+garageSceneGroup.add(gBackWall);
+// left wall (x=−12)
+const gLeftWall = new THREE.Mesh(new THREE.PlaneGeometry(26, 10), wallMat);
+gLeftWall.position.set(-12, 5, 1); gLeftWall.rotation.y = Math.PI/2;
+garageSceneGroup.add(gLeftWall);
+// right wall (x=+12)
+const gRightWall = new THREE.Mesh(new THREE.PlaneGeometry(26, 10), wallMat);
+gRightWall.position.set(12, 5, 1); gRightWall.rotation.y = -Math.PI/2;
+garageSceneGroup.add(gRightWall);
+// ceiling
+const gCeil = new THREE.Mesh(new THREE.PlaneGeometry(24, 26), new THREE.MeshLambertMaterial({ color: 0x9090a0 }));
+gCeil.rotation.x = Math.PI/2; gCeil.position.set(0, 9, 1);
+garageSceneGroup.add(gCeil);
+
+// ---- GARAGE DOOR (front wall, z=−12) ----
+// door panels — horizontal corrugated slats
+const dpMat1 = new THREE.MeshLambertMaterial({ color: 0xc8c8d0 });
+const dpMat2 = new THREE.MeshLambertMaterial({ color: 0xb0b0b8 });
+for (let p = 0; p < 8; p++) {
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(22, 0.95, 0.22), p%2===0 ? dpMat1 : dpMat2);
+  panel.position.set(0, 0.5 + p * 0.96, -12);
+  garageSceneGroup.add(panel);
+  // horizontal groove line between panels
+  const groove = new THREE.Mesh(new THREE.BoxGeometry(22, 0.08, 0.26), new THREE.MeshLambertMaterial({ color: 0x888890 }));
+  groove.position.set(0, p * 0.96 + 0.04, -11.93);
+  garageSceneGroup.add(groove);
+}
+// door frame
+const fMat = new THREE.MeshLambertMaterial({ color: 0x585860 });
+garageSceneGroup.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(22.6, 0.4, 0.3), fMat), { position: new THREE.Vector3(0, 8.1, -12) }));
+for (let s of [-1, 1]) {
+  const post = new THREE.Mesh(new THREE.BoxGeometry(0.35, 8.1, 0.3), fMat);
+  post.position.set(s * 11.17, 4.05, -12);
+  garageSceneGroup.add(post);
+}
+// door handle strip (center of door)
+const handle = new THREE.Mesh(new THREE.BoxGeometry(3, 0.12, 0.35), new THREE.MeshLambertMaterial({ color: 0x707078 }));
+handle.position.set(0, 3.84, -11.9);
+garageSceneGroup.add(handle);
+
+// ---- TIRES & WHEELS (right side, x≈10, z≈6) ----
+const tireMat = new THREE.MeshLambertMaterial({ color: 0x222224 });
+const rimMat2 = new THREE.MeshLambertMaterial({ color: 0x9090a0 });
+for (let i = 0; i < 4; i++) {
+  // tire ring (standing, leaning slightly against right wall)
+  const t = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.18, 8, 16), tireMat);
+  t.rotation.y = Math.PI/2; t.rotation.z = 0.18;
+  t.position.set(10.2, 0.6, 5.5 + i * 1.35);
+  garageSceneGroup.add(t);
+  // rim disc inside
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.14, 8), rimMat2);
+  rim.rotation.z = Math.PI/2;
+  rim.position.copy(t.position); rim.position.x -= 0.12;
+  garageSceneGroup.add(rim);
+}
+
+// ---- WORKBENCH (left wall) ----
+const woodMat = new THREE.MeshLambertMaterial({ color: 0x7a5530 });
+const metalMat = new THREE.MeshLambertMaterial({ color: 0x5a5a62 });
+// table top
+const bench = new THREE.Mesh(new THREE.BoxGeometry(7, 0.14, 1.8), woodMat);
+bench.position.set(-8, 1.05, 7); garageSceneGroup.add(bench);
+// legs
+for (let lx of [-3, 3]) for (let lz of [-0.75, 0.75]) {
+  const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.05, 0.1), metalMat);
+  leg.position.set(-8+lx, 0.525, 7+lz); garageSceneGroup.add(leg);
+}
+// shelf above bench
+const shelf = new THREE.Mesh(new THREE.BoxGeometry(7, 0.08, 1.2), woodMat);
+shelf.position.set(-8, 3.2, 7.2); garageSceneGroup.add(shelf);
+// items on shelf — oil cans (small cylinders)
+for (let c = 0; c < 5; c++) {
+  const can = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.38, 8),
+    new THREE.MeshLambertMaterial({ color: [0xcc2020,0x2050cc,0xf0a020,0x208040,0xdd3390][c] }));
+  can.position.set(-10.5 + c * 0.55, 3.45, 7.2); garageSceneGroup.add(can);
+}
+
+// ---- RED TOOLBOX (below workbench) ----
+const tbMat = new THREE.MeshLambertMaterial({ color: 0xcc1a1a });
+const tb = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.9, 0.85), tbMat);
+tb.position.set(-10, 0.95, 7); garageSceneGroup.add(tb);
+// drawer lines on toolbox
+for (let d = 0; d < 5; d++) {
+  const dr = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.28, 0.88), new THREE.MeshLambertMaterial({ color: 0xaa1010 }));
+  dr.position.set(-10, 0.22 + d * 0.34, 7.01); garageSceneGroup.add(dr);
+  const knob = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.08, 0.12), new THREE.MeshLambertMaterial({ color: 0xddddcc }));
+  knob.position.set(-10, 0.22 + d * 0.34, 7.46); garageSceneGroup.add(knob);
+}
+
+// ---- OVERHEAD FLUORESCENT LIGHTS ----
+const lightFixMat = new THREE.MeshBasicMaterial({ color: 0xeeeeff });
+for (let lx of [-5, 5]) {
+  const fix = new THREE.Mesh(new THREE.BoxGeometry(4, 0.12, 0.35), lightFixMat);
+  fix.position.set(lx, 8.85, 1); garageSceneGroup.add(fix);
+  const bulb = new THREE.PointLight(0xfff8e8, 1.4, 20);
+  bulb.position.set(lx, 8.6, 1); garageSceneGroup.add(bulb);
+}
+
+scene.add(garageSceneGroup);
+garageSceneGroup.visible = false;
 
 // ===== ARENA scene (hex tile survival) =====
 const arenaGroup = new THREE.Group();
@@ -1105,6 +1243,7 @@ function updateArena(dt) {
 
   arenaPlayer.x += arenaPlayer.vx * dts;
   arenaPlayer.z += arenaPlayer.vz * dts;
+  _trailT += dts;
 
   // tile under player determines support
   const tile = arenaTileAt(arenaPlayer.x, arenaPlayer.z);
@@ -1408,19 +1547,21 @@ function update(dt) {
   if (player.worldX < -limit) { player.worldX = -limit; player.vx *= -0.2; }
   if (player.worldX > limit)  { player.worldX = limit;  player.vx *= -0.2; }
 
-  // continuous tire trail — always while driving, stronger when sliding sideways
+  // continuous tire trail — emits downward (toward camera = bottom of screen)
   if (speed > 8) {
+    _trailT += 0.016;
     const slideBoost = Math.min(1, Math.abs(player.vx) / 12);
-    const trailColor = getTrailColor();
+    const trailColor = getTrailColor(_trailT);
     for (let side = -1; side <= 1; side += 2) {
-      const wp = project3D(player.worldX + side * 0.75, 0.05, -1.8);
+      const wp = project3D(player.worldX + side * 0.72, 0.05, -1.6);
       if (!wp.behind) {
+        // vy positive = drift toward bottom of screen (behind the car)
         particles.push({ x: wp.x, y: wp.y,
-          vx: (Math.random()-0.5) * (0.8 + slideBoost * 2),
-          vy: -(0.3 + Math.random() * 0.5),
-          life: 300 + slideBoost * 400 + Math.random() * 200,
-          max: 900,
-          size: 3 + slideBoost * 6 + Math.random() * 3,
+          vx: (Math.random()-0.5) * (1.5 + slideBoost * 3),
+          vy: 1.5 + Math.random() * 2.5,
+          life: 700 + slideBoost * 600 + Math.random() * 400,
+          max: 1700,
+          size: 8 + slideBoost * 14 + Math.random() * 6,
           color: trailColor, gravity: 0, kind: 'spark' });
       }
     }
@@ -1536,17 +1677,20 @@ function updateParticles(dt) {
 
 // ===== sync 3D scene =====
 function syncScene() {
-  const inShowroom = (state === STATE.MENU || state === STATE.HELP || state === STATE.GARAGE);
+  const inShowroom = (state === STATE.MENU || state === STATE.HELP);
+  const inGarage3D = (state === STATE.GARAGE);
   const inArena = (state === STATE.ARENA) || (state === STATE.DEAD && earnings && earnings.mode === 'ARENA');
-  roadMesh.visible = !inShowroom && !inArena;
-  grassMesh.visible = !inShowroom && !inArena;
-  mountains.visible = !inShowroom && !inArena;
+  const inIndoor = inShowroom || inGarage3D;
+  roadMesh.visible = !inIndoor && !inArena;
+  grassMesh.visible = !inIndoor && !inArena;
+  mountains.visible = !inIndoor && !inArena;
   showroomGroup.visible = inShowroom;
+  garageSceneGroup.visible = inGarage3D;
   arenaGroup.visible = inArena;
   for (const b of arenaBots) { if (b.mesh) b.mesh.visible = inArena && b.state === 'alive'; }
-  for (const s of scenery) s.mesh.visible = !inShowroom && !inArena;
-  stars.visible = !inShowroom && !inArena && BACKGROUNDS[bgIdx].stars;
-  // background color override for arena
+  for (const s of scenery) s.mesh.visible = !inIndoor && !inArena;
+  stars.visible = !inIndoor && !inArena && BACKGROUNDS[bgIdx].stars;
+
   if (inArena) {
     scene.background = new THREE.Color(0x5bbde4);
     scene.fog.color.set(0x5bbde4);
@@ -1554,21 +1698,30 @@ function syncScene() {
     hemi.color.set(0x5bbde4);
     hemi.groundColor.set(0x0055bb);
     ambient.intensity = 0.35;
+  } else if (inGarage3D) {
+    scene.background = new THREE.Color(0x80808a);
+    scene.fog.color.set(0x80808a);
+    scene.fog.near = 22; scene.fog.far = 55;
+    hemi.color.set(0xfff8e8);
+    hemi.groundColor.set(0x606068);
+    sun.color.set(0xfff8e8);
+    ambient.intensity = 0.55;
   }
 
-  if (inShowroom) {
-    // pump up ambient when in showroom for dramatic look
-    ambient.intensity = 0.45;
+  if (inIndoor) {
+    // pristine car, slowly rotating
     if (playerCarGroup) {
       playerCarGroup.position.set(0, 0.18, 1);
       playerCarGroup.rotation.set(0, menuBlink * 0.0008, 0);
       playerCarGroup.visible = true;
-      applyDamageVisual(playerCarGroup, 0); // pristine in showroom
+      applyDamageVisual(playerCarGroup, 0);
     }
+    if (!inGarage3D) ambient.intensity = 0.45; // showroom brighter
     // slowly orbiting camera
     const orbit = -Math.PI/4 + Math.sin(menuBlink * 0.00018) * 0.4;
-    const dist = 9.5;
-    camera.position.set(Math.sin(orbit) * dist, 3.4, Math.cos(orbit) * -dist + 1);
+    const dist = inGarage3D ? 8.5 : 9.5;
+    const camH = inGarage3D ? 2.8 : 3.4;
+    camera.position.set(Math.sin(orbit) * dist, camH, Math.cos(orbit) * -dist + 1);
     camera.lookAt(0, 1.1, 1);
   } else {
     // restore ambient from background
@@ -1630,9 +1783,9 @@ function drawArenaHud() {
     if (p.behind) continue;
     const alpha = (s.life / s.maxLife) * 0.5 * s.intensity;
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = getTrailColor();
+    ctx.fillStyle = getTrailColor(_trailT + s.life * 0.001);
     ctx.beginPath();
-    ctx.ellipse(p.x, p.y, 4, 2, 0, 0, Math.PI * 2);
+    ctx.ellipse(p.x, p.y, 12, 6, 0, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalAlpha = 1;

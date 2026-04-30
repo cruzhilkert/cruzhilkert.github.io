@@ -369,96 +369,7 @@ showroomGroup.add(showKey, showKey.target);
 scene.add(showroomGroup);
 showroomGroup.visible = false;
 
-// ===== GARAGE 3D scene =====
-const garageSceneGroup = new THREE.Group();
-function gAdd(mesh, x, y, z, rx, ry, rz) {
-  if (x !== undefined) mesh.position.set(x, y, z);
-  if (rx !== undefined) mesh.rotation.set(rx, ry, rz);
-  garageSceneGroup.add(mesh);
-  return mesh;
-}
-function gMesh(geo, color) { return new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color })); }
-
-// shared materials
-const gFloorMat = new THREE.MeshLambertMaterial({ color: 0x808088 });
-const gWallMat  = new THREE.MeshLambertMaterial({ color: 0xa8a8b0, side: THREE.DoubleSide });
-const gDoorMat1 = new THREE.MeshLambertMaterial({ color: 0xc0c0c8 });
-const gDoorMat2 = new THREE.MeshLambertMaterial({ color: 0xa8a8b0 });
-const gFrameMat = new THREE.MeshLambertMaterial({ color: 0x555560 });
-const gTireMat  = new THREE.MeshLambertMaterial({ color: 0x252528 });
-const gRimMat   = new THREE.MeshLambertMaterial({ color: 0x909098 });
-const gWoodMat  = new THREE.MeshLambertMaterial({ color: 0x7a5530 });
-
-// floor
-gAdd(new THREE.Mesh(new THREE.PlaneGeometry(24, 26), gFloorMat), 0, 0, 1, -Math.PI/2, 0, 0);
-// ceiling
-gAdd(new THREE.Mesh(new THREE.PlaneGeometry(24, 26), new THREE.MeshLambertMaterial({ color: 0x888898 })), 0, 9, 1, Math.PI/2, 0, 0);
-// back wall (+z)
-gAdd(new THREE.Mesh(new THREE.PlaneGeometry(24, 9), gWallMat), 0, 4.5, 13, 0, Math.PI, 0);
-// left wall
-gAdd(new THREE.Mesh(new THREE.PlaneGeometry(26, 9), gWallMat), -12, 4.5, 1, 0, Math.PI/2, 0);
-// right wall
-gAdd(new THREE.Mesh(new THREE.PlaneGeometry(26, 9), gWallMat), 12, 4.5, 1, 0, -Math.PI/2, 0);
-
-// garage door — 6 alternating horizontal panels across front wall (z = -12)
-for (let p = 0; p < 6; p++) {
-  const panel = new THREE.Mesh(new THREE.BoxGeometry(22, 1.28, 0.18), p % 2 === 0 ? gDoorMat1 : gDoorMat2);
-  panel.position.set(0, 0.64 + p * 1.28, -12);
-  garageSceneGroup.add(panel);
-}
-// door frame top bar
-const dtop = new THREE.Mesh(new THREE.BoxGeometry(22.6, 0.4, 0.3), gFrameMat);
-dtop.position.set(0, 8.0, -12);
-garageSceneGroup.add(dtop);
-// door frame side posts
-for (const sx of [-11.1, 11.1]) {
-  const post = new THREE.Mesh(new THREE.BoxGeometry(0.4, 7.7, 0.3), gFrameMat);
-  post.position.set(sx, 3.85, -12);
-  garageSceneGroup.add(post);
-}
-
-// tires leaning against right wall — shared geometry
-const tireGeo = new THREE.TorusGeometry(0.55, 0.19, 7, 14);
-const rimGeo  = new THREE.CylinderGeometry(0.3, 0.3, 0.12, 8);
-for (let i = 0; i < 4; i++) {
-  const tire = new THREE.Mesh(tireGeo, gTireMat);
-  tire.rotation.set(0, Math.PI/2, 0.2);
-  tire.position.set(10.4, 0.62, 5 + i * 1.35);
-  garageSceneGroup.add(tire);
-  const rim = new THREE.Mesh(rimGeo, gRimMat);
-  rim.rotation.set(0, 0, Math.PI/2);
-  rim.position.set(10.2, 0.62, 5 + i * 1.35);
-  garageSceneGroup.add(rim);
-}
-
-// workbench (left wall) — just top + single thick support box
-const benchTop = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.16, 1.6), gWoodMat);
-benchTop.position.set(-8.2, 1.08, 7);
-garageSceneGroup.add(benchTop);
-const benchBody = new THREE.Mesh(new THREE.BoxGeometry(6.5, 1.08, 1.6), new THREE.MeshLambertMaterial({ color: 0x555560 }));
-benchBody.position.set(-8.2, 0.54, 7);
-garageSceneGroup.add(benchBody);
-
-// toolbox (red block with a lighter top)
-const tbMain = gMesh(new THREE.BoxGeometry(1.5, 1.7, 0.8), 0xcc2020);
-tbMain.position.set(-11.2, 0.85, 7);
-garageSceneGroup.add(tbMain);
-const tbTop = gMesh(new THREE.BoxGeometry(1.5, 0.3, 0.8), 0xdd4040);
-tbTop.position.set(-11.2, 1.85, 7);
-garageSceneGroup.add(tbTop);
-
-// overhead light fixtures + point lights
-for (const lx of [-5, 5]) {
-  const fix = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.14, 0.4), new THREE.MeshBasicMaterial({ color: 0xeeeeff }));
-  fix.position.set(lx, 8.88, 1);
-  garageSceneGroup.add(fix);
-  const bulb = new THREE.PointLight(0xfff8e8, 1.2, 18);
-  bulb.position.set(lx, 8.6, 1);
-  garageSceneGroup.add(bulb);
-}
-
-scene.add(garageSceneGroup);
-garageSceneGroup.visible = false;
+// garage reuses showroomGroup — no separate scene needed
 
 // ===== ARENA scene (hex tile survival) =====
 const arenaGroup = new THREE.Group();
@@ -1633,19 +1544,16 @@ function updateParticles(dt) {
 
 // ===== sync 3D scene =====
 function syncScene() {
-  const inShowroom = (state === STATE.MENU || state === STATE.HELP);
-  const inGarage3D = (state === STATE.GARAGE);
+  const inShowroom = (state === STATE.MENU || state === STATE.HELP || state === STATE.GARAGE);
   const inArena = (state === STATE.ARENA) || (state === STATE.DEAD && earnings && earnings.mode === 'ARENA');
-  const inIndoor = inShowroom || inGarage3D;
-  roadMesh.visible = !inIndoor && !inArena;
-  grassMesh.visible = !inIndoor && !inArena;
-  mountains.visible = !inIndoor && !inArena;
+  roadMesh.visible = !inShowroom && !inArena;
+  grassMesh.visible = !inShowroom && !inArena;
+  mountains.visible = !inShowroom && !inArena;
   showroomGroup.visible = inShowroom;
-  garageSceneGroup.visible = inGarage3D;
   arenaGroup.visible = inArena;
   for (const b of arenaBots) { if (b.mesh) b.mesh.visible = inArena && b.state === 'alive'; }
-  for (const s of scenery) s.mesh.visible = !inIndoor && !inArena;
-  stars.visible = !inIndoor && !inArena && BACKGROUNDS[bgIdx].stars;
+  for (const s of scenery) s.mesh.visible = !inShowroom && !inArena;
+  stars.visible = !inShowroom && !inArena && BACKGROUNDS[bgIdx].stars;
 
   if (inArena) {
     scene.background = new THREE.Color(0x5bbde4);
@@ -1654,30 +1562,19 @@ function syncScene() {
     hemi.color.set(0x5bbde4);
     hemi.groundColor.set(0x0055bb);
     ambient.intensity = 0.35;
-  } else if (inGarage3D) {
-    scene.background = new THREE.Color(0x80808a);
-    scene.fog.color.set(0x80808a);
-    scene.fog.near = 22; scene.fog.far = 55;
-    hemi.color.set(0xfff8e8);
-    hemi.groundColor.set(0x606068);
-    sun.color.set(0xfff8e8);
-    ambient.intensity = 0.55;
   }
 
-  if (inIndoor) {
-    // pristine car, slowly rotating
+  if (inShowroom) {
+    ambient.intensity = 0.45;
     if (playerCarGroup) {
       playerCarGroup.position.set(0, 0.18, 1);
       playerCarGroup.rotation.set(0, menuBlink * 0.0008, 0);
       playerCarGroup.visible = true;
       applyDamageVisual(playerCarGroup, 0);
     }
-    if (!inGarage3D) ambient.intensity = 0.45; // showroom brighter
-    // slowly orbiting camera
     const orbit = -Math.PI/4 + Math.sin(menuBlink * 0.00018) * 0.4;
-    const dist = inGarage3D ? 8.5 : 9.5;
-    const camH = inGarage3D ? 2.8 : 3.4;
-    camera.position.set(Math.sin(orbit) * dist, camH, Math.cos(orbit) * -dist + 1);
+    const dist = 9.5;
+    camera.position.set(Math.sin(orbit) * dist, 3.4, Math.cos(orbit) * -dist + 1);
     camera.lookAt(0, 1.1, 1);
   } else {
     // restore ambient from background

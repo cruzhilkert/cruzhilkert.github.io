@@ -34,11 +34,11 @@ const W = canvas3d.width, H = canvas3d.height;
 
 // ===== game data =====
 const CARS = [
-  { name: 'CRUISER', body: 0x7f8c8d, accent: 0x4a5658, topMul: 0.85, steerMul: 0.85, accelMul: 0.85, cost: 0,   desc: 'Starter — sluggish' },
-  { name: 'BLAZE',   body: 0xe74c3c, accent: 0x7c1d12, topMul: 1.30, steerMul: 0.95, accelMul: 1.15, cost: 100, desc: 'Top speed +' },
-  { name: 'NIMBLE',  body: 0x2ecc71, accent: 0x125a30, topMul: 1.0,  steerMul: 1.50, accelMul: 1.05, cost: 150, desc: 'Handling +' },
-  { name: 'BRUTE',   body: 0x9b59b6, accent: 0x4a2266, topMul: 1.15, steerMul: 0.85, accelMul: 1.50, cost: 200, desc: 'Acceleration +' },
-  { name: 'GHOST',   body: 0xecf0f1, accent: 0x34495e, topMul: 1.30, steerMul: 1.30, accelMul: 1.20, cost: 400, desc: 'Top-tier all-rounder' },
+  { name: 'CRUISER', body: 0x7f8c8d, accent: 0x4a5658, topMul: 0.85, steerMul: 0.85, accelMul: 0.85, cost: 0,    desc: 'Starter — sluggish' },
+  { name: 'BLAZE',   body: 0xe74c3c, accent: 0x7c1d12, topMul: 1.30, steerMul: 0.95, accelMul: 1.15, cost: 2000, desc: 'Top speed +' },
+  { name: 'NIMBLE',  body: 0x2ecc71, accent: 0x125a30, topMul: 1.0,  steerMul: 1.50, accelMul: 1.05, cost: 3000, desc: 'Handling +' },
+  { name: 'BRUTE',   body: 0x9b59b6, accent: 0x4a2266, topMul: 1.15, steerMul: 0.85, accelMul: 1.50, cost: 4000, desc: 'Acceleration +' },
+  { name: 'GHOST',   body: 0xecf0f1, accent: 0x34495e, topMul: 1.30, steerMul: 1.30, accelMul: 1.20, cost: 5000, desc: 'Top-tier all-rounder' },
 ];
 const SHOP_PAINTS = [
   { id: 'paint_stock',   name: 'STOCK',    color: null,     cost: 0   },
@@ -369,10 +369,10 @@ showroomGroup.visible = false;
 // ===== ARENA scene (hex tile survival) =====
 const arenaGroup = new THREE.Group();
 const arenaTiles = [];
-const HEX_SIZE = 2.0;
+const HEX_SIZE = 1.55;
 const HEX_RADIUS = 9;
 const arenaPlayer = { x: 0, z: 0, y: 0, vy: 0, vx: 0, vz: 0, heading: 0, fwd: 0, onGround: false };
-const arenaTileGeom = new THREE.CylinderGeometry(HEX_SIZE * 0.97, HEX_SIZE * 0.97, 0.35, 6);
+const arenaTileGeom = new THREE.CylinderGeometry(HEX_SIZE * 0.92, HEX_SIZE * 0.92, 0.28, 6);
 
 // bot colours and starting positions (120° apart, radius 7)
 const BOT_COLORS  = [0xe74c3c, 0x2ecc71, 0x9b59b6];
@@ -405,19 +405,40 @@ function buildArena() {
 }
 buildArena();
 
-// arena void (the abyss below)
+// arena void — ocean surface below the platform
 const arenaVoid = new THREE.Mesh(
   new THREE.PlaneGeometry(800, 800),
-  new THREE.MeshBasicMaterial({ color: 0x06080f })
+  new THREE.MeshLambertMaterial({ color: 0x0055bb })
 );
 arenaVoid.rotation.x = -Math.PI / 2;
-arenaVoid.position.y = -40;
+arenaVoid.position.y = -12;
 arenaGroup.add(arenaVoid);
 
-// distant water-like ring around platform
-const arenaSkyMat = new THREE.MeshBasicMaterial({ color: 0xff8866, side: THREE.BackSide });
+// sky dome — tropical sky blue
+const arenaSkyMat = new THREE.MeshBasicMaterial({ color: 0x5bbde4, side: THREE.BackSide });
 const arenaSkyDome = new THREE.Mesh(new THREE.SphereGeometry(220, 24, 16), arenaSkyMat);
 arenaGroup.add(arenaSkyDome);
+
+// mountain ring around the arena
+(function() {
+  const mtMat  = new THREE.MeshLambertMaterial({ color: 0x2d6080 });
+  const snwMat = new THREE.MeshLambertMaterial({ color: 0xddeeff });
+  const COUNT  = 24;
+  for (let i = 0; i < COUNT; i++) {
+    const angle  = (i / COUNT) * Math.PI * 2;
+    const radius = 95 + Math.sin(i * 2.7) * 18;
+    const h      = 34 + Math.sin(i * 1.9) * 16 + Math.sin(i * 3.3) * 7;
+    const baseR  = 13 + Math.sin(i * 1.4 + 1) * 4;
+    const mt = new THREE.Mesh(new THREE.ConeGeometry(baseR, h, 5, 1), mtMat);
+    mt.position.set(Math.cos(angle) * radius, h / 2 - 10, Math.sin(angle) * radius);
+    arenaGroup.add(mt);
+    // snow cap
+    const sh = h * 0.3;
+    const snow = new THREE.Mesh(new THREE.ConeGeometry(baseR * 0.4, sh, 5, 1), snwMat);
+    snow.position.set(mt.position.x, mt.position.y + h / 2 - sh / 2 + 0.2, mt.position.z);
+    arenaGroup.add(snow);
+  }
+})();
 
 scene.add(arenaGroup);
 arenaGroup.visible = false;
@@ -1387,6 +1408,22 @@ function update(dt) {
   if (player.worldX < -limit) { player.worldX = -limit; player.vx *= -0.2; }
   if (player.worldX > limit)  { player.worldX = limit;  player.vx *= -0.2; }
 
+  // tire smoke trail when steering hard
+  if (Math.abs(player.vx) > 5) {
+    const intensity = Math.min(1, (Math.abs(player.vx) - 5) / 9);
+    const trailColor = getTrailColor();
+    for (let side = -1; side <= 1; side += 2) {
+      const wp = project3D(player.worldX + side * 0.75, 0.05, -1.8);
+      if (!wp.behind) {
+        particles.push({ x: wp.x, y: wp.y,
+          vx: (Math.random()-0.5) * 1.5, vy: -(0.4 + Math.random() * 0.6),
+          life: 500 + Math.random()*300, max: 800,
+          size: 5 + intensity * 5 + Math.random() * 3,
+          color: trailColor, gravity: 0, kind: 'spark' });
+      }
+    }
+  }
+
   if (headOn) {
     const accelRate = 22 * car.accelMul * engineMul;
     const maxBoost = 18 * car.topMul * bodyMul;
@@ -1509,9 +1546,11 @@ function syncScene() {
   stars.visible = !inShowroom && !inArena && BACKGROUNDS[bgIdx].stars;
   // background color override for arena
   if (inArena) {
-    scene.background = new THREE.Color(0xff8866);
-    scene.fog.color.set(0xff8866);
-    scene.fog.near = 80; scene.fog.far = 260;
+    scene.background = new THREE.Color(0x5bbde4);
+    scene.fog.color.set(0x5bbde4);
+    scene.fog.near = 90; scene.fog.far = 220;
+    hemi.color.set(0x5bbde4);
+    hemi.groundColor.set(0x0055bb);
     ambient.intensity = 0.35;
   }
 

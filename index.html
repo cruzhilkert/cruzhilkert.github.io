@@ -371,134 +371,90 @@ showroomGroup.visible = false;
 
 // ===== GARAGE 3D scene =====
 const garageSceneGroup = new THREE.Group();
-
-// concrete floor with subtle grid texture
-const concC = document.createElement('canvas');
-concC.width = concC.height = 256;
-{ const c = concC.getContext('2d');
-  c.fillStyle = '#80808a'; c.fillRect(0,0,256,256);
-  c.strokeStyle = '#6a6a74'; c.lineWidth = 1;
-  for (let i = 0; i <= 256; i += 64) {
-    c.beginPath(); c.moveTo(i,0); c.lineTo(i,256); c.stroke();
-    c.beginPath(); c.moveTo(0,i); c.lineTo(256,i); c.stroke();
-  } }
-const concTex = new THREE.CanvasTexture(concC);
-concTex.wrapS = concTex.wrapT = THREE.RepeatWrapping;
-concTex.repeat.set(5, 5);
-const gFloor = new THREE.Mesh(
-  new THREE.PlaneGeometry(24, 26),
-  new THREE.MeshLambertMaterial({ map: concTex })
-);
-gFloor.rotation.x = -Math.PI/2; gFloor.position.set(0, 0, 1);
-garageSceneGroup.add(gFloor);
-
-// oil stain under car
-const oilMat = new THREE.MeshBasicMaterial({ color: 0x2a2a30, transparent: true, opacity: 0.55 });
-const oil = new THREE.Mesh(new THREE.CircleGeometry(1.1, 16), oilMat);
-oil.rotation.x = -Math.PI/2; oil.position.set(0.4, 0.01, 1.2);
-garageSceneGroup.add(oil);
-
-// walls
-const wallMat = new THREE.MeshLambertMaterial({ color: 0xb0b0b8, side: THREE.FrontSide });
-// back wall (z=+13)
-const gBackWall = new THREE.Mesh(new THREE.PlaneGeometry(24, 10), wallMat);
-gBackWall.position.set(0, 5, 13); gBackWall.rotation.y = Math.PI;
-garageSceneGroup.add(gBackWall);
-// left wall (x=−12)
-const gLeftWall = new THREE.Mesh(new THREE.PlaneGeometry(26, 10), wallMat);
-gLeftWall.position.set(-12, 5, 1); gLeftWall.rotation.y = Math.PI/2;
-garageSceneGroup.add(gLeftWall);
-// right wall (x=+12)
-const gRightWall = new THREE.Mesh(new THREE.PlaneGeometry(26, 10), wallMat);
-gRightWall.position.set(12, 5, 1); gRightWall.rotation.y = -Math.PI/2;
-garageSceneGroup.add(gRightWall);
-// ceiling
-const gCeil = new THREE.Mesh(new THREE.PlaneGeometry(24, 26), new THREE.MeshLambertMaterial({ color: 0x9090a0 }));
-gCeil.rotation.x = Math.PI/2; gCeil.position.set(0, 9, 1);
-garageSceneGroup.add(gCeil);
-
-// ---- GARAGE DOOR (front wall, z=−12) ----
-// door panels — horizontal corrugated slats
-const dpMat1 = new THREE.MeshLambertMaterial({ color: 0xc8c8d0 });
-const dpMat2 = new THREE.MeshLambertMaterial({ color: 0xb0b0b8 });
-for (let p = 0; p < 8; p++) {
-  const panel = new THREE.Mesh(new THREE.BoxGeometry(22, 0.95, 0.22), p%2===0 ? dpMat1 : dpMat2);
-  panel.position.set(0, 0.5 + p * 0.96, -12);
-  garageSceneGroup.add(panel);
-  // horizontal groove line between panels
-  const groove = new THREE.Mesh(new THREE.BoxGeometry(22, 0.08, 0.26), new THREE.MeshLambertMaterial({ color: 0x888890 }));
-  groove.position.set(0, p * 0.96 + 0.04, -11.93);
-  garageSceneGroup.add(groove);
+function gAdd(mesh, x, y, z, rx, ry, rz) {
+  if (x !== undefined) mesh.position.set(x, y, z);
+  if (rx !== undefined) mesh.rotation.set(rx, ry, rz);
+  garageSceneGroup.add(mesh);
+  return mesh;
 }
-// door frame
-const fMat = new THREE.MeshLambertMaterial({ color: 0x585860 });
-garageSceneGroup.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(22.6, 0.4, 0.3), fMat), { position: new THREE.Vector3(0, 8.1, -12) }));
-for (let s of [-1, 1]) {
-  const post = new THREE.Mesh(new THREE.BoxGeometry(0.35, 8.1, 0.3), fMat);
-  post.position.set(s * 11.17, 4.05, -12);
+function gMesh(geo, color) { return new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color })); }
+
+// shared materials
+const gFloorMat = new THREE.MeshLambertMaterial({ color: 0x808088 });
+const gWallMat  = new THREE.MeshLambertMaterial({ color: 0xa8a8b0, side: THREE.DoubleSide });
+const gDoorMat1 = new THREE.MeshLambertMaterial({ color: 0xc0c0c8 });
+const gDoorMat2 = new THREE.MeshLambertMaterial({ color: 0xa8a8b0 });
+const gFrameMat = new THREE.MeshLambertMaterial({ color: 0x555560 });
+const gTireMat  = new THREE.MeshLambertMaterial({ color: 0x252528 });
+const gRimMat   = new THREE.MeshLambertMaterial({ color: 0x909098 });
+const gWoodMat  = new THREE.MeshLambertMaterial({ color: 0x7a5530 });
+
+// floor
+gAdd(new THREE.Mesh(new THREE.PlaneGeometry(24, 26), gFloorMat), 0, 0, 1, -Math.PI/2, 0, 0);
+// ceiling
+gAdd(new THREE.Mesh(new THREE.PlaneGeometry(24, 26), new THREE.MeshLambertMaterial({ color: 0x888898 })), 0, 9, 1, Math.PI/2, 0, 0);
+// back wall (+z)
+gAdd(new THREE.Mesh(new THREE.PlaneGeometry(24, 9), gWallMat), 0, 4.5, 13, 0, Math.PI, 0);
+// left wall
+gAdd(new THREE.Mesh(new THREE.PlaneGeometry(26, 9), gWallMat), -12, 4.5, 1, 0, Math.PI/2, 0);
+// right wall
+gAdd(new THREE.Mesh(new THREE.PlaneGeometry(26, 9), gWallMat), 12, 4.5, 1, 0, -Math.PI/2, 0);
+
+// garage door — 6 alternating horizontal panels across front wall (z = -12)
+for (let p = 0; p < 6; p++) {
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(22, 1.28, 0.18), p % 2 === 0 ? gDoorMat1 : gDoorMat2);
+  panel.position.set(0, 0.64 + p * 1.28, -12);
+  garageSceneGroup.add(panel);
+}
+// door frame top bar
+const dtop = new THREE.Mesh(new THREE.BoxGeometry(22.6, 0.4, 0.3), gFrameMat);
+dtop.position.set(0, 8.0, -12);
+garageSceneGroup.add(dtop);
+// door frame side posts
+for (const sx of [-11.1, 11.1]) {
+  const post = new THREE.Mesh(new THREE.BoxGeometry(0.4, 7.7, 0.3), gFrameMat);
+  post.position.set(sx, 3.85, -12);
   garageSceneGroup.add(post);
 }
-// door handle strip (center of door)
-const handle = new THREE.Mesh(new THREE.BoxGeometry(3, 0.12, 0.35), new THREE.MeshLambertMaterial({ color: 0x707078 }));
-handle.position.set(0, 3.84, -11.9);
-garageSceneGroup.add(handle);
 
-// ---- TIRES & WHEELS (right side, x≈10, z≈6) ----
-const tireMat = new THREE.MeshLambertMaterial({ color: 0x222224 });
-const rimMat2 = new THREE.MeshLambertMaterial({ color: 0x9090a0 });
+// tires leaning against right wall — shared geometry
+const tireGeo = new THREE.TorusGeometry(0.55, 0.19, 7, 14);
+const rimGeo  = new THREE.CylinderGeometry(0.3, 0.3, 0.12, 8);
 for (let i = 0; i < 4; i++) {
-  // tire ring (standing, leaning slightly against right wall)
-  const t = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.18, 8, 16), tireMat);
-  t.rotation.y = Math.PI/2; t.rotation.z = 0.18;
-  t.position.set(10.2, 0.6, 5.5 + i * 1.35);
-  garageSceneGroup.add(t);
-  // rim disc inside
-  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.14, 8), rimMat2);
-  rim.rotation.z = Math.PI/2;
-  rim.position.copy(t.position); rim.position.x -= 0.12;
+  const tire = new THREE.Mesh(tireGeo, gTireMat);
+  tire.rotation.set(0, Math.PI/2, 0.2);
+  tire.position.set(10.4, 0.62, 5 + i * 1.35);
+  garageSceneGroup.add(tire);
+  const rim = new THREE.Mesh(rimGeo, gRimMat);
+  rim.rotation.set(0, 0, Math.PI/2);
+  rim.position.set(10.2, 0.62, 5 + i * 1.35);
   garageSceneGroup.add(rim);
 }
 
-// ---- WORKBENCH (left wall) ----
-const woodMat = new THREE.MeshLambertMaterial({ color: 0x7a5530 });
-const metalMat = new THREE.MeshLambertMaterial({ color: 0x5a5a62 });
-// table top
-const bench = new THREE.Mesh(new THREE.BoxGeometry(7, 0.14, 1.8), woodMat);
-bench.position.set(-8, 1.05, 7); garageSceneGroup.add(bench);
-// legs
-for (let lx of [-3, 3]) for (let lz of [-0.75, 0.75]) {
-  const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.05, 0.1), metalMat);
-  leg.position.set(-8+lx, 0.525, 7+lz); garageSceneGroup.add(leg);
-}
-// shelf above bench
-const shelf = new THREE.Mesh(new THREE.BoxGeometry(7, 0.08, 1.2), woodMat);
-shelf.position.set(-8, 3.2, 7.2); garageSceneGroup.add(shelf);
-// items on shelf — oil cans (small cylinders)
-for (let c = 0; c < 5; c++) {
-  const can = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.38, 8),
-    new THREE.MeshLambertMaterial({ color: [0xcc2020,0x2050cc,0xf0a020,0x208040,0xdd3390][c] }));
-  can.position.set(-10.5 + c * 0.55, 3.45, 7.2); garageSceneGroup.add(can);
-}
+// workbench (left wall) — just top + single thick support box
+const benchTop = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.16, 1.6), gWoodMat);
+benchTop.position.set(-8.2, 1.08, 7);
+garageSceneGroup.add(benchTop);
+const benchBody = new THREE.Mesh(new THREE.BoxGeometry(6.5, 1.08, 1.6), new THREE.MeshLambertMaterial({ color: 0x555560 }));
+benchBody.position.set(-8.2, 0.54, 7);
+garageSceneGroup.add(benchBody);
 
-// ---- RED TOOLBOX (below workbench) ----
-const tbMat = new THREE.MeshLambertMaterial({ color: 0xcc1a1a });
-const tb = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.9, 0.85), tbMat);
-tb.position.set(-10, 0.95, 7); garageSceneGroup.add(tb);
-// drawer lines on toolbox
-for (let d = 0; d < 5; d++) {
-  const dr = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.28, 0.88), new THREE.MeshLambertMaterial({ color: 0xaa1010 }));
-  dr.position.set(-10, 0.22 + d * 0.34, 7.01); garageSceneGroup.add(dr);
-  const knob = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.08, 0.12), new THREE.MeshLambertMaterial({ color: 0xddddcc }));
-  knob.position.set(-10, 0.22 + d * 0.34, 7.46); garageSceneGroup.add(knob);
-}
+// toolbox (red block with a lighter top)
+const tbMain = gMesh(new THREE.BoxGeometry(1.5, 1.7, 0.8), 0xcc2020);
+tbMain.position.set(-11.2, 0.85, 7);
+garageSceneGroup.add(tbMain);
+const tbTop = gMesh(new THREE.BoxGeometry(1.5, 0.3, 0.8), 0xdd4040);
+tbTop.position.set(-11.2, 1.85, 7);
+garageSceneGroup.add(tbTop);
 
-// ---- OVERHEAD FLUORESCENT LIGHTS ----
-const lightFixMat = new THREE.MeshBasicMaterial({ color: 0xeeeeff });
-for (let lx of [-5, 5]) {
-  const fix = new THREE.Mesh(new THREE.BoxGeometry(4, 0.12, 0.35), lightFixMat);
-  fix.position.set(lx, 8.85, 1); garageSceneGroup.add(fix);
-  const bulb = new THREE.PointLight(0xfff8e8, 1.4, 20);
-  bulb.position.set(lx, 8.6, 1); garageSceneGroup.add(bulb);
+// overhead light fixtures + point lights
+for (const lx of [-5, 5]) {
+  const fix = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.14, 0.4), new THREE.MeshBasicMaterial({ color: 0xeeeeff }));
+  fix.position.set(lx, 8.88, 1);
+  garageSceneGroup.add(fix);
+  const bulb = new THREE.PointLight(0xfff8e8, 1.2, 18);
+  bulb.position.set(lx, 8.6, 1);
+  garageSceneGroup.add(bulb);
 }
 
 scene.add(garageSceneGroup);

@@ -369,72 +369,7 @@ showroomGroup.add(showKey, showKey.target);
 scene.add(showroomGroup);
 showroomGroup.visible = false;
 
-// ===== GARAGE 3D scene =====
-const garageSceneGroup = new THREE.Group();
-{
-  const floorMat = new THREE.MeshLambertMaterial({ color: 0x808088 });
-  const wallMat  = new THREE.MeshLambertMaterial({ color: 0xa8a8b2, side: THREE.DoubleSide });
-  const door1Mat = new THREE.MeshLambertMaterial({ color: 0xbebec8 });
-  const door2Mat = new THREE.MeshLambertMaterial({ color: 0xa4a4ae });
-  const frameMat = new THREE.MeshLambertMaterial({ color: 0x505058 });
-  const tireMat  = new THREE.MeshLambertMaterial({ color: 0x242426 });
-  const rimMat   = new THREE.MeshLambertMaterial({ color: 0x8e8e98 });
-  const woodMat  = new THREE.MeshLambertMaterial({ color: 0x7a5530 });
-  const metalMat = new THREE.MeshLambertMaterial({ color: 0x52525c });
-  const boxMat   = new THREE.MeshLambertMaterial({ color: 0xcc2020 });
-
-  function gm(geo, mat, x, y, z, rx, ry, rz) {
-    const m = new THREE.Mesh(geo, mat);
-    m.position.set(x, y, z);
-    if (rx !== undefined) m.rotation.set(rx, ry, rz);
-    garageSceneGroup.add(m);
-  }
-
-  // floor, ceiling, walls
-  gm(new THREE.PlaneGeometry(24, 26), floorMat, 0, 0, 1, -Math.PI/2, 0, 0);
-  gm(new THREE.PlaneGeometry(24, 26), new THREE.MeshLambertMaterial({ color: 0x888890 }), 0, 9, 1, Math.PI/2, 0, 0);
-  gm(new THREE.PlaneGeometry(24, 9),  wallMat,  0,   4.5, 13,  0, Math.PI, 0);
-  gm(new THREE.PlaneGeometry(26, 9),  wallMat,  -12, 4.5, 1,   0, Math.PI/2, 0);
-  gm(new THREE.PlaneGeometry(26, 9),  wallMat,  12,  4.5, 1,   0, -Math.PI/2, 0);
-
-  // garage door — 6 flat panels on front wall
-  for (let p = 0; p < 6; p++) {
-    gm(new THREE.BoxGeometry(22, 1.28, 0.16), p % 2 === 0 ? door1Mat : door2Mat, 0, 0.64 + p * 1.28, -12, 0, 0, 0);
-  }
-  // door frame
-  gm(new THREE.BoxGeometry(22.6, 0.4, 0.28), frameMat, 0, 8.0, -12, 0, 0, 0);
-  gm(new THREE.BoxGeometry(0.4, 7.68, 0.28), frameMat, -11.1, 3.84, -12, 0, 0, 0);
-  gm(new THREE.BoxGeometry(0.4, 7.68, 0.28), frameMat,  11.1, 3.84, -12, 0, 0, 0);
-
-  // tires — shared geometries
-  const tireGeo = new THREE.TorusGeometry(0.55, 0.19, 8, 14);
-  const rimGeo  = new THREE.CylinderGeometry(0.3, 0.3, 0.12, 8);
-  for (let i = 0; i < 4; i++) {
-    const tire = new THREE.Mesh(tireGeo, tireMat);
-    tire.rotation.set(0, Math.PI / 2, 0.2);
-    tire.position.set(10.4, 0.62, 5 + i * 1.35);
-    garageSceneGroup.add(tire);
-    const rim = new THREE.Mesh(rimGeo, rimMat);
-    rim.rotation.set(0, 0, Math.PI / 2);
-    rim.position.set(10.1, 0.62, 5 + i * 1.35);
-    garageSceneGroup.add(rim);
-  }
-
-  // workbench + toolbox
-  gm(new THREE.BoxGeometry(6.5, 0.15, 1.6), woodMat,  -8.2, 1.08, 7, 0, 0, 0);
-  gm(new THREE.BoxGeometry(6.5, 1.08, 1.6), metalMat, -8.2, 0.54, 7, 0, 0, 0);
-  gm(new THREE.BoxGeometry(1.5, 1.8,  0.8), boxMat,  -11.2, 0.9,  7, 0, 0, 0);
-
-  // overhead lights (no fixture mesh — just point lights)
-  const l1 = new THREE.PointLight(0xfff8e8, 1.3, 20);
-  l1.position.set(-5, 8.5, 1);
-  garageSceneGroup.add(l1);
-  const l2 = new THREE.PointLight(0xfff8e8, 1.3, 20);
-  l2.position.set(5, 8.5, 1);
-  garageSceneGroup.add(l2);
-}
-scene.add(garageSceneGroup);
-garageSceneGroup.visible = false;
+// Garage is drawn in pure 2D on the HUD canvas — no 3D geometry needed
 
 // ===== ARENA scene (hex tile survival) =====
 const arenaGroup = new THREE.Group();
@@ -1610,14 +1545,13 @@ function updateParticles(dt) {
 // ===== sync 3D scene =====
 function syncScene() {
   const inShowroom = (state === STATE.MENU || state === STATE.HELP);
-  const inGarage3D = (state === STATE.GARAGE);
-  const inIndoor   = inShowroom || inGarage3D;
+  const inGarage = (state === STATE.GARAGE);
+  const inIndoor   = inShowroom || inGarage;
   const inArena = (state === STATE.ARENA) || (state === STATE.DEAD && earnings && earnings.mode === 'ARENA');
   roadMesh.visible = !inIndoor && !inArena;
   grassMesh.visible = !inIndoor && !inArena;
   mountains.visible = !inIndoor && !inArena;
   showroomGroup.visible = inShowroom;
-  garageSceneGroup.visible = inGarage3D;
   arenaGroup.visible = inArena;
   for (const b of arenaBots) { if (b.mesh) b.mesh.visible = inArena && b.state === 'alive'; }
   for (const s of scenery) s.mesh.visible = !inIndoor && !inArena;
@@ -1630,7 +1564,7 @@ function syncScene() {
     hemi.color.set(0x5bbde4);
     hemi.groundColor.set(0x0055bb);
     ambient.intensity = 0.35;
-  } else if (inGarage3D) {
+  } else if (inGarage) {
     scene.background = new THREE.Color(0x808088);
     scene.fog.color.set(0x808088);
     scene.fog.near = 20; scene.fog.far = 50;
@@ -1640,7 +1574,7 @@ function syncScene() {
   }
 
   if (inIndoor) {
-    if (!inGarage3D) ambient.intensity = 0.45;
+    if (!inGarage) ambient.intensity = 0.45;
     if (playerCarGroup) {
       playerCarGroup.position.set(0, 0.18, 1);
       playerCarGroup.rotation.set(0, menuBlink * 0.0008, 0);
@@ -1648,8 +1582,8 @@ function syncScene() {
       applyDamageVisual(playerCarGroup, 0);
     }
     const orbit = -Math.PI/4 + Math.sin(menuBlink * 0.00018) * 0.4;
-    const dist = inGarage3D ? 8.5 : 9.5;
-    const camH = inGarage3D ? 2.6 : 3.4;
+    const dist = inGarage ? 8.5 : 9.5;
+    const camH = inGarage ? 2.6 : 3.4;
     camera.position.set(Math.sin(orbit) * dist, camH, Math.cos(orbit) * -dist + 1);
     camera.lookAt(0, 1.1, 1);
   } else {
@@ -2016,25 +1950,83 @@ function garageBtn(label, x, y, w, h, action, opts={}) {
   garageButtons.push({ x, y, w, h, action, disabled: !!opts.disabled });
 }
 
+function drawGarageRoom() {
+  const RB = 200; // bottom of garage room area
+  // opaque shop background below the room
+  ctx.fillStyle = 'rgba(6,8,20,0.96)';
+  ctx.fillRect(0, RB, W, H - RB);
+
+  // garage door horizontal stripes across the top
+  const sH = 14, nS = 5;
+  for (let i = 0; i < nS; i++) {
+    ctx.fillStyle = i % 2 === 0 ? 'rgba(188,188,202,0.84)' : 'rgba(162,162,176,0.84)';
+    ctx.fillRect(0, i * sH, W, sH);
+  }
+  ctx.strokeStyle = 'rgba(65,65,76,0.55)';
+  ctx.lineWidth = 1;
+  for (let i = 1; i <= nS; i++) {
+    ctx.beginPath(); ctx.moveTo(0, i * sH - 0.5); ctx.lineTo(W, i * sH - 0.5); ctx.stroke();
+  }
+
+  // perspective walls — inner transparent window where car shows through
+  const IT = nS * sH, IL = 62, IR = W - 62, IB = RB - 6;
+  // left wall
+  ctx.fillStyle = 'rgba(148,150,162,0.88)';
+  ctx.beginPath();
+  ctx.moveTo(0, IT); ctx.lineTo(IL, IT); ctx.lineTo(IL, IB); ctx.lineTo(0, RB);
+  ctx.closePath(); ctx.fill();
+  // right wall
+  ctx.beginPath();
+  ctx.moveTo(W, IT); ctx.lineTo(IR, IT); ctx.lineTo(IR, IB); ctx.lineTo(W, RB);
+  ctx.closePath(); ctx.fill();
+  // floor strip
+  ctx.fillStyle = 'rgba(96,98,110,0.88)';
+  ctx.beginPath();
+  ctx.moveTo(0, RB); ctx.lineTo(W, RB); ctx.lineTo(IR, IB); ctx.lineTo(IL, IB);
+  ctx.closePath(); ctx.fill();
+
+  // inner frame line
+  ctx.strokeStyle = 'rgba(45,45,54,0.65)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(IL, IT, IR - IL, IB - IT);
+
+  // tires stacked on right wall
+  const tx = W - 30;
+  for (let i = 0; i < 3; i++) {
+    const ty = RB - 16 - i * 22;
+    ctx.fillStyle = '#1e1e22';
+    ctx.beginPath(); ctx.ellipse(tx, ty, 15, 8, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#5e5e70';
+    ctx.beginPath(); ctx.ellipse(tx, ty, 5, 3, 0, 0, Math.PI*2); ctx.fill();
+  }
+
+  // workbench on left wall
+  const wx = 4, ww = 54, wy = RB - 54;
+  ctx.fillStyle = '#7a5530'; ctx.fillRect(wx, wy, ww, 8);
+  ctx.fillStyle = '#4a3020'; ctx.fillRect(wx, wy + 8, ww, 32);
+  // red toolbox on workbench
+  ctx.fillStyle = '#cc2020'; ctx.fillRect(wx, wy - 17, 22, 17);
+  ctx.fillStyle = '#aa1010'; ctx.fillRect(wx + 2, wy - 10, 18, 3);
+}
+
 function drawGarage() {
   garageButtons = [];
-  // full overlay
-  ctx.fillStyle = 'rgba(6,8,20,0.93)';
-  ctx.fillRect(0, 0, W, H);
+  drawGarageRoom();
+  const RB = 200;
 
   // title + coins
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffd54a';
-  ctx.font = 'bold 26px system-ui';
-  ctx.fillText('GARAGE', W/2, 38);
+  ctx.font = 'bold 22px system-ui';
+  ctx.fillText('GARAGE', W/2, RB + 22);
   ctx.textAlign = 'right';
-  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 16px system-ui';
-  ctx.fillText('● ' + coins, W-14, 36);
+  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 14px system-ui';
+  ctx.fillText('● ' + coins, W-14, RB + 22);
   ctx.font = '9px system-ui'; ctx.fillStyle = '#bbb';
-  ctx.fillText('COINS', W-14, 48);
+  ctx.fillText('COINS', W-14, RB + 33);
 
   // tabs
-  const tabW=138, tabH=30, tabGap=4, tabY=52;
+  const tabW=138, tabH=27, tabGap=4, tabY=RB+37;
   const tabX0=(W-(tabW*3+tabGap*2))/2;
   const TABS=[['cars','CARS'],['paint','PAINT'],['trails','TRAILS']];
   for(let i=0;i<TABS.length;i++){
@@ -2043,10 +2035,10 @@ function drawGarage() {
     garageBtn(label,tx,tabY,tabW,tabH,()=>{garageTab=id;},{active:garageTab===id});
   }
 
-  const contentY=90, contentH=H-90-48;
+  const contentY=RB+72, contentH=H-contentY-40;
 
   if(garageTab==='cars'){
-    const cardH=52, gap=6;
+    const cardH=44, gap=5;
     const listH=CARS.length*(cardH+gap)-gap;
     const startY=contentY+Math.max(0,(contentH-listH)/2);
     CARS.forEach((car,i)=>{
@@ -2063,17 +2055,17 @@ function drawGarage() {
       ctx.beginPath(); ctx.roundRect(22,cy+cardH/2-10,20,20,4); ctx.fill();
       // name & desc
       ctx.textAlign='left'; ctx.fillStyle=owned_?'#ffd54a':'#aaa';
-      ctx.font='bold 13px system-ui';
-      ctx.fillText(car.name,50,cy+cardH/2-4);
+      ctx.font='bold 12px system-ui';
+      ctx.fillText(car.name,50,cy+cardH/2-3);
       ctx.fillStyle='#888'; ctx.font='10px system-ui';
-      ctx.fillText(car.desc,50,cy+cardH/2+11);
+      ctx.fillText(car.desc,50,cy+cardH/2+10);
       // cost for locked cars
       if(!owned_){
         ctx.fillStyle='#ff8888'; ctx.font='9px system-ui';
-        ctx.fillText('● '+car.cost+' coins',50,cy+cardH/2+23);
+        ctx.fillText('● '+car.cost+' coins',50,cy+cardH/2+21);
       }
       // action button
-      const bw=76,bh=26,bx=W-14-bw-4,by_=cy+cardH/2-bh/2;
+      const bw=76,bh=24,bx=W-14-bw-4,by_=cy+cardH/2-bh/2;
       if(equipped){
         garageBtn('EQUIPPED',bx,by_,bw,bh,null,{active:true,small:true});
       }else if(owned_){
@@ -2086,7 +2078,7 @@ function drawGarage() {
   }
 
   if(garageTab==='paint'){
-    const cols=3, swW=(W-28-cols*6)/cols, swH=88, gap=6;
+    const cols=3, swW=(W-28-cols*6)/cols, swH=78, gap=5;
     SHOP_PAINTS.forEach((paint,i)=>{
       const col=i%cols, row=Math.floor(i/cols);
       const px=14+col*(swW+gap), py=contentY+row*(swH+gap);
@@ -2122,7 +2114,7 @@ function drawGarage() {
   }
 
   if(garageTab==='trails'){
-    const tH=62, gap=6;
+    const tH=33, gap=3;
     SHOP_TRAILS.forEach((trail,i)=>{
       const ty=contentY+i*(tH+gap);
       const owned_=isOwned(trail.id);
@@ -2136,16 +2128,16 @@ function drawGarage() {
         const a=0.15+d*0.14;
         ctx.globalAlpha=a;
         ctx.fillStyle=trail.color;
-        ctx.beginPath(); ctx.ellipse(28+d*14,ty+tH/2,5,3,0,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(28+d*14,ty+tH/2,4,2.5,0,0,Math.PI*2); ctx.fill();
       }
       ctx.globalAlpha=1;
-      // name
-      ctx.textAlign='left'; ctx.fillStyle='#eee'; ctx.font='bold 13px system-ui';
-      ctx.fillText(trail.name,120,ty+22);
-      ctx.fillStyle='#aaa'; ctx.font='10px system-ui';
-      ctx.fillText(trail.cost===0?'FREE':'● '+trail.cost+' coins',120,ty+38);
+      // name + cost
+      ctx.textAlign='left'; ctx.fillStyle='#eee'; ctx.font='bold 11px system-ui';
+      ctx.fillText(trail.name,112,ty+12);
+      ctx.fillStyle='#aaa'; ctx.font='9px system-ui';
+      ctx.fillText(trail.cost===0?'FREE':'● '+trail.cost+' coins',112,ty+23);
       // button
-      const bw3=70,bh3=24,bx3=W-14-bw3-4,by3=ty+tH/2-bh3/2;
+      const bw3=66,bh3=22,bx3=W-14-bw3-4,by3=ty+tH/2-bh3/2;
       if(equipped){
         garageBtn('ACTIVE',bx3,by3,bw3,bh3,null,{active:true,small:true});
       }else if(owned_){

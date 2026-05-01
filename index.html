@@ -51,6 +51,9 @@ const CARS = [
   { name: 'APEX',    kind: 'sport', body: 0x3f51b5, accent: 0x1a1f5e, topMul: 1.82, steerMul: 1.82, accelMul: 1.82, cost: 65000,  gemCost: 8,  coinMul: 7.5,  gemChance: 0.004,   hitsToKill: 12, desc: 'Elite all-rounder' },
   { name: 'STORM',   kind: 'sport', body: 0xe91e63, accent: 0x6a0030, topMul: 1.97, steerMul: 1.97, accelMul: 1.97, cost: 80000,  gemCost: 9,  coinMul: 8.5,  gemChance: 0.006,   hitsToKill: 13, desc: 'Near-maxed all stats' },
   { name: 'F1',      kind: 'f1',    body: 0xff0044, accent: 0xffd700, topMul: 2.20, steerMul: 2.20, accelMul: 2.20, cost: 100000, gemCost: 10, coinMul: 10.0, gemChance: 0.01,    hitsToKill: 15, desc: 'Ultimate speed machine' },
+  { name: 'SWAT',    kind: 'swat',      body: 0x0d1b3e, accent: 0x1a3a6e, topMul: 1.0,  steerMul: 1.0,  accelMul: 1.2,  cost: 15000,  gemCost: 0, coinMul: 4.0,  gemChance: 0.0003, hitsToKill: 8,  desc: 'Armored response unit',    missionOnly: true },
+  { name: 'TANK',    kind: 'tank',      body: 0x4e6741, accent: 0x2d3b25, topMul: 0.72, steerMul: 0.72, accelMul: 1.5,  cost: 25000,  gemCost: 0, coinMul: 5.5,  gemChance: 0.0005, hitsToKill: 18, desc: 'Nearly indestructible',    missionOnly: true },
+  { name: 'ROCKET',  kind: 'rocketcar', body: 0xff1744, accent: 0x7a0020, topMul: 1.55, steerMul: 1.15, accelMul: 1.4,  cost: 30000,  gemCost: 0, coinMul: 6.0,  gemChance: 0.001,  hitsToKill: 5,  desc: 'Loaded with missile pods',  missionOnly: true },
 ];
 const SHOP_PAINTS = [
   { id: 'paint_stock',   name: 'STOCK',    color: null,     cost: 0,    special: null },
@@ -77,12 +80,26 @@ const SHOP_TRAILS = [
 ];
 
 const MISSIONS = [
-  { id: 'm_nitro3',    label: '3 nitros in 1 Arena game',  reward: 1000 },
-  { id: 'm_survive60', label: 'Survive 60s in Classic',     reward: 500  },
-  { id: 'm_wave5',     label: 'Reach Wave 5 in Head On',    reward: 750  },
-  { id: 'm_dodge20',   label: 'Dodge 20 cars in Head On',   reward: 600  },
-  { id: 'm_earn500',   label: 'Earn 500+ coins in 1 run',   reward: 500  },
-  { id: 'm_arena1st',  label: '1st place in any Arena',     reward: 800  },
+  { id: 'm_nitro3',      label: '3 nitros in 1 Arena game',       reward: 1000 },
+  { id: 'm_survive60',   label: 'Survive 60s in Classic',          reward: 500  },
+  { id: 'm_wave5',       label: 'Reach Wave 5 in Head On',         reward: 750  },
+  { id: 'm_dodge20',     label: 'Dodge 20 cars in Head On',        reward: 600  },
+  { id: 'm_earn500',     label: 'Earn 500+ coins in 1 run',        reward: 500  },
+  { id: 'm_arena1st',    label: '1st place in any Arena',          reward: 800  },
+  { id: 'm_survive30',   label: 'Survive 30s in Classic',          reward: 300  },
+  { id: 'm_survive120',  label: 'Survive 120s in Classic',         reward: 1200 },
+  { id: 'm_wave3',       label: 'Reach Wave 3 in Head On',         reward: 350  },
+  { id: 'm_wave8',       label: 'Reach Wave 8 in Head On',         reward: 1100 },
+  { id: 'm_dodge5',      label: 'Dodge 5 cars in Head On',         reward: 150  },
+  { id: 'm_dodge40',     label: 'Dodge 40 cars in Head On',        reward: 1000 },
+  { id: 'm_speed120',    label: 'Hit 120 km/h in any run',         reward: 400  },
+  { id: 'm_speed160',    label: 'Hit 160 km/h in any run',         reward: 900  },
+  { id: 'm_earn250',     label: 'Earn 250+ coins in 1 run',        reward: 250  },
+  { id: 'm_earn1500',    label: 'Earn 1500+ coins in 1 run',       reward: 1500 },
+  { id: 'm_nitro1',      label: 'Use 1 nitro in Arena',            reward: 350  },
+  { id: 'm_arena_lv5',   label: '1st place on Arena Level 5+',     reward: 1500 },
+  { id: 'm_arena_lv10',  label: '1st place on Arena Level 10',     reward: 2500 },
+  { id: 'm_hard_arena',  label: '1st place in Arena on HARD',      reward: 1800 },
 ];
 
 const ENEMY_TYPES = [
@@ -172,11 +189,12 @@ function getFireColor() { const cols = ['#ffee00','#ffdd00','#ffaa00','#ff7700',
 let _trailT = 0; // global trail time for color cycling
 
 // ===== runtime state =====
-const STATE = { MENU: 'menu', HELP: 'help', PLAYING: 'playing', DEAD: 'dead', ARENA: 'arena', GARAGE: 'garage', ARENA_SELECT: 'arena_select', GEM_SHOP: 'gem_shop' };
+const STATE = { MENU: 'menu', HELP: 'help', PLAYING: 'playing', DEAD: 'dead', ARENA: 'arena', GARAGE: 'garage', ARENA_SELECT: 'arena_select', GEM_SHOP: 'gem_shop', MISSIONS: 'missions', MISSIONS_GARAGE: 'missions_garage' };
 let state = STATE.MENU;
 let garageTab = 'cars'; // 'cars' | 'paint' | 'trails'
 let garagePaintSelected = null;
 let garageButtons = [];
+let missionsButtons = [];
 let arenaSelectButtons = [];
 let gemShopButtons = [];
 let menuBlink = 0;
@@ -554,7 +572,10 @@ function buildCar(opts) {
     hatch: { l:3.8, w:1.76, gc:0.16, lh:0.54, ch:0.56, cw:1.66, cl:2.28, cz:-0.20 },
     van:   { l:4.5, w:1.92, gc:0.20, lh:0.68, ch:0.80, cw:1.86, cl:3.20, cz:-0.10 },
     truck: { l:5.0, w:2.20, gc:0.26, lh:0.78, ch:0.70, cw:2.04, cl:1.70, cz: 0.80 },
-    f1:    { l:5.2, w:1.78, gc:0.06, lh:0.28, ch:0.28, cw:0.58, cl:0.88, cz:-0.18 },
+    f1:         { l:5.2, w:1.78, gc:0.06, lh:0.28, ch:0.28, cw:0.58, cl:0.88, cz:-0.18 },
+    swat:       { l:4.6, w:2.10, gc:0.22, lh:0.70, ch:0.72, cw:2.0,  cl:3.0,  cz:-0.05 },
+    tank:       { l:5.0, w:2.60, gc:0.28, lh:0.52, ch:0.42, cw:2.4,  cl:3.0,  cz: 0.0  },
+    rocketcar:  { l:4.2, w:1.90, gc:0.13, lh:0.44, ch:0.38, cw:1.78, cl:1.80, cz:-0.06 },
   }[kind] || { l:4.2, w:1.82, gc:0.16, lh:0.52, ch:0.50, cw:1.72, cl:2.02, cz:-0.12 };
 
   const { l, w, gc, lh, ch, cw, cl, cz } = S;
@@ -594,7 +615,7 @@ function buildCar(opts) {
 
   // ── Glass ─────────────────────────────────────────────────────────────────────
   let glass = null;
-  if (kind !== 'truck' && kind !== 'f1') {
+  if (kind !== 'truck' && kind !== 'f1' && kind !== 'tank') {
     const wsH = ch * 0.82;
     const wsAngle = kind === 'van' ? -0.08 : kind === 'sport' ? -0.42 : -0.30;
     const ws = new THREE.Mesh(new THREE.BoxGeometry(cw * 0.86, wsH, 0.05), glassMat);
@@ -824,6 +845,106 @@ function buildCar(opts) {
     g.add(visor);
   }
 
+  // ── SWAT extras: light bar + armor plate ──────────────────────────────────────
+  if (kind === 'swat') {
+    const armorMat = new THREE.MeshPhongMaterial({ color: 0x1a1a2e, shininess: 40 });
+    const barMat   = new THREE.MeshPhongMaterial({ color: 0x111122, shininess: 20 });
+    const redMat   = new THREE.MeshBasicMaterial({ color: 0xff2222 });
+    const blueMat  = new THREE.MeshBasicMaterial({ color: 0x2244ff });
+    // armor plates on sides
+    for (const sx of [-1, 1]) {
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.08, lh * 0.7, l * 0.7), armorMat);
+      plate.position.set(sx * (w / 2 + 0.04), gc + lh * 0.5, 0);
+      g.add(plate);
+    }
+    // light bar base on roof
+    const lbBase = new THREE.Mesh(new THREE.BoxGeometry(cw * 0.7, 0.12, 0.44), barMat);
+    lbBase.position.set(0, rl + 0.06, cz + 0.4);
+    g.add(lbBase);
+    // red lights (left side)
+    for (let i = 0; i < 3; i++) {
+      const rl2 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.14, 8), redMat);
+      rl2.rotation.z = Math.PI / 2;
+      rl2.position.set(-0.38 + i * 0.2, rl + 0.13, cz + 0.4);
+      g.add(rl2);
+    }
+    // blue lights (right side)
+    for (let i = 0; i < 3; i++) {
+      const bl2 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.14, 8), blueMat);
+      bl2.rotation.z = Math.PI / 2;
+      bl2.position.set(0.0 + i * 0.2, rl + 0.13, cz + 0.4);
+      g.add(bl2);
+    }
+    // front push-bar
+    const pushBar = new THREE.Mesh(new THREE.BoxGeometry(w * 0.9, 0.16, 0.10), armorMat);
+    pushBar.position.set(0, gc + lh * 0.4, l / 2 + 0.05);
+    g.add(pushBar);
+  }
+
+  // ── TANK extras: turret + tracks ──────────────────────────────────────────────
+  if (kind === 'tank') {
+    const tankMat  = new THREE.MeshPhongMaterial({ color: 0x4e6741, shininess: 20 });
+    const darkGrn  = new THREE.MeshPhongMaterial({ color: 0x2d3b25, shininess: 10 });
+    // tracks (flat slabs on sides)
+    for (const sx of [-1, 1]) {
+      const track = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.36, l * 0.92), darkGrn);
+      track.position.set(sx * (w / 2 + 0.19), gc + 0.18, 0);
+      g.add(track);
+      // track links (ridges)
+      for (let i = -2; i <= 2; i++) {
+        const link = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.18), tankMat);
+        link.position.set(sx * (w / 2 + 0.19), gc + 0.36, i * 0.7);
+        g.add(link);
+      }
+    }
+    // turret base
+    const tBase = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.78, 0.28, 8), tankMat);
+    tBase.position.set(0, rl + 0.14, 0.2);
+    g.add(tBase);
+    // turret dome
+    const tDome = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.72, 0.22, 8), tankMat);
+    tDome.position.set(0, rl + 0.35, 0.2);
+    g.add(tDome);
+    // barrel
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.6, 8), darkGrn);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, rl + 0.36, 0.2 + 0.8);
+    g.add(barrel);
+  }
+
+  // ── ROCKET CAR extras: missile pods on roof ────────────────────────────────────
+  if (kind === 'rocketcar') {
+    const podMat    = new THREE.MeshPhongMaterial({ color: 0x333333, shininess: 60 });
+    const missileMat= new THREE.MeshPhongMaterial({ color: 0xcccccc, shininess: 80 });
+    const tipMat    = new THREE.MeshPhongMaterial({ color: 0xff3300, shininess: 100 });
+    for (const sx of [-1, 1]) {
+      // pod housing
+      const pod = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.20, 0.80), podMat);
+      pod.position.set(sx * 0.52, rl + 0.10, cz + 0.1);
+      g.add(pod);
+      // two missiles per pod
+      for (let mz of [-0.22, 0.22]) {
+        const mBody = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.70, 6), missileMat);
+        mBody.rotation.x = Math.PI / 2;
+        mBody.position.set(sx * 0.52, rl + 0.10, cz + 0.1 + mz);
+        g.add(mBody);
+        const mTip = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.18, 6), tipMat);
+        mTip.rotation.x = Math.PI / 2;
+        mTip.position.set(sx * 0.52, rl + 0.10, cz + 0.1 + mz + 0.44);
+        g.add(mTip);
+      }
+    }
+    // rear spoiler
+    const spoiler = new THREE.Mesh(new THREE.BoxGeometry(w * 1.1, 0.06, 0.24), podMat);
+    spoiler.position.set(0, rl + 0.28, -l / 2 + 0.16);
+    g.add(spoiler);
+    for (const sx of [-1, 1]) {
+      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.28, 0.06), podMat);
+      strut.position.set(sx * w * 0.46, rl + 0.14, -l / 2 + 0.16);
+      g.add(strut);
+    }
+  }
+
   // ── userData ──────────────────────────────────────────────────────────────────
   g.userData = {
     dim, body, roof, glass,
@@ -1035,6 +1156,8 @@ window.addEventListener('keydown', e => {
   if (state === STATE.ARENA && k === ' ' && arenaPlayer.onGround) { arenaPlayer.vy = 10; arenaPlayer.onGround = false; }
   if (state === STATE.ARENA_SELECT && k === 'escape') state = STATE.MENU;
   if (state === STATE.GEM_SHOP && (k === 'escape' || k === ' ' || k === 'enter')) state = STATE.MENU;
+  if (state === STATE.MISSIONS && k === 'escape') state = STATE.MENU;
+  if (state === STATE.MISSIONS_GARAGE && k === 'escape') state = STATE.MISSIONS;
 });
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 canvas3d.addEventListener('mousemove', e => {
@@ -1050,7 +1173,7 @@ canvas3d.addEventListener('mousemove', e => {
 canvas3d.addEventListener('wheel', e => {
   if (state === STATE.GARAGE && garageTab === 'cars') {
     e.preventDefault();
-    garageCarScroll = Math.max(0, Math.min(CARS.length - 6, garageCarScroll + (e.deltaY > 0 ? 1 : -1)));
+    garageCarScroll = Math.max(0, Math.min(CARS.filter(c=>!c.missionOnly).length - 6, garageCarScroll + (e.deltaY > 0 ? 1 : -1)));
   }
 }, { passive: false });
 canvas3d.addEventListener('click', e => {
@@ -1072,6 +1195,9 @@ canvas3d.addEventListener('click', e => {
   } else if (state === STATE.GEM_SHOP) {
     const b = gemShopButtons.find(btn => x >= btn.x && x <= btn.x+btn.w && y >= btn.y && y <= btn.y+btn.h);
     if (b && b.action) b.action();
+  } else if (state === STATE.MISSIONS || state === STATE.MISSIONS_GARAGE) {
+    const b = missionsButtons.find(btn => x >= btn.x && x <= btn.x+btn.w && y >= btn.y && y <= btn.y+btn.h);
+    if (b && !b.disabled && b.action) b.action();
   } else if (state === STATE.HELP) state = STATE.MENU;
   else if (state === STATE.DEAD) {
     if (earnings && earnings.mode === 'ARENA') state = STATE.ARENA_SELECT;
@@ -1791,12 +1917,30 @@ function checkMissions() {
   for (const m of MISSIONS) {
     if (missionsDone.has(m.id)) continue;
     let done = false;
-    if (m.id === 'm_nitro3'   ) done = earnings?.mode === 'ARENA' && nitroCollectedThisGame >= 3;
-    if (m.id === 'm_survive60') done = earnings?.mode !== 'ARENA' && MODES[modeIdx] === 'CLASSIC' && gameTime >= 60;
-    if (m.id === 'm_wave5'    ) done = earnings?.mode !== 'ARENA' && MODES[modeIdx] === 'HEAD ON' && wave >= 5;
-    if (m.id === 'm_dodge20'  ) done = earnings?.mode !== 'ARENA' && MODES[modeIdx] === 'HEAD ON' && dodged >= 20;
-    if (m.id === 'm_earn500'  ) done = lastEarned >= 500;
-    if (m.id === 'm_arena1st' ) done = earnings?.mode === 'ARENA' && earnings?.placement === 1;
+    const isArena   = earnings?.mode === 'ARENA';
+    const isClassic = !isArena && MODES[modeIdx] === 'CLASSIC';
+    const isHeadOn  = !isArena && MODES[modeIdx] === 'HEAD ON';
+    const topKmh    = earnings ? (isArena ? (arenaPlayer?.fwd || 0) * 3.6 : (earnings.topSpeedKmh || 0)) : 0;
+    if (m.id === 'm_nitro3'     ) done = isArena   && nitroCollectedThisGame >= 3;
+    if (m.id === 'm_survive60'  ) done = isClassic && gameTime >= 60;
+    if (m.id === 'm_wave5'      ) done = isHeadOn  && wave >= 5;
+    if (m.id === 'm_dodge20'    ) done = isHeadOn  && dodged >= 20;
+    if (m.id === 'm_earn500'    ) done = lastEarned >= 500;
+    if (m.id === 'm_arena1st'   ) done = isArena   && earnings?.placement === 1;
+    if (m.id === 'm_survive30'  ) done = isClassic && gameTime >= 30;
+    if (m.id === 'm_survive120' ) done = isClassic && gameTime >= 120;
+    if (m.id === 'm_wave3'      ) done = isHeadOn  && wave >= 3;
+    if (m.id === 'm_wave8'      ) done = isHeadOn  && wave >= 8;
+    if (m.id === 'm_dodge5'     ) done = isHeadOn  && dodged >= 5;
+    if (m.id === 'm_dodge40'    ) done = isHeadOn  && dodged >= 40;
+    if (m.id === 'm_speed120'   ) done = topKmh >= 120;
+    if (m.id === 'm_speed160'   ) done = topKmh >= 160;
+    if (m.id === 'm_earn250'    ) done = lastEarned >= 250;
+    if (m.id === 'm_earn1500'   ) done = lastEarned >= 1500;
+    if (m.id === 'm_nitro1'     ) done = isArena   && nitroCollectedThisGame >= 1;
+    if (m.id === 'm_arena_lv5'  ) done = isArena   && earnings?.placement === 1 && arenaLevel >= 5;
+    if (m.id === 'm_arena_lv10' ) done = isArena   && earnings?.placement === 1 && arenaLevel === 10;
+    if (m.id === 'm_hard_arena' ) done = isArena   && earnings?.placement === 1 && difficultyIdx === 2;
     if (done) {
       missionsDone.add(m.id);
       setCoins(coins + m.reward);
@@ -2357,6 +2501,8 @@ function drawHud2D() {
   if (state === STATE.GARAGE) drawGarage();
   if (state === STATE.ARENA_SELECT) drawArenaSelect();
   if (state === STATE.GEM_SHOP) drawGemShop();
+  if (state === STATE.MISSIONS) drawMissionsScreen();
+  if (state === STATE.MISSIONS_GARAGE) drawMissionsGarage();
 }
 
 function drawArenaSelect() {
@@ -2873,14 +3019,16 @@ function drawMenu() {
   ctx.fillText(bestClassic > 0 ? bestClassic : '—', bx + bw*3 + gap*2 + gap/2, ry + 23);
 
   // secondary row above main row
-  const sBw = 100, sBh = 24;
-  const sTotal = sBw * 3 + gap * 2;
-  const sBx = (W - sTotal) / 2;
+  const sBh = 24;
   const sBy = by - 30;
+  const sBw4 = 82;
+  const sTotal4 = sBw4 * 4 + gap * 3;
+  const sBx4 = (W - sTotal4) / 2;
   const secondary = [
-    { label: 'DIFFICULTY: ' + DIFFICULTIES[difficultyIdx].name, x: sBx,                 y: sBy, w: sBw, h: sBh, action: cycleDifficulty },
-    { label: '⬢ ARENA',                                         x: sBx + sBw + gap,     y: sBy, w: sBw, h: sBh, action: () => state = STATE.ARENA_SELECT },
-    { label: 'HOW TO PLAY',                                     x: sBx + (sBw + gap)*2, y: sBy, w: sBw, h: sBh, action: () => state = STATE.HELP },
+    { label: 'DIFFICULTY: ' + DIFFICULTIES[difficultyIdx].name, x: sBx4,                  y: sBy, w: sBw4, h: sBh, action: cycleDifficulty },
+    { label: '⬢ ARENA',                                          x: sBx4 + (sBw4+gap),     y: sBy, w: sBw4, h: sBh, action: () => state = STATE.ARENA_SELECT },
+    { label: 'MISSIONS',                                          x: sBx4 + (sBw4+gap)*2,   y: sBy, w: sBw4, h: sBh, action: () => state = STATE.MISSIONS },
+    { label: 'HOW TO PLAY',                                       x: sBx4 + (sBw4+gap)*3,   y: sBy, w: sBw4, h: sBh, action: () => state = STATE.HELP },
   ];
   for (const b of secondary) menuButtons.push(b);
 
@@ -3003,16 +3151,18 @@ function drawGarage() {
 
   if(garageTab==='cars'){
     const cardH=44, gap=5, visibleCount=6;
-    const maxScroll=Math.max(0,CARS.length-visibleCount);
+    const regularCars=CARS.map((c,i)=>({...c,_origIdx:i})).filter(c=>!c.missionOnly);
+    const maxScroll=Math.max(0,regularCars.length-visibleCount);
     garageCarScroll=Math.max(0,Math.min(garageCarScroll,maxScroll));
     const startIdx=Math.floor(garageCarScroll);
-    const endIdx=Math.min(CARS.length,startIdx+visibleCount);
+    const endIdx=Math.min(regularCars.length,startIdx+visibleCount);
     // scroll hint arrows
     if(startIdx>0){ctx.fillStyle='rgba(255,213,74,0.7)';ctx.font='14px system-ui';ctx.textAlign='center';ctx.fillText('▲',W/2,contentY+6);}
-    if(endIdx<CARS.length){ctx.fillStyle='rgba(255,213,74,0.7)';ctx.font='14px system-ui';ctx.textAlign='center';ctx.fillText('▼',W/2,contentY+contentH+4);}
-    for(let i=startIdx;i<endIdx;i++){
-      const car=CARS[i];
-      const cy=contentY+(i-startIdx)*(cardH+gap);
+    if(endIdx<regularCars.length){ctx.fillStyle='rgba(255,213,74,0.7)';ctx.font='14px system-ui';ctx.textAlign='center';ctx.fillText('▼',W/2,contentY+contentH+4);}
+    for(let li=0;li<endIdx-startIdx;li++){
+      const car=regularCars[startIdx+li];
+      const i=car._origIdx;
+      const cy=contentY+li*(cardH+gap);
       const owned_=isUnlocked(i);
       const equipped=carIdx===i;
       // card bg
@@ -3211,8 +3361,9 @@ function drawGarage() {
       ctx.beginPath(); ctx.roundRect(14, panY, W-28, panH, 7); ctx.fill();
       ctx.strokeStyle = '#6600aa'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.roundRect(14, panY, W-28, panH, 7); ctx.stroke();
+      const selectedPaintName = (SHOP_PAINTS.find(p => p.id === garagePaintSelected) || {}).name || garagePaintSelected;
       ctx.textAlign = 'left'; ctx.fillStyle = '#cc88ff'; ctx.font = 'bold 10px system-ui';
-      ctx.fillText('OBSIDIAN  —  INFO', 22, panY + 13);
+      ctx.fillText(selectedPaintName + '  —  INFO', 22, panY + 13);
       ctx.fillStyle = '#ddd'; ctx.font = '9.5px system-ui';
       for (let li = 0; li < lines.length; li++) {
         ctx.fillText(lines[li], 22, panY + 26 + li * 16);
@@ -3305,6 +3456,135 @@ function drawGemShop() {
   ctx.fillText('← BACK', W/2, backY + 21);
   gemShopButtons.push({ x: backX, y: backY, w: backW, h: backH, action: () => { state = STATE.MENU; } });
 
+  ctx.textAlign = 'left';
+}
+
+function drawMissionsScreen() {
+  missionsButtons = [];
+  ctx.fillStyle = 'rgba(0,0,0,0.92)';
+  ctx.fillRect(0, 0, W, H);
+
+  // title
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd54a';
+  ctx.font = 'bold 26px system-ui';
+  ctx.fillText('MISSIONS', W/2, 36);
+
+  const done = MISSIONS.filter(m => missionsDone.has(m.id)).length;
+  ctx.fillStyle = '#aaa'; ctx.font = '11px system-ui';
+  ctx.fillText(done + ' / ' + MISSIONS.length + ' complete', W/2, 54);
+
+  // 2-column grid
+  const colW = (W - 28) / 2, rowH = 40, startY = 68, gap = 4;
+  for (let i = 0; i < MISSIONS.length; i++) {
+    const m = MISSIONS[i];
+    const col = i % 2, row = Math.floor(i / 2);
+    const mx = 10 + col * (colW + 8);
+    const my = startY + row * (rowH + gap);
+    const isDone = missionsDone.has(m.id);
+    ctx.fillStyle = isDone ? 'rgba(40,80,40,0.7)' : 'rgba(20,20,35,0.7)';
+    ctx.beginPath(); ctx.roundRect(mx, my, colW, rowH, 5); ctx.fill();
+    ctx.strokeStyle = isDone ? '#44aa44' : 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(mx, my, colW, rowH, 5); ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = isDone ? '#66dd66' : '#fff';
+    ctx.font = (isDone ? 'bold ' : '') + '9px system-ui';
+    ctx.fillText((isDone ? '✓ ' : '○ ') + m.label, mx + 8, my + 15);
+    ctx.fillStyle = isDone ? '#44aa44' : '#ffd54a';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('+' + m.reward + ' ●', mx + 8, my + 30);
+  }
+
+  // bottom buttons
+  const bh = 34;
+  const garageBtn2 = { label: '🚗 GARAGE', x: 10, y: H - bh - 8, w: 110, h: bh, action: () => state = STATE.MISSIONS_GARAGE };
+  const backBtn2   = { label: '← BACK',   x: W - 120, y: H - bh - 8, w: 110, h: bh, action: () => state = STATE.MENU };
+  for (const b of [garageBtn2, backBtn2]) {
+    missionsButtons.push(b);
+    const hov = mouse.x >= b.x && mouse.x <= b.x+b.w && mouse.y >= b.y && mouse.y <= b.y+b.h;
+    ctx.fillStyle = hov ? 'rgba(255,68,221,0.85)' : 'rgba(20,20,35,0.85)';
+    ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, 6); ctx.fill();
+    ctx.strokeStyle = hov ? '#fff' : '#ff44dd'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, 6); ctx.stroke();
+    ctx.textAlign = 'center'; ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText(b.label, b.x + b.w/2, b.y + b.h/2 + 4);
+  }
+  ctx.textAlign = 'left';
+}
+
+function drawMissionsGarage() {
+  missionsButtons = [];
+  ctx.fillStyle = 'rgba(0,0,0,0.92)';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd54a';
+  ctx.font = 'bold 22px system-ui';
+  ctx.fillText('SPECIAL GARAGE', W/2, 34);
+  ctx.fillStyle = '#888'; ctx.font = '10px system-ui';
+  ctx.fillText('Exclusive vehicles — available only here', W/2, 52);
+
+  const missionCars = CARS.map((c,i) => ({...c, _idx: i})).filter(c => c.missionOnly);
+  const cardH = 118, gap = 8;
+  const startY = 64;
+
+  missionCars.forEach((car, li) => {
+    const cy = startY + li * (cardH + gap);
+    const owned_ = isUnlocked(car._idx);
+    const equipped_ = carIdx === car._idx;
+
+    ctx.fillStyle = equipped_ ? 'rgba(255,68,221,0.15)' : 'rgba(20,20,35,0.8)';
+    ctx.beginPath(); ctx.roundRect(14, cy, W-28, cardH, 8); ctx.fill();
+    ctx.strokeStyle = equipped_ ? '#ff44dd' : 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = equipped_ ? 2 : 1;
+    ctx.beginPath(); ctx.roundRect(14, cy, W-28, cardH, 8); ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 15px system-ui';
+    ctx.fillText(car.name, 28, cy + 22);
+    ctx.fillStyle = '#ccc'; ctx.font = '10px system-ui';
+    ctx.fillText(car.desc, 28, cy + 38);
+    ctx.fillStyle = '#aaa'; ctx.font = '9px system-ui';
+    ctx.fillText('Hits: ' + car.hitsToKill + '  ·  Coins ×' + car.coinMul, 28, cy + 52);
+
+    const bw_ = 100, bh_ = 28, bx_ = W - 14 - bw_ - 8, by_ = cy + cardH/2 - bh_/2;
+    let label_, disabled_ = false, action_ = null;
+    if (equipped_) { label_ = 'EQUIPPED'; disabled_ = false; }
+    else if (owned_) { label_ = 'SELECT'; action_ = () => { carIdx = car._idx; localStorage.setItem('headon_car', car._idx); rebuildPlayerCar(); }; }
+    else {
+      const canAfford = coins >= car.cost;
+      label_ = canAfford ? '● ' + car.cost : '● ' + car.cost;
+      disabled_ = !canAfford;
+      if (canAfford) action_ = () => { setCoins(coins - car.cost); unlockCar(car._idx); carIdx = car._idx; localStorage.setItem('headon_car', car._idx); rebuildPlayerCar(); };
+    }
+    const hov_ = !disabled_ && mouse.x >= bx_ && mouse.x <= bx_+bw_ && mouse.y >= by_ && mouse.y <= by_+bh_;
+    ctx.fillStyle = disabled_ ? 'rgba(40,40,50,0.55)' : hov_ ? 'rgba(255,68,221,0.85)' : 'rgba(20,20,35,0.85)';
+    ctx.beginPath(); ctx.roundRect(bx_, by_, bw_, bh_, 5); ctx.fill();
+    ctx.strokeStyle = disabled_ ? '#444' : hov_ ? '#fff' : '#ff44dd'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(bx_, by_, bw_, bh_, 5); ctx.stroke();
+    ctx.textAlign = 'center'; ctx.fillStyle = disabled_ ? '#666' : equipped_ ? '#00ff88' : '#ffd54a';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText(label_, bx_ + bw_/2, by_ + bh_/2 + 4);
+    ctx.textAlign = 'left';
+
+    if (action_) missionsButtons.push({ x: bx_, y: by_, w: bw_, h: bh_, action: action_, disabled: false });
+
+    // coin balance line
+    ctx.fillStyle = '#aaa'; ctx.font = '9px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('Your coins: ● ' + coins, W - 22, cy + cardH - 10);
+    ctx.textAlign = 'left';
+  });
+
+  // back button
+  const backB = { label: '← BACK', x: W/2 - 60, y: H - 42, w: 120, h: 32, action: () => state = STATE.MISSIONS };
+  missionsButtons.push(backB);
+  const hovB = mouse.x >= backB.x && mouse.x <= backB.x+backB.w && mouse.y >= backB.y && mouse.y <= backB.y+backB.h;
+  ctx.fillStyle = hovB ? 'rgba(255,68,221,0.85)' : 'rgba(20,20,35,0.85)';
+  ctx.beginPath(); ctx.roundRect(backB.x, backB.y, backB.w, backB.h, 6); ctx.fill();
+  ctx.strokeStyle = hovB ? '#fff' : '#ff44dd'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(backB.x, backB.y, backB.w, backB.h, 6); ctx.stroke();
+  ctx.textAlign = 'center'; ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 13px system-ui';
+  ctx.fillText(backB.label, backB.x + backB.w/2, backB.y + backB.h/2 + 4);
   ctx.textAlign = 'left';
 }
 

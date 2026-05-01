@@ -62,7 +62,8 @@ const SHOP_PAINTS = [
   { id: 'paint_snow',    name: 'SNOW',     color: 0xecf0f1, cost: 500,  special: null },
   { id: 'paint_inferno', name: 'INFERNO',  color: 0xe67e22, cost: 750,  special: 'inferno' },
   { id: 'paint_rainbow', name: 'RAINBOW',  color: 0xff0000, cost: 4000, special: 'rainbow' },
-  { id: 'paint_obsidian', name: 'OBSIDIAN', color: 0x1a0030, cost: 2500, special: 'obsidian' },
+  { id: 'paint_obsidian',     name: 'OBSIDIAN',      color: 0x1a0030, cost: 2500, special: 'obsidian'     },
+  { id: 'paint_moneyforever', name: 'MONEY FOREVER', color: 0x1b5e20, cost: 3000, special: 'moneyforever' },
 ];
 const SHOP_TRAILS = [
   { id: 'trail_default', name: 'DEFAULT',    color: '#333333', cost: 0,    special: null },
@@ -72,6 +73,16 @@ const SHOP_TRAILS = [
   { id: 'trail_ice',     name: 'ICE',        color: '#aaddff', cost: 750,  special: null },
   { id: 'trail_rainbow', name: 'RAINBOW',    color: '#ff0000', cost: 3000, special: 'rainbow' },
   { id: 'trail_hyper',   name: 'HYPER',      color: '#cc44ff', cost: 4000, special: 'hyper'   },
+  { id: 'trail_money',   name: 'MONEY',      color: '#2e7d32', cost: 1100, special: 'money'   },
+];
+
+const MISSIONS = [
+  { id: 'm_nitro3',    label: '3 nitros in 1 Arena game',  reward: 1000 },
+  { id: 'm_survive60', label: 'Survive 60s in Classic',     reward: 500  },
+  { id: 'm_wave5',     label: 'Reach Wave 5 in Head On',    reward: 750  },
+  { id: 'm_dodge20',   label: 'Dodge 20 cars in Head On',   reward: 600  },
+  { id: 'm_earn500',   label: 'Earn 500+ coins in 1 run',   reward: 500  },
+  { id: 'm_arena1st',  label: '1st place in any Arena',     reward: 800  },
 ];
 
 const ENEMY_TYPES = [
@@ -164,6 +175,7 @@ let _trailT = 0; // global trail time for color cycling
 const STATE = { MENU: 'menu', HELP: 'help', PLAYING: 'playing', DEAD: 'dead', ARENA: 'arena', GARAGE: 'garage', ARENA_SELECT: 'arena_select', GEM_SHOP: 'gem_shop' };
 let state = STATE.MENU;
 let garageTab = 'cars'; // 'cars' | 'paint' | 'trails'
+let garagePaintSelected = null;
 let garageButtons = [];
 let arenaSelectButtons = [];
 let gemShopButtons = [];
@@ -171,6 +183,11 @@ let menuBlink = 0;
 let lastEarned = 0;
 let arenaLevel = 1;
 let arenaProgress = +localStorage.getItem('headon_arena_progress') || 0; // highest level beaten with 1st place
+let mfCharges = 3; // money forever ability charges per arena game
+let mfCooldown = 0; // ms until next money forever trigger allowed
+let missionsDone = new Set(JSON.parse(localStorage.getItem('headon_missions_done') || '[]'));
+let nitroCollectedThisGame = 0;
+let missionFlashMsg = ''; let missionFlashTimer = 0;
 let diffSpeedWarning = 0; // ms below speed floor in the regular driving game
 let garageCarScroll = 0;
 let bgCycleTimer = 0; // ms until next random background switch during play
@@ -198,6 +215,7 @@ let speedingTime = 0;    // ms above 80 km/h
 let maxSpeed = 0;        // m/s
 let cockpitView = false; // false = chase cam, true = inside cockpit
 let earnings = null;     // breakdown for TOTALED screen
+let crashAutoTimer = 0;  // ms until auto-restart after crash
 
 let menuButtons = [];
 const mouse = { x: -1, y: -1 };
@@ -877,12 +895,35 @@ function addObsidianSpikes(group) {
   }
 }
 
+function addMoneyForeverBills(group) {
+  const billGeo = new THREE.PlaneGeometry(0.72, 0.36);
+  const billMat = new THREE.MeshPhongMaterial({ color: 0x2e7d32, emissive: 0x1b5e20, shininess: 80, side: THREE.DoubleSide });
+  const innerMat = new THREE.MeshPhongMaterial({ color: 0xc8e6c9, emissive: 0x388e3c, shininess: 50, side: THREE.DoubleSide });
+  const placements = [
+    // [x, y, z, ry]  — ry rotates bill to face outward
+    [ 0.98, 0.55,  0.5,  Math.PI/2],
+    [ 0.98, 0.55, -0.3,  Math.PI/2],
+    [-0.98, 0.55,  0.5, -Math.PI/2],
+    [-0.98, 0.55, -0.3, -Math.PI/2],
+    [ 0.3,  1.22,  0.3,  0],
+    [-0.3,  1.22,  0.3,  0],
+    [ 0,    1.22, -0.2,  0],
+    [ 0,    0.45,  1.3,  0],
+    [ 0,    0.45, -1.35, Math.PI],
+  ];
+  for (const [x, y, z, ry] of placements) {
+    const outer = new THREE.Mesh(billGeo, billMat); outer.position.set(x, y, z); outer.rotation.y = ry; group.add(outer);
+    const inner = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 0.24), innerMat); inner.position.set(x, y, z); inner.rotation.y = ry; group.add(inner);
+  }
+}
+
 function rebuildPlayerCar() {
   if (playerCarGroup) {
     scene.remove(playerCarGroup);
   }
   playerCarGroup = buildCar({ kind: CARS[carIdx].kind || 'sedan', color: getPlayerBodyColor(), accent: CARS[carIdx].accent, isPlayer: true });
   if (equippedPaint === 'paint_obsidian') addObsidianSpikes(playerCarGroup);
+  if (equippedPaint === 'paint_moneyforever') addMoneyForeverBills(playerCarGroup);
   playerCarGroup.position.set(0, 0, 0);
   scene.add(playerCarGroup);
 }
@@ -986,7 +1027,7 @@ window.addEventListener('keydown', e => {
       else state = STATE.MENU;
     } else if (k === 'r') {
       if (earnings && earnings.mode === 'ARENA') startArena();
-      else startGame();
+      else state = STATE.MENU;
     }
   }
   if (state === STATE.PLAYING && k === 'c') cockpitView = !cockpitView;
@@ -1108,7 +1149,7 @@ function startGame() {
   lastEarned = 0;
   dmg = { body:0, tires:0, engine:0 };
   invulnTime = 0; crashes = 0; smokeTimer = 0; damageBanner = 0;
-  gameTime = 0; distanceM = 0; speedingTime = 0; maxSpeed = 0; earnings = null;
+  gameTime = 0; distanceM = 0; speedingTime = 0; maxSpeed = 0; earnings = null; crashAutoTimer = 0;
   diffSpeedWarning = 0;
   bgCycleTimer = 25000 + Math.random() * 20000; // first switch in 25-45s
   rebuildPlayerCar();
@@ -1131,6 +1172,27 @@ function randomAliveTilePos() {
 
 function updateBot(bot, dt) {
   if (bot.frozenTimer > 0) { bot.frozenTimer -= dt; return; }
+  if (bot.berserkTimer > 0) {
+    bot.berserkTimer -= dt;
+    const dts2 = dt / 1000;
+    // find nearest alive bot to ram into
+    let target = null, bestD = Infinity;
+    for (const other of arenaBots) {
+      if (other === bot || other.state !== 'alive') continue;
+      const d = Math.hypot(other.x - bot.x, other.z - bot.z);
+      if (d < bestD) { bestD = d; target = other; }
+    }
+    if (!target) { target = { x: arenaPlayer.x, z: arenaPlayer.z }; } // fallback: chase player
+    const angle = Math.atan2(target.x - bot.x, target.z - bot.z);
+    let diff2 = angle - bot.heading;
+    while (diff2 > Math.PI) diff2 -= Math.PI*2; while (diff2 < -Math.PI) diff2 += Math.PI*2;
+    bot.heading += Math.sign(diff2) * Math.min(Math.abs(diff2), 4 * dts2);
+    bot.fwd = Math.min(22, bot.fwd + 22 * dts2);
+    bot.x += Math.sin(bot.heading) * bot.fwd * dts2;
+    bot.z += Math.cos(bot.heading) * bot.fwd * dts2;
+    if (bot.mesh) bot.mesh.rotation.set(0, bot.heading, 0);
+    return;
+  }
   const dts = dt / 1000;
   bot.jumpCooldown = Math.max(0, bot.jumpCooldown - dt);
 
@@ -1264,7 +1326,7 @@ function startArena() {
       fwd: 0, onGround: false,
       state: 'alive',
       mesh,
-      targetX: 0, targetZ: 0, targetTimer: 0, jumpCooldown: 0, frozenTimer: 0,
+      targetX: 0, targetZ: 0, targetTimer: 0, jumpCooldown: 0, frozenTimer: 0, berserkTimer: 0,
     };
   });
   arenaElimOrder = []; arenaPlacement = null; skidMarks = [];
@@ -1274,6 +1336,8 @@ function startArena() {
   dmg = { body: 0, tires: 0, engine: 0 };
   invulnTime = 0; crashes = 0; gameTime = 0; score = 0;
   earnings = null; lastEarned = 0;
+  nitroCollectedThisGame = 0;
+  mfCharges = 3; mfCooldown = 0;
   rebuildPlayerCar();
   state = STATE.ARENA;
 }
@@ -1282,6 +1346,7 @@ function updateArena(dt) {
   const dts = dt / 1000;
   gameTime += dts;
   score = Math.floor(gameTime * 10);
+  if (mfCooldown > 0) mfCooldown -= dt;
 
   // free driving input
   const turn = ((keys['arrowleft']||keys['a']) ? 1 : 0) - ((keys['arrowright']||keys['d']) ? 1 : 0);
@@ -1451,6 +1516,12 @@ function updateArena(dt) {
           bot.frozenTimer = 2000;
           bot.vx = 0; bot.vz = 0; bot.fwd = 0;
         }
+        // money forever: send bot berserk for 2s, up to 3 times per game (5s cooldown)
+        if (equippedPaint === 'paint_moneyforever' && mfCharges > 0 && mfCooldown <= 0) {
+          bot.berserkTimer = 2000;
+          mfCharges--;
+          mfCooldown = 5000;
+        }
       }
     }
   }
@@ -1521,6 +1592,7 @@ function updateArena(dt) {
       arenaPlayer.vx = nx * Math.max(fwd * 2.5, 38);
       arenaPlayer.vz = nz * Math.max(fwd * 2.5, 38);
       nitroTime = 5000;
+      nitroCollectedThisGame++;
       arenaGroup.remove(nitroPickup.mesh);
       nitroPickup = null;
       addShake(0.15, 300);
@@ -1578,6 +1650,7 @@ function updateArena(dt) {
       lvlMul: e.lvlMul, botBonus: e.botBonus, botsDown: e.botsDown, masterBonus: e.masterBonus,
     };
     lastEarned = e.total; if (e.total > 0) setCoins(coins + e.total);
+    checkMissions();
     return;
   }
 
@@ -1598,6 +1671,7 @@ function updateArena(dt) {
       lvlMul: e.lvlMul, botBonus: e.botBonus, botsDown: e.botsDown, masterBonus: e.masterBonus,
     };
     lastEarned = e.total; if (e.total > 0) setCoins(coins + e.total);
+    checkMissions();
   }
 }
 function cycleDifficulty() { difficultyIdx = (difficultyIdx + 1) % DIFFICULTIES.length; localStorage.setItem('headon_diff', difficultyIdx); }
@@ -1678,10 +1752,13 @@ function takeDamage(e) {
   speedBoost = Math.max(-5, speedBoost - 6);
   if (dmg.body >= 0.99 && dmg.tires >= 0.99 && dmg.engine >= 0.99) {
     state = STATE.DEAD;
+    addShake(0.6, 900);
+    crashAutoTimer = 3000;
     if (score > getBest()) { saveBest(Math.floor(score)); }
     earnings = computeEarnings();
     lastEarned = earnings.total;
     if (lastEarned > 0) setCoins(coins + lastEarned);
+    checkMissions();
   }
 }
 
@@ -1708,6 +1785,26 @@ function computeEarnings() {
     topSpeedKmh, topSpeedBonus,
     total, diffMul, carMul, gemEarned,
   };
+}
+
+function checkMissions() {
+  for (const m of MISSIONS) {
+    if (missionsDone.has(m.id)) continue;
+    let done = false;
+    if (m.id === 'm_nitro3'   ) done = earnings?.mode === 'ARENA' && nitroCollectedThisGame >= 3;
+    if (m.id === 'm_survive60') done = earnings?.mode !== 'ARENA' && MODES[modeIdx] === 'CLASSIC' && gameTime >= 60;
+    if (m.id === 'm_wave5'    ) done = earnings?.mode !== 'ARENA' && MODES[modeIdx] === 'HEAD ON' && wave >= 5;
+    if (m.id === 'm_dodge20'  ) done = earnings?.mode !== 'ARENA' && MODES[modeIdx] === 'HEAD ON' && dodged >= 20;
+    if (m.id === 'm_earn500'  ) done = lastEarned >= 500;
+    if (m.id === 'm_arena1st' ) done = earnings?.mode === 'ARENA' && earnings?.placement === 1;
+    if (done) {
+      missionsDone.add(m.id);
+      setCoins(coins + m.reward);
+      missionFlashMsg = m.label + '  +' + m.reward + ' ●';
+      missionFlashTimer = 3500;
+    }
+  }
+  localStorage.setItem('headon_missions_done', JSON.stringify([...missionsDone]));
 }
 
 // ===== paint FX =====
@@ -1776,6 +1873,17 @@ function spawnPaintFX(carX, carY, carZ, scale) {
 
 function spawnPaintGroundTrail(carX, carSpeed) {
   if (CARS[carIdx].kind === 'truck') return;
+  const trailSpecGround = SHOP_TRAILS.find(x => x.id === equippedTrail);
+  if (trailSpecGround && trailSpecGround.special === 'money' && Math.random() < 0.25) {
+    const rp = project3D(carX + (Math.random()-0.5)*1.2, 0.01, -2.1);
+    if (!rp.behind) {
+      const drift = 1.8 + carSpeed * 0.06 + Math.random() * 1.2;
+      particles.push({ x: rp.x, y: rp.y,
+        vx: (Math.random()-0.5)*0.8, vy: drift,
+        life: 2200, max: 2200, size: 20 + Math.random()*12,
+        rot: (Math.random()-0.5)*0.5, color: '#2e7d32', gravity: 0, kind: 'bill' });
+    }
+  }
   const paintSpec = SHOP_PAINTS.find(p => p.id === equippedPaint);
   if (!paintSpec || !['inferno','snow','ocean','obsidian'].includes(paintSpec.special)) return;
   if (Math.random() > 0.35) return; // thin out spawns
@@ -1823,7 +1931,14 @@ function update(dt) {
   const dts0 = dt / 1000;
   if (shakeImpulse > 0) shakeImpulse -= dt; else shakeMag *= Math.pow(0.5, dts0 * 5);
   if (shakeMag < 0.005) shakeMag = 0;
+  if (missionFlashTimer > 0) missionFlashTimer -= dt;
   _paintRainbowHue = (_paintRainbowHue + dts0 * 90) % 360;
+
+  if (state === STATE.DEAD && earnings && earnings.mode !== 'ARENA') {
+    if (crashAutoTimer > 0) { crashAutoTimer -= dt; if (crashAutoTimer <= 0) state = STATE.MENU; }
+    updateParticles(dt);
+    return;
+  }
 
   if (state === STATE.ARENA) { updateArena(dt); updateParticles(dt); return; }
 
@@ -1924,6 +2039,26 @@ function update(dt) {
             color: obsidianTrail ? getObsidianColor() : getFireColor(), gravity: 0, kind: 'spark',
           });
         }
+      }
+    } else if (trailSpec && trailSpec.special === 'money') {
+      // money trail — $100 bill particles drift behind car
+      if (Math.random() < 0.6) {
+        const wp = project3D(player.worldX + (Math.random()-0.5)*1.2, 0.15, -1.7);
+        if (!wp.behind) {
+          particles.push({ x: wp.x, y: wp.y,
+            vx: (Math.random()-0.5)*2.5, vy: 1.8 + Math.random()*3,
+            life: 1200 + Math.random()*600, max: 1800,
+            size: 18 + Math.random()*10, rot: (Math.random()-0.5)*1.2,
+            color: '#2e7d32', gravity: 0, kind: 'bill' });
+        }
+      }
+      // floating screen bills — rain down from top
+      if (Math.random() < 0.08) {
+        particles.push({ x: Math.random()*W, y: -20,
+          vx: (Math.random()-0.5)*1.5, vy: 1.5+Math.random()*3,
+          life: 400+Math.random()*300, max: 700,
+          size: 22+Math.random()*12, rot: (Math.random()-0.5)*1.5,
+          color: '#2e7d32', gravity: 0, kind: 'bill' });
       }
     } else {
       const obsidianOn = equippedPaint === 'paint_obsidian';
@@ -2086,10 +2221,13 @@ function update(dt) {
         damageBanner = 1200;
         if (dmg.body >= 0.99 && dmg.tires >= 0.99 && dmg.engine >= 0.99) {
           state = STATE.DEAD;
+          addShake(0.6, 900); playCrashSound();
+          crashAutoTimer = 3000;
           if (score > getBest()) { saveBest(Math.floor(score)); }
           earnings = computeEarnings();
           lastEarned = earnings.total;
           if (lastEarned > 0) setCoins(coins + lastEarned);
+          checkMissions();
         }
       }
     } else {
@@ -2386,6 +2524,18 @@ function drawArenaHud() {
   ctx.font = 'bold 14px system-ui';
   ctx.fillText('LV ' + arenaLevel + (arenaLevel <= 5 ? ' 🔒' : ' 🔓'), 44, 29);
 
+  // money forever charge indicator
+  if (equippedPaint === 'paint_moneyforever') {
+    const chargeY = nitroTime > 0 ? H - 72 : H - 48;
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.roundRect(W/2 - 52, chargeY, 104, 20, 5); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = '#66bb6a';
+    const cd = mfCooldown > 0 ? '  (' + Math.ceil(mfCooldown/1000) + 's)' : '';
+    ctx.fillText('💵 ' + mfCharges + '/3 charges' + cd, W/2, chargeY + 14);
+  }
+
   ctx.textAlign = 'left';
   ctx.restore();
 }
@@ -2394,7 +2544,17 @@ function drawParticles() {
     const a = Math.max(0, Math.min(1, p.life / p.max));
     ctx.globalAlpha = a;
     ctx.fillStyle = p.color;
-    if (p.kind === 'debris') {
+    if (p.kind === 'bill') {
+      const bw = p.size * 1.7, bh = p.size * 0.85;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot || 0);
+      ctx.fillStyle = '#2e7d32'; ctx.fillRect(-bw/2, -bh/2, bw, bh);
+      ctx.fillStyle = '#c8e6c9'; ctx.fillRect(-bw/2+2, -bh/2+2, bw-4, bh-4);
+      ctx.fillStyle = '#1b5e20'; ctx.font = 'bold ' + Math.floor(bh*0.55) + 'px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('$100', 0, 0);
+      ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+      ctx.restore();
+    } else if (p.kind === 'debris') {
       ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
       ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
       ctx.restore();
@@ -2449,16 +2609,24 @@ function drawHud() {
   drawDamageBars();
 
   if (damageBanner > 0 && state === STATE.PLAYING) {
-    const a = Math.min(1, damageBanner / 300);
+    const a = Math.min(0.45, (damageBanner / 300) * 0.45);
     ctx.globalAlpha = a;
-    ctx.fillStyle = 'rgba(180,30,30,0.6)';
-    ctx.fillRect(0, H/2 - 30, W, 50);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 22px system-ui';
-    ctx.textAlign = 'center';
-    ctx.fillText('DAMAGED!', W/2, H/2 + 4);
-    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ff2222';
+    ctx.fillRect(0, 0, W, H);
     ctx.globalAlpha = 1;
+  }
+
+  // mission complete flash
+  if (missionFlashTimer > 0) {
+    const fa = Math.min(1, missionFlashTimer / 400);
+    ctx.globalAlpha = fa;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.beginPath(); ctx.roundRect(W/2 - 150, H/2 - 22, 300, 36, 8); ctx.fill();
+    ctx.fillStyle = '#66bb6a'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✓ MISSION COMPLETE', W/2, H/2 - 8);
+    ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText(missionFlashMsg, W/2, H/2 + 9);
+    ctx.textAlign = 'left'; ctx.globalAlpha = 1;
   }
 
   if (MODES[modeIdx] === 'HEAD ON' && state === STATE.PLAYING) {
@@ -2606,6 +2774,29 @@ function drawMenu() {
   for (let i = 4; i > 0; i--) ctx.fillText('ON', 14 + i, 88 + i);
   ctx.fillStyle = '#ffd54a';
   ctx.fillText('ON', 14, 88);
+
+  // missions panel — below HEAD ON title
+  const activeMissions = MISSIONS.filter(m => !missionsDone.has(m.id));
+  const doneCount = MISSIONS.length - activeMissions.length;
+  const showM = activeMissions.slice(0, 4);
+  const panelH = 18 + showM.length * 30 + (doneCount > 0 ? 18 : 0);
+  ctx.fillStyle = 'rgba(0,0,0,0.52)';
+  ctx.beginPath(); ctx.roundRect(10, 96, 165, panelH, 6); ctx.fill();
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 9px system-ui';
+  ctx.fillText('MISSIONS', 17, 109);
+  let mY = 120;
+  for (const m of showM) {
+    ctx.fillStyle = '#fff'; ctx.font = '9px system-ui';
+    ctx.fillText(m.label, 17, mY);
+    ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 9px system-ui';
+    ctx.fillText('+' + m.reward + ' ●', 17, mY + 11);
+    mY += 30;
+  }
+  if (doneCount > 0) {
+    ctx.fillStyle = '#66bb6a'; ctx.font = '9px system-ui';
+    ctx.fillText('✓ ' + doneCount + ' / ' + MISSIONS.length + ' complete', 17, mY + 6);
+  }
 
   // coin balance top-right
   ctx.textAlign = 'right';
@@ -2805,7 +2996,7 @@ function drawGarage() {
   for(let i=0;i<TABS.length;i++){
     const [id,label]=TABS[i];
     const tx=tabX0+i*(tabW+tabGap);
-    garageBtn(label,tx,tabY,tabW,tabH,()=>{garageTab=id;},{active:garageTab===id});
+    garageBtn(label,tx,tabY,tabW,tabH,()=>{garageTab=id;garagePaintSelected=null;},{active:garageTab===id});
   }
 
   const contentY=RB+72, contentH=H-contentY-40;
@@ -2870,13 +3061,20 @@ function drawGarage() {
       const px=14+col*(swW+gap), py=contentY+row*(swH+gap);
       const owned_=isOwned(paint.id);
       const equipped=equippedPaint===paint.id;
+      const isSelected = garagePaintSelected === paint.id;
+      // register card body as clickable (tap to see info)
+      garageButtons.push({ x:px, y:py, w:swW, h:swH-24, action:()=>{ garagePaintSelected = garagePaintSelected===paint.id ? null : paint.id; }, disabled:false });
       // card
-      ctx.fillStyle=equipped?'rgba(255,68,221,0.2)':'rgba(255,255,255,0.04)';
+      ctx.fillStyle=equipped?'rgba(255,68,221,0.2)':isSelected?'rgba(80,0,120,0.28)':'rgba(255,255,255,0.04)';
       roundedRect(px,py,swW,swH,7); ctx.fill();
-      ctx.strokeStyle=equipped?'#ff44dd':'rgba(255,255,255,0.12)';
-      ctx.lineWidth=equipped?2:1; roundedRect(px,py,swW,swH,7); ctx.stroke();
-      // secret obsidian treatment — hide details until owned
-      const isSecret = paint.id === 'paint_obsidian' && !owned_;
+      ctx.strokeStyle=equipped?'#ff44dd':isSelected?'#aa44ff':'rgba(255,255,255,0.12)';
+      ctx.lineWidth=equipped||isSelected?2:1; roundedRect(px,py,swW,swH,7); ctx.stroke();
+      // secret unlock conditions
+      const obsidianCondMet   = equippedPaint==='paint_ocean'    && equippedTrail==='trail_fire';
+      const mfCondMet         = equippedPaint==='paint_emerald'  && equippedTrail==='trail_money';
+      const conditionMet      = (paint.id==='paint_obsidian' && obsidianCondMet) || (paint.id==='paint_moneyforever' && mfCondMet);
+      // hide details until actually owned (secret stays hidden even when combo is met)
+      const isSecret = (paint.id==='paint_obsidian' || paint.id==='paint_moneyforever') && !owned_;
       // color swatch
       const swatchColor=paint.color!=null?'#'+paint.color.toString(16).padStart(6,'0'):'#'+CARS[carIdx].body.toString(16).padStart(6,'0');
       const swX=px+swW/2-18, swY=py+8, swW2=36, swH2=28;
@@ -2909,6 +3107,10 @@ function drawGarage() {
         const ot=(Date.now()/1200)%1;
         og.addColorStop(0,'#0a0010'); og.addColorStop(ot,'#6600aa'); og.addColorStop(1,'#1a0030');
         ctx.fillStyle=og;
+      } else if(paint.special==='moneyforever'){
+        const mg=ctx.createLinearGradient(swX,swY,swX+swW2,swY+swH2);
+        mg.addColorStop(0,'#1b5e20'); mg.addColorStop(0.5,'#66bb6a'); mg.addColorStop(1,'#2e7d32');
+        ctx.fillStyle=mg;
       } else {
         ctx.fillStyle=swatchColor;
       }
@@ -2922,15 +3124,23 @@ function drawGarage() {
       // cost/owned
       ctx.fillStyle='#aaa'; ctx.font='9px system-ui';
       ctx.fillText(isSecret ? '●'+paint.cost : (paint.cost===0?'FREE':'●'+paint.cost), px+swW/2, py+60);
+      // big lock overlay when secret and conditions not met
+      const isSecretLocked = (paint.id==='paint_obsidian' || paint.id==='paint_moneyforever') && !owned_ && !conditionMet;
+      if (isSecretLocked) {
+        ctx.fillStyle='rgba(0,0,0,0.55)';
+        roundedRect(px,py,swW,swH,7); ctx.fill();
+        ctx.font='28px system-ui'; ctx.textAlign='center';
+        ctx.fillText('🔒', px+swW/2, py+swH/2+10);
+      }
       // button
       const bw2=swW-12,bh2=18,bx2=px+6,by2=py+swH-22;
-      const obsidianLocked = paint.id==='paint_obsidian' && !owned_ &&
-        !(equippedPaint==='paint_ocean' && equippedTrail==='trail_fire');
       if(equipped){
         garageBtn('ON',bx2,by2,bw2,bh2,null,{active:true,small:true});
       }else if(owned_){
         garageBtn('EQUIP',bx2,by2,bw2,bh2,()=>equipPaint(paint.id),{small:true});
-      }else if(obsidianLocked){
+      }else if(conditionMet){
+        garageBtn('UNLOCK',bx2,by2,bw2,bh2,()=>{ownItem(paint.id);equipPaint(paint.id);},{small:true});
+      }else if(isSecretLocked){
         garageBtn('LOCKED',bx2,by2,bw2,bh2,null,{disabled:true,small:true});
       }else{
         const canAfford=coins>=paint.cost;
@@ -2973,6 +3183,41 @@ function drawGarage() {
         garageBtn('BUY',bx3,by3,bw3,bh3,canAfford?()=>{setCoins(coins-trail.cost);ownItem(trail.id);equipTrail(trail.id);}:null,{disabled:!canAfford,small:true});
       }
     });
+  }
+
+  // paint info panel — shown when a paint card is tapped
+  if (garageTab === 'paint' && garagePaintSelected) {
+    const infos = {
+      paint_obsidian: [
+        'One of the most secret paints.',
+        'Try to find more secrets hidden in the game.',
+        '⬡ Stops Arena enemies for 2 seconds on collision.',
+        '⬡ Infects Arena tiles with a spreading virus,',
+        '   consuming more space over time.',
+      ],
+      paint_moneyforever: [
+        'Car plastered with $100 bills.',
+        '⬡ Touch an enemy in Arena → they go berserk for',
+        '   2 seconds, ramming into other cars.',
+        '⬡ 3 charges per game · 5 second cooldown.',
+        'Unlock: EMERALD paint + MONEY trail equipped.',
+      ],
+    };
+    const lines = infos[garagePaintSelected];
+    if (lines) {
+      const panH = 14 + lines.length * 16 + 6;
+      const panY = H - 48 - panH;
+      ctx.fillStyle = 'rgba(10,0,20,0.88)';
+      ctx.beginPath(); ctx.roundRect(14, panY, W-28, panH, 7); ctx.fill();
+      ctx.strokeStyle = '#6600aa'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(14, panY, W-28, panH, 7); ctx.stroke();
+      ctx.textAlign = 'left'; ctx.fillStyle = '#cc88ff'; ctx.font = 'bold 10px system-ui';
+      ctx.fillText('OBSIDIAN  —  INFO', 22, panY + 13);
+      ctx.fillStyle = '#ddd'; ctx.font = '9.5px system-ui';
+      for (let li = 0; li < lines.length; li++) {
+        ctx.fillText(lines[li], 22, panY + 26 + li * 16);
+      }
+    }
   }
 
   // back button
@@ -3105,14 +3350,11 @@ function drawCrash() {
   const gemEarned= earnings && earnings.gemEarned|| false;
   const extraLines = (diffMul !== 1 ? 1 : 0) + (carMul > 1 ? 1 : 0) + (gemEarned ? 1 : 0);
   ctx.fillStyle = 'rgba(0,0,0,0.7)';
-  ctx.fillRect(0, H/2 - 110, W, 230 + extraLines * 18);
+  ctx.fillRect(0, H/2 - 80, W, 190 + extraLines * 18);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ff5555';
-  ctx.font = 'bold 42px system-ui';
-  ctx.fillText('TOTALED', W/2, H/2 - 50);
   ctx.fillStyle = '#fff'; ctx.font = '14px system-ui';
-  ctx.fillText('Crashes survived: ' + crashes, W/2, H/2 - 24);
-  ctx.fillText('Score: ' + Math.floor(score), W/2, H/2 - 6);
+  ctx.fillText('Crashes survived: ' + crashes, W/2, H/2 - 44);
+  ctx.fillText('Score: ' + Math.floor(score), W/2, H/2 - 24);
   let lineY = H/2 + 12;
   if (diffMul !== 1) {
     ctx.fillStyle = diffMul > 1 ? '#ff9944' : '#888';
@@ -3139,7 +3381,7 @@ function drawCrash() {
   ctx.fillText('● ' + coins + '  ◆ ' + gems, W/2, lineY + 4);
   lineY += 20;
   ctx.fillStyle = '#fff'; ctx.font = '14px system-ui';
-  ctx.fillText('R to restart · Space for menu', W/2, lineY + 16);
+  ctx.fillText('Space · click to return to menu', W/2, lineY + 16);
   ctx.textAlign = 'left';
 }
 

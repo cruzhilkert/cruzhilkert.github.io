@@ -62,6 +62,7 @@ const SHOP_PAINTS = [
   { id: 'paint_snow',    name: 'SNOW',     color: 0xecf0f1, cost: 500,  special: null },
   { id: 'paint_inferno', name: 'INFERNO',  color: 0xe67e22, cost: 750,  special: 'inferno' },
   { id: 'paint_rainbow', name: 'RAINBOW',  color: 0xff0000, cost: 4000, special: 'rainbow' },
+  { id: 'paint_obsidian', name: 'OBSIDIAN', color: 0x1a0030, cost: 2500, special: 'obsidian' },
 ];
 const SHOP_TRAILS = [
   { id: 'trail_default', name: 'DEFAULT',    color: '#333333', cost: 0,    special: null },
@@ -855,11 +856,27 @@ function applyDamageVisual(group, dmgLevel) {
 
 // ===== player car instance =====
 let playerCarGroup = null;
+function addObsidianSpikes(group) {
+  const spikeGeo = new THREE.ConeGeometry(0.11, 0.46, 4);
+  const spikeMat = new THREE.MeshPhongMaterial({ color: 0x3a0055, emissive: 0x220033, shininess: 140, specular: 0xaa44ff });
+  const positions = [
+    [0, 1.28, 0.7], [0, 1.28, 0], [0, 1.28, -0.7],  // roof row
+    [-0.96, 0.72, 0.3], [0.96, 0.72, 0.3],            // sides
+    [0, 0.72, 1.3],                                     // hood
+  ];
+  for (const [x, y, z] of positions) {
+    const s = new THREE.Mesh(spikeGeo, spikeMat);
+    s.position.set(x, y, z);
+    group.add(s);
+  }
+}
+
 function rebuildPlayerCar() {
   if (playerCarGroup) {
     scene.remove(playerCarGroup);
   }
   playerCarGroup = buildCar({ kind: CARS[carIdx].kind || 'sedan', color: getPlayerBodyColor(), accent: CARS[carIdx].accent, isPlayer: true });
+  if (equippedPaint === 'paint_obsidian') addObsidianSpikes(playerCarGroup);
   playerCarGroup.position.set(0, 0, 0);
   scene.add(playerCarGroup);
 }
@@ -1702,6 +1719,15 @@ function spawnPaintFX(carX, carY, carZ, scale) {
         life: 250+Math.random()*300, max: 550,
         size: (2+Math.random()*5)*scale, color: `hsl(${Math.floor(hue)},100%,62%)`, gravity: 0.006, kind: 'spark' });
     }
+    // obsidian: purple glimmer sparks when moving side-to-side
+    if (paintSpec.special === 'obsidian' && Math.abs(player.vx) > 2 && Math.random() < 0.13) {
+      const hue = 260 + Math.random() * 50;
+      const bright = Math.random() < 0.4 ? 85 : 65;
+      particles.push({ x: cp.x + (Math.random()-0.5)*spread*1.2, y: cp.y + (Math.random()-0.5)*spread*0.5,
+        vx: (Math.random()-0.5)*2.5, vy: -(0.3 + Math.random()*1.2),
+        life: 180+Math.random()*220, max: 400,
+        size: (1.5+Math.random()*3.5)*scale, color: `hsl(${Math.floor(hue)},90%,${bright}%)`, gravity: 0.004, kind: 'spark' });
+    }
   }
 }
 
@@ -1867,6 +1893,23 @@ function update(dt) {
   if (speed > 5) spawnPaintFX(player.worldX, 0.6, 0, 1.0);
   // paint ground trail marks — inferno/snow/ocean leave marks on the road
   if (speed > 8) spawnPaintGroundTrail(player.worldX, speed);
+  // water + fire = steam: OCEAN paint + FIRE trail → hissing steam cloud at exhaust
+  if (speed > 8 && Math.random() < 0.25) {
+    const paintSpec = SHOP_PAINTS.find(p => p.id === equippedPaint);
+    const trailSpec = SHOP_TRAILS.find(t => t.id === equippedTrail);
+    if (paintSpec && paintSpec.special === 'ocean' && trailSpec && trailSpec.special === 'fire') {
+      const sp = project3D(player.worldX + (Math.random()-0.5)*1.0, 0.35, -1.85);
+      if (!sp.behind) {
+        for (let i = 0; i < 3; i++) {
+          particles.push({ x: sp.x + (Math.random()-0.5)*14, y: sp.y + (Math.random()-0.5)*8,
+            vx: (Math.random()-0.5)*1.8, vy: -(0.8 + Math.random()*2.5),
+            life: 500+Math.random()*500, max: 1000,
+            size: 10+Math.random()*16, color: `rgba(${200+Math.floor(Math.random()*40)},${215+Math.floor(Math.random()*30)},240,0.7)`,
+            gravity: -0.018, kind: 'spark' });
+        }
+      }
+    }
+  }
 
   if (headOn) {
     const accelRate = 22 * car.accelMul * engineMul;
@@ -2751,10 +2794,18 @@ function drawGarage() {
       roundedRect(px,py,swW,swH,7); ctx.fill();
       ctx.strokeStyle=equipped?'#ff44dd':'rgba(255,255,255,0.12)';
       ctx.lineWidth=equipped?2:1; roundedRect(px,py,swW,swH,7); ctx.stroke();
+      // secret obsidian treatment — hide details until owned
+      const isSecret = paint.id === 'paint_obsidian' && !owned_;
       // color swatch
       const swatchColor=paint.color!=null?'#'+paint.color.toString(16).padStart(6,'0'):'#'+CARS[carIdx].body.toString(16).padStart(6,'0');
       const swX=px+swW/2-18, swY=py+8, swW2=36, swH2=28;
-      if(paint.special==='ocean'){
+      if(isSecret){
+        // mystery swatch
+        ctx.fillStyle='#0a0010';
+        ctx.beginPath(); ctx.roundRect(swX,swY,swW2,swH2,4); ctx.fill();
+        ctx.fillStyle='#440066'; ctx.font='bold 14px system-ui'; ctx.textAlign='center';
+        ctx.fillText('?',px+swW/2,swY+swH2/2+5);
+      } else if(paint.special==='ocean'){
         // animated water ripple gradient
         const wt=(Date.now()/900)%1;
         const wg=ctx.createLinearGradient(swX,swY,swX+swW2,swY+swH2);
@@ -2772,19 +2823,24 @@ function drawGarage() {
         const ig=ctx.createLinearGradient(swX,swY,swX,swY+swH2);
         ig.addColorStop(0,'#ffee00'); ig.addColorStop(0.5,'#ff6600'); ig.addColorStop(1,'#880000');
         ctx.fillStyle=ig;
+      } else if(paint.special==='obsidian'){
+        const og=ctx.createLinearGradient(swX,swY,swX+swW2,swY+swH2);
+        const ot=(Date.now()/1200)%1;
+        og.addColorStop(0,'#0a0010'); og.addColorStop(ot,'#6600aa'); og.addColorStop(1,'#1a0030');
+        ctx.fillStyle=og;
       } else {
         ctx.fillStyle=swatchColor;
       }
-      ctx.beginPath(); ctx.roundRect(swX,swY,swW2,swH2,4); ctx.fill();
-      if(paint.color==null){ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1;ctx.beginPath();ctx.roundRect(swX,swY,swW2,swH2,4);ctx.stroke();}
+      if(!isSecret){ ctx.beginPath(); ctx.roundRect(swX,swY,swW2,swH2,4); ctx.fill(); }
+      if(!isSecret && paint.color==null){ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1;ctx.beginPath();ctx.roundRect(swX,swY,swW2,swH2,4);ctx.stroke();}
       // special fx badge
-      if(paint.special){ctx.fillStyle='rgba(0,0,0,0.55)';ctx.beginPath();ctx.roundRect(swX+swW2-14,swY+1,13,10,2);ctx.fill();ctx.fillStyle='#fff';ctx.font='7px system-ui';ctx.textAlign='left';ctx.fillText('FX',swX+swW2-12,swY+9);}
+      if(!isSecret && paint.special){ctx.fillStyle='rgba(0,0,0,0.55)';ctx.beginPath();ctx.roundRect(swX+swW2-14,swY+1,13,10,2);ctx.fill();ctx.fillStyle='#fff';ctx.font='7px system-ui';ctx.textAlign='left';ctx.fillText('FX',swX+swW2-12,swY+9);}
       // name
-      ctx.textAlign='center'; ctx.fillStyle='#eee'; ctx.font='bold 10px system-ui';
-      ctx.fillText(paint.name,px+swW/2,py+48);
+      ctx.textAlign='center'; ctx.fillStyle= isSecret ? '#660099' : '#eee'; ctx.font='bold 10px system-ui';
+      ctx.fillText(isSecret ? '??? SECRET' : paint.name, px+swW/2, py+48);
       // cost/owned
       ctx.fillStyle='#aaa'; ctx.font='9px system-ui';
-      ctx.fillText(paint.cost===0?'FREE':'●'+paint.cost,px+swW/2,py+60);
+      ctx.fillText(isSecret ? '●'+paint.cost : (paint.cost===0?'FREE':'●'+paint.cost), px+swW/2, py+60);
       // button
       const bw2=swW-12,bh2=18,bx2=px+6,by2=py+swH-22;
       if(equipped){

@@ -1461,7 +1461,7 @@ function updateArena(dt) {
       const nx = Math.sin(arenaPlayer.heading), nz = Math.cos(arenaPlayer.heading);
       arenaPlayer.vx = nx * Math.max(fwd * 2.5, 38);
       arenaPlayer.vz = nz * Math.max(fwd * 2.5, 38);
-      nitroTime = 3000;
+      nitroTime = 5000;
       arenaGroup.remove(nitroPickup.mesh);
       nitroPickup = null;
       addShake(0.15, 300);
@@ -2197,7 +2197,7 @@ function drawArenaHud() {
 
   // nitro indicator
   if (nitroTime > 0) {
-    const frac = nitroTime / 3000;
+    const frac = nitroTime / 5000;
     const nx = W / 2 - 60, ny = H - 48, nw = 120, nh = 18;
     ctx.globalAlpha = 0.85;
     ctx.fillStyle = '#111';

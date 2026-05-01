@@ -79,28 +79,6 @@ const SHOP_TRAILS = [
   { id: 'trail_money',   name: 'MONEY',      color: '#2e7d32', cost: 1100, special: 'money'   },
 ];
 
-const MISSIONS = [
-  { id: 'm_nitro3',      label: '3 nitros in 1 Arena game',       reward: 1000 },
-  { id: 'm_survive60',   label: 'Survive 60s in Classic',          reward: 500  },
-  { id: 'm_wave5',       label: 'Reach Wave 5 in Head On',         reward: 750  },
-  { id: 'm_dodge20',     label: 'Dodge 20 cars in Head On',        reward: 600  },
-  { id: 'm_earn500',     label: 'Earn 500+ coins in 1 run',        reward: 500  },
-  { id: 'm_arena1st',    label: '1st place in any Arena',          reward: 800  },
-  { id: 'm_survive30',   label: 'Survive 30s in Classic',          reward: 300  },
-  { id: 'm_survive120',  label: 'Survive 120s in Classic',         reward: 1200 },
-  { id: 'm_wave3',       label: 'Reach Wave 3 in Head On',         reward: 350  },
-  { id: 'm_wave8',       label: 'Reach Wave 8 in Head On',         reward: 1100 },
-  { id: 'm_dodge5',      label: 'Dodge 5 cars in Head On',         reward: 150  },
-  { id: 'm_dodge40',     label: 'Dodge 40 cars in Head On',        reward: 1000 },
-  { id: 'm_speed120',    label: 'Hit 120 km/h in any run',         reward: 400  },
-  { id: 'm_speed160',    label: 'Hit 160 km/h in any run',         reward: 900  },
-  { id: 'm_earn250',     label: 'Earn 250+ coins in 1 run',        reward: 250  },
-  { id: 'm_earn1500',    label: 'Earn 1500+ coins in 1 run',       reward: 1500 },
-  { id: 'm_nitro1',      label: 'Use 1 nitro in Arena',            reward: 350  },
-  { id: 'm_arena_lv5',   label: '1st place on Arena Level 5+',     reward: 1500 },
-  { id: 'm_arena_lv10',  label: '1st place on Arena Level 10',     reward: 2500 },
-  { id: 'm_hard_arena',  label: '1st place in Arena on HARD',      reward: 1800 },
-];
 
 const ENEMY_TYPES = [
   { kind: 'sedan', weight: 5, palette: [0xe74c3c,0xf39c12,0x9b59b6,0x1abc9c,0x34495e,0xc0392b] },
@@ -203,9 +181,7 @@ let arenaLevel = 1;
 let arenaProgress = +localStorage.getItem('headon_arena_progress') || 0; // highest level beaten with 1st place
 let mfCharges = 3; // money forever ability charges per arena game
 let mfCooldown = 0; // ms until next money forever trigger allowed
-let missionsDone = new Set(JSON.parse(localStorage.getItem('headon_missions_done') || '[]'));
 let nitroCollectedThisGame = 0;
-let missionFlashMsg = ''; let missionFlashTimer = 0;
 let diffSpeedWarning = 0; // ms below speed floor in the regular driving game
 let garageCarScroll = 0;
 let bgCycleTimer = 0; // ms until next random background switch during play
@@ -1776,7 +1752,6 @@ function updateArena(dt) {
       lvlMul: e.lvlMul, botBonus: e.botBonus, botsDown: e.botsDown, masterBonus: e.masterBonus,
     };
     lastEarned = e.total; if (e.total > 0) setCoins(coins + e.total);
-    checkMissions();
     return;
   }
 
@@ -1797,7 +1772,6 @@ function updateArena(dt) {
       lvlMul: e.lvlMul, botBonus: e.botBonus, botsDown: e.botsDown, masterBonus: e.masterBonus,
     };
     lastEarned = e.total; if (e.total > 0) setCoins(coins + e.total);
-    checkMissions();
   }
 }
 function cycleDifficulty() { difficultyIdx = (difficultyIdx + 1) % DIFFICULTIES.length; localStorage.setItem('headon_diff', difficultyIdx); }
@@ -1884,7 +1858,6 @@ function takeDamage(e) {
     earnings = computeEarnings();
     lastEarned = earnings.total;
     if (lastEarned > 0) setCoins(coins + lastEarned);
-    checkMissions();
   }
 }
 
@@ -1913,43 +1886,6 @@ function computeEarnings() {
   };
 }
 
-function checkMissions() {
-  for (const m of MISSIONS) {
-    if (missionsDone.has(m.id)) continue;
-    let done = false;
-    const isArena   = earnings?.mode === 'ARENA';
-    const isClassic = !isArena && MODES[modeIdx] === 'CLASSIC';
-    const isHeadOn  = !isArena && MODES[modeIdx] === 'HEAD ON';
-    const topKmh    = earnings ? (isArena ? (arenaPlayer?.fwd || 0) * 3.6 : (earnings.topSpeedKmh || 0)) : 0;
-    if (m.id === 'm_nitro3'     ) done = isArena   && nitroCollectedThisGame >= 3;
-    if (m.id === 'm_survive60'  ) done = isClassic && gameTime >= 60;
-    if (m.id === 'm_wave5'      ) done = isHeadOn  && wave >= 5;
-    if (m.id === 'm_dodge20'    ) done = isHeadOn  && dodged >= 20;
-    if (m.id === 'm_earn500'    ) done = lastEarned >= 500;
-    if (m.id === 'm_arena1st'   ) done = isArena   && earnings?.placement === 1;
-    if (m.id === 'm_survive30'  ) done = isClassic && gameTime >= 30;
-    if (m.id === 'm_survive120' ) done = isClassic && gameTime >= 120;
-    if (m.id === 'm_wave3'      ) done = isHeadOn  && wave >= 3;
-    if (m.id === 'm_wave8'      ) done = isHeadOn  && wave >= 8;
-    if (m.id === 'm_dodge5'     ) done = isHeadOn  && dodged >= 5;
-    if (m.id === 'm_dodge40'    ) done = isHeadOn  && dodged >= 40;
-    if (m.id === 'm_speed120'   ) done = topKmh >= 120;
-    if (m.id === 'm_speed160'   ) done = topKmh >= 160;
-    if (m.id === 'm_earn250'    ) done = lastEarned >= 250;
-    if (m.id === 'm_earn1500'   ) done = lastEarned >= 1500;
-    if (m.id === 'm_nitro1'     ) done = isArena   && nitroCollectedThisGame >= 1;
-    if (m.id === 'm_arena_lv5'  ) done = isArena   && earnings?.placement === 1 && arenaLevel >= 5;
-    if (m.id === 'm_arena_lv10' ) done = isArena   && earnings?.placement === 1 && arenaLevel === 10;
-    if (m.id === 'm_hard_arena' ) done = isArena   && earnings?.placement === 1 && difficultyIdx === 2;
-    if (done) {
-      missionsDone.add(m.id);
-      setCoins(coins + m.reward);
-      missionFlashMsg = m.label + '  +' + m.reward + ' ●';
-      missionFlashTimer = 3500;
-    }
-  }
-  localStorage.setItem('headon_missions_done', JSON.stringify([...missionsDone]));
-}
 
 // ===== paint FX =====
 // carX/Y/Z = world centre of car body; scale = 1.0 normal, smaller for showroom framing
@@ -2075,7 +2011,6 @@ function update(dt) {
   const dts0 = dt / 1000;
   if (shakeImpulse > 0) shakeImpulse -= dt; else shakeMag *= Math.pow(0.5, dts0 * 5);
   if (shakeMag < 0.005) shakeMag = 0;
-  if (missionFlashTimer > 0) missionFlashTimer -= dt;
   _paintRainbowHue = (_paintRainbowHue + dts0 * 90) % 360;
 
   if (state === STATE.DEAD && earnings && earnings.mode !== 'ARENA') {
@@ -2371,7 +2306,6 @@ function update(dt) {
           earnings = computeEarnings();
           lastEarned = earnings.total;
           if (lastEarned > 0) setCoins(coins + lastEarned);
-          checkMissions();
         }
       }
     } else {
@@ -2762,19 +2696,6 @@ function drawHud() {
     ctx.globalAlpha = 1;
   }
 
-  // mission complete flash
-  if (missionFlashTimer > 0) {
-    const fa = Math.min(1, missionFlashTimer / 400);
-    ctx.globalAlpha = fa;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.beginPath(); ctx.roundRect(W/2 - 150, H/2 - 22, 300, 36, 8); ctx.fill();
-    ctx.fillStyle = '#66bb6a'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
-    ctx.fillText('✓ MISSION COMPLETE', W/2, H/2 - 8);
-    ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 13px system-ui';
-    ctx.fillText(missionFlashMsg, W/2, H/2 + 9);
-    ctx.textAlign = 'left'; ctx.globalAlpha = 1;
-  }
-
   if (MODES[modeIdx] === 'HEAD ON' && state === STATE.PLAYING) {
     const w = WAVES[Math.min(wave, WAVES.length-1)];
     ctx.font = '13px system-ui';
@@ -2921,29 +2842,6 @@ function drawMenu() {
   ctx.fillStyle = '#ffd54a';
   ctx.fillText('ON', 14, 88);
 
-  // missions panel — below HEAD ON title
-  const activeMissions = MISSIONS.filter(m => !missionsDone.has(m.id));
-  const doneCount = MISSIONS.length - activeMissions.length;
-  const showM = activeMissions.slice(0, 4);
-  const panelH = 18 + showM.length * 30 + (doneCount > 0 ? 18 : 0);
-  ctx.fillStyle = 'rgba(0,0,0,0.52)';
-  ctx.beginPath(); ctx.roundRect(10, 96, 165, panelH, 6); ctx.fill();
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 9px system-ui';
-  ctx.fillText('MISSIONS', 17, 109);
-  let mY = 120;
-  for (const m of showM) {
-    ctx.fillStyle = '#fff'; ctx.font = '9px system-ui';
-    ctx.fillText(m.label, 17, mY);
-    ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 9px system-ui';
-    ctx.fillText('+' + m.reward + ' ●', 17, mY + 11);
-    mY += 30;
-  }
-  if (doneCount > 0) {
-    ctx.fillStyle = '#66bb6a'; ctx.font = '9px system-ui';
-    ctx.fillText('✓ ' + doneCount + ' / ' + MISSIONS.length + ' complete', 17, mY + 6);
-  }
-
   // coin balance top-right
   ctx.textAlign = 'right';
   ctx.fillStyle = '#ffd54a';
@@ -3027,7 +2925,7 @@ function drawMenu() {
   const secondary = [
     { label: 'DIFFICULTY: ' + DIFFICULTIES[difficultyIdx].name, x: sBx4,                  y: sBy, w: sBw4, h: sBh, action: cycleDifficulty },
     { label: '⬢ ARENA',                                          x: sBx4 + (sBw4+gap),     y: sBy, w: sBw4, h: sBh, action: () => state = STATE.ARENA_SELECT },
-    { label: 'MISSIONS',                                          x: sBx4 + (sBw4+gap)*2,   y: sBy, w: sBw4, h: sBh, action: () => state = STATE.MISSIONS },
+    { label: 'LEVELS',                                            x: sBx4 + (sBw4+gap)*2,   y: sBy, w: sBw4, h: sBh, action: () => state = STATE.MISSIONS },
     { label: 'HOW TO PLAY',                                       x: sBx4 + (sBw4+gap)*3,   y: sBy, w: sBw4, h: sBh, action: () => state = STATE.HELP },
   ];
   for (const b of secondary) menuButtons.push(b);
@@ -3464,42 +3362,42 @@ function drawMissionsScreen() {
   ctx.fillStyle = 'rgba(0,0,0,0.92)';
   ctx.fillRect(0, 0, W, H);
 
-  // title
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffd54a';
   ctx.font = 'bold 26px system-ui';
-  ctx.fillText('MISSIONS', W/2, 36);
+  ctx.fillText('LEVELS', W/2, 34);
 
-  const done = MISSIONS.filter(m => missionsDone.has(m.id)).length;
-  ctx.fillStyle = '#aaa'; ctx.font = '11px system-ui';
-  ctx.fillText(done + ' / ' + MISSIONS.length + ' complete', W/2, 54);
+  // 4-column grid of level tiles
+  const cols = 4, tileW = 96, tileH = 72, gapX = 9, gapY = 8;
+  const gridW = cols * tileW + (cols - 1) * gapX;
+  const startX = (W - gridW) / 2;
+  const startY = 58;
 
-  // 2-column grid
-  const colW = (W - 28) / 2, rowH = 40, startY = 68, gap = 4;
-  for (let i = 0; i < MISSIONS.length; i++) {
-    const m = MISSIONS[i];
-    const col = i % 2, row = Math.floor(i / 2);
-    const mx = 10 + col * (colW + 8);
-    const my = startY + row * (rowH + gap);
-    const isDone = missionsDone.has(m.id);
-    ctx.fillStyle = isDone ? 'rgba(40,80,40,0.7)' : 'rgba(20,20,35,0.7)';
-    ctx.beginPath(); ctx.roundRect(mx, my, colW, rowH, 5); ctx.fill();
-    ctx.strokeStyle = isDone ? '#44aa44' : 'rgba(255,255,255,0.1)';
-    ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(mx, my, colW, rowH, 5); ctx.stroke();
-    ctx.textAlign = 'left';
-    ctx.fillStyle = isDone ? '#66dd66' : '#fff';
-    ctx.font = (isDone ? 'bold ' : '') + '9px system-ui';
-    ctx.fillText((isDone ? '✓ ' : '○ ') + m.label, mx + 8, my + 15);
-    ctx.fillStyle = isDone ? '#44aa44' : '#ffd54a';
-    ctx.font = 'bold 10px system-ui';
-    ctx.fillText('+' + m.reward + ' ●', mx + 8, my + 30);
+  for (let i = 0; i < 20; i++) {
+    const col = i % cols, row = Math.floor(i / cols);
+    const tx = startX + col * (tileW + gapX);
+    const ty = startY + row * (tileH + gapY);
+    const hov = mouse.x >= tx && mouse.x <= tx+tileW && mouse.y >= ty && mouse.y <= ty+tileH;
+
+    ctx.fillStyle = hov ? 'rgba(255,68,221,0.22)' : 'rgba(18,18,32,0.85)';
+    ctx.beginPath(); ctx.roundRect(tx, ty, tileW, tileH, 8); ctx.fill();
+    ctx.strokeStyle = hov ? '#ff44dd' : 'rgba(255,255,255,0.14)';
+    ctx.lineWidth = hov ? 2 : 1;
+    ctx.beginPath(); ctx.roundRect(tx, ty, tileW, tileH, 8); ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd54a';
+    ctx.font = 'bold 28px system-ui';
+    ctx.fillText(i + 1, tx + tileW/2, ty + tileH/2 + 10);
+
+    missionsButtons.push({ x: tx, y: ty, w: tileW, h: tileH, action: startGame, disabled: false });
   }
 
   // bottom buttons
   const bh = 34;
-  const garageBtn2 = { label: '🚗 GARAGE', x: 10, y: H - bh - 8, w: 110, h: bh, action: () => state = STATE.MISSIONS_GARAGE };
-  const backBtn2   = { label: '← BACK',   x: W - 120, y: H - bh - 8, w: 110, h: bh, action: () => state = STATE.MENU };
-  for (const b of [garageBtn2, backBtn2]) {
+  const garageB = { label: '🚗 GARAGE', x: 10,     y: H - bh - 8, w: 110, h: bh, action: () => state = STATE.MISSIONS_GARAGE };
+  const backB   = { label: '← BACK',   x: W - 120, y: H - bh - 8, w: 110, h: bh, action: () => state = STATE.MENU };
+  for (const b of [garageB, backB]) {
     missionsButtons.push(b);
     const hov = mouse.x >= b.x && mouse.x <= b.x+b.w && mouse.y >= b.y && mouse.y <= b.y+b.h;
     ctx.fillStyle = hov ? 'rgba(255,68,221,0.85)' : 'rgba(20,20,35,0.85)';

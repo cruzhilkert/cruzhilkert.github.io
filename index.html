@@ -410,6 +410,9 @@ const BOT_STARTS  = [[7, 0], [-3.5, 6.06], [-3.5, -6.06]];
 let arenaBots = [];
 let arenaElimOrder = []; // pushed in order of elimination (first-in = last place)
 let arenaPlacement = null;
+let nitroSpawnTimer = 60000; // ms until next pickup spawns
+let nitroPickup = null;      // { mesh, x, z } or null
+let nitroTime = 0;           // ms of active boost remaining
 let skidMarks = []; // { wx, wy, wz, life, maxLife }
 
 function buildArena() {
@@ -1239,6 +1242,9 @@ function startArena() {
     };
   });
   arenaElimOrder = []; arenaPlacement = null; skidMarks = [];
+  // reset nitro
+  if (nitroPickup) { arenaGroup.remove(nitroPickup.mesh); nitroPickup = null; }
+  nitroSpawnTimer = 60000; nitroTime = 0;
   dmg = { body: 0, tires: 0, engine: 0 };
   invulnTime = 0; crashes = 0; gameTime = 0; score = 0;
   earnings = null; lastEarned = 0;
@@ -1274,11 +1280,13 @@ function updateArena(dt) {
     arenaPlayer.vz += (alignedVz - arenaPlayer.vz) * f;
   }
 
-  // friction & speed cap
-  arenaPlayer.vx *= Math.pow(0.55, dts);
-  arenaPlayer.vz *= Math.pow(0.55, dts);
+  // friction & speed cap (nitro overrides both)
+  const frictionBase = nitroTime > 0 ? Math.pow(0.97, dts) : Math.pow(0.55, dts);
+  arenaPlayer.vx *= frictionBase;
+  arenaPlayer.vz *= frictionBase;
   const newSpeed = Math.hypot(arenaPlayer.vx, arenaPlayer.vz);
-  if (newSpeed > 28) { arenaPlayer.vx *= 28 / newSpeed; arenaPlayer.vz *= 28 / newSpeed; }
+  const speedCap = nitroTime > 0 ? 58 : 28;
+  if (newSpeed > speedCap) { arenaPlayer.vx *= speedCap / newSpeed; arenaPlayer.vz *= speedCap / newSpeed; }
 
   // keep fwd as signed speed for camera/compat
   arenaPlayer.fwd = (Math.sin(arenaPlayer.heading) * arenaPlayer.vx +
@@ -1401,6 +1409,71 @@ function updateArena(dt) {
   }
   for (const s of skidMarks) s.life -= dt;
   if (skidMarks.length > 250) skidMarks = skidMarks.filter(s => s.life > 0).slice(-220);
+
+  // ── nitro boost tick ──────────────────────────────────────────────────────
+  if (nitroTime > 0) {
+    nitroTime -= dt;
+    if (nitroTime <= 0) {
+      // sharp brake at end of boost
+      nitroTime = 0;
+      arenaPlayer.vx *= 0.35;
+      arenaPlayer.vz *= 0.35;
+    }
+  }
+
+  // ── nitro pickup spawn (once per 60s, only while game is live) ───────────
+  if (!nitroPickup && !arenaElimOrder.includes('player')) {
+    nitroSpawnTimer -= dt;
+    if (nitroSpawnTimer <= 0) {
+      const aliveTiles = arenaTiles.filter(t => t.state === 'alive');
+      if (aliveTiles.length > 0) {
+        const tile = aliveTiles[Math.floor(Math.random() * aliveTiles.length)];
+        // build mesh: glowing hex pad + spinning torus
+        const padGeo  = new THREE.CylinderGeometry(0.72, 0.72, 0.18, 6);
+        const padMat  = new THREE.MeshPhongMaterial({ color: 0xffcc00, emissive: 0xff8800, emissiveIntensity: 0.9 });
+        const pad     = new THREE.Mesh(padGeo, padMat);
+        const ringGeo = new THREE.TorusGeometry(0.55, 0.09, 8, 18);
+        const ringMat = new THREE.MeshPhongMaterial({ color: 0xffffff, emissive: 0xffee44, emissiveIntensity: 1.0 });
+        const ring    = new THREE.Mesh(ringGeo, ringMat);
+        ring.position.y = 0.55;
+        ring.rotation.x = Math.PI / 2;
+        ring.name = 'nitroRing';
+        const g = new THREE.Group();
+        g.add(pad); g.add(ring);
+        g.position.set(tile.x, 0.22, tile.z);
+        arenaGroup.add(g);
+        nitroPickup = { mesh: g, x: tile.x, z: tile.z };
+      }
+      nitroSpawnTimer = 60000;
+    }
+  }
+
+  // ── spin & collect pickup ─────────────────────────────────────────────────
+  if (nitroPickup) {
+    const ring = nitroPickup.mesh.getObjectByName('nitroRing');
+    if (ring) ring.rotation.z += dts * 3.5;
+    nitroPickup.mesh.position.y = 0.22 + Math.sin(gameTime * 3.5) * 0.12;
+    const pdx = arenaPlayer.x - nitroPickup.x;
+    const pdz = arenaPlayer.z - nitroPickup.z;
+    if (Math.hypot(pdx, pdz) < 1.6 && arenaPlayer.onGround) {
+      // collected — big speed blast forward
+      const fwd = Math.hypot(arenaPlayer.vx, arenaPlayer.vz) < 1 ? 1 : Math.hypot(arenaPlayer.vx, arenaPlayer.vz);
+      const nx = Math.sin(arenaPlayer.heading), nz = Math.cos(arenaPlayer.heading);
+      arenaPlayer.vx = nx * Math.max(fwd * 2.5, 38);
+      arenaPlayer.vz = nz * Math.max(fwd * 2.5, 38);
+      nitroTime = 3000;
+      arenaGroup.remove(nitroPickup.mesh);
+      nitroPickup = null;
+      addShake(0.15, 300);
+      // burst particles
+      for (let i = 0; i < 18; i++) {
+        particles.push({ x: W/2 + (Math.random()-0.5)*60, y: H/2 + (Math.random()-0.5)*60,
+          vx: (Math.random()-0.5)*6, vy: -(1+Math.random()*5),
+          life: 400+Math.random()*400, max: 800,
+          size: 4+Math.random()*8, color: Math.random()<0.5?'#ffee00':'#ff9900', gravity: 0.04, kind: 'spark' });
+      }
+    }
+  }
 
   const allBotsDead = arenaBots.every(b => b.state === 'dead');
 
@@ -2121,6 +2194,31 @@ function drawArenaHud() {
   ctx.font = '11px system-ui';
   ctx.fillStyle = '#aaa';
   ctx.fillText(Math.floor(gameTime) + 's  ·  ' + aliveBots + ' rivals left', W / 2, py + ph + 14);
+
+  // nitro indicator
+  if (nitroTime > 0) {
+    const frac = nitroTime / 3000;
+    const nx = W / 2 - 60, ny = H - 48, nw = 120, nh = 18;
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.roundRect(nx, ny, nw, nh, 5); ctx.fill();
+    ctx.fillStyle = frac > 0.5 ? '#ffcc00' : '#ff6600';
+    ctx.beginPath(); ctx.roundRect(nx, ny, nw * frac, nh, 5); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.fillText('⚡ NITRO', W / 2, ny - 4);
+  } else if (!nitroPickup && !arenaElimOrder.includes('player')) {
+    // show countdown to next nitro
+    const remaining = Math.ceil(nitroSpawnTimer / 1000);
+    ctx.globalAlpha = 0.55;
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#ffcc00';
+    ctx.textAlign = 'center';
+    ctx.fillText('⚡ next nitro in ' + remaining + 's', W / 2, H - 34);
+    ctx.globalAlpha = 1;
+  }
 
   // level badge top-left
   const lvColor = arenaLevel <= 5 ? '#00f0ff' : '#ff44dd';

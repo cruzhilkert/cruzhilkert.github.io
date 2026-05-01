@@ -1124,6 +1124,7 @@ function randomAliveTilePos() {
 }
 
 function updateBot(bot, dt) {
+  if (bot.frozenTimer > 0) { bot.frozenTimer -= dt; return; }
   const dts = dt / 1000;
   bot.jumpCooldown = Math.max(0, bot.jumpCooldown - dt);
 
@@ -1257,7 +1258,7 @@ function startArena() {
       fwd: 0, onGround: false,
       state: 'alive',
       mesh,
-      targetX: 0, targetZ: 0, targetTimer: 0, jumpCooldown: 0,
+      targetX: 0, targetZ: 0, targetTimer: 0, jumpCooldown: 0, frozenTimer: 0,
     };
   });
   arenaElimOrder = []; arenaPlacement = null; skidMarks = [];
@@ -1439,6 +1440,11 @@ function updateArena(dt) {
         arenaPlayer.vz -= impulse * nz;
         bot.vx += impulse * nx;
         bot.vz += impulse * nz;
+        // obsidian freeze: halt the bot for 2s
+        if (equippedPaint === 'paint_obsidian') {
+          bot.frozenTimer = 2000;
+          bot.vx = 0; bot.vz = 0; bot.fwd = 0;
+        }
       }
     }
   }

@@ -2783,7 +2783,7 @@ function drawGarage() {
   }
 
   if(garageTab==='paint'){
-    const cols=3, swW=(W-28-cols*6)/cols, swH=78, gap=5;
+    const cols=4, swW=(W-28-cols*6)/cols, swH=78, gap=5;
     SHOP_PAINTS.forEach((paint,i)=>{
       const col=i%cols, row=Math.floor(i/cols);
       const px=14+col*(swW+gap), py=contentY+row*(swH+gap);

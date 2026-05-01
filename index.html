@@ -1706,6 +1706,7 @@ function spawnPaintFX(carX, carY, carZ, scale) {
 }
 
 function spawnPaintGroundTrail(carX, carSpeed) {
+  if (CARS[carIdx].kind === 'truck') return;
   const paintSpec = SHOP_PAINTS.find(p => p.id === equippedPaint);
   if (!paintSpec || !['inferno','snow','ocean'].includes(paintSpec.special)) return;
   if (Math.random() > 0.35) return; // thin out spawns

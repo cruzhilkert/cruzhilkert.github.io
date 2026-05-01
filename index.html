@@ -163,6 +163,7 @@ let gemShopButtons = [];
 let menuBlink = 0;
 let lastEarned = 0;
 let arenaLevel = 1;
+let arenaProgress = +localStorage.getItem('headon_arena_progress') || 0; // highest level beaten with 1st place
 let diffSpeedWarning = 0; // ms below speed floor in the regular driving game
 let garageCarScroll = 0;
 let bgCycleTimer = 0; // ms until next random background switch during play
@@ -1003,7 +1004,7 @@ canvas3d.addEventListener('click', e => {
     if (b && b.action) b.action();
   } else if (state === STATE.ARENA_SELECT) {
     const b = arenaSelectButtons.find(btn => x >= btn.x && x <= btn.x+btn.w && y >= btn.y && y <= btn.y+btn.h);
-    if (b) { if (b.level === 0) state = STATE.MENU; else { arenaLevel = b.level; startArena(); } }
+    if (b) { if (b.level === 0) state = STATE.MENU; else if (!b.locked) { arenaLevel = b.level; startArena(); } }
   } else if (state === STATE.GEM_SHOP) {
     const b = gemShopButtons.find(btn => x >= btn.x && x <= btn.x+btn.w && y >= btn.y && y <= btn.y+btn.h);
     if (b && b.action) b.action();
@@ -1490,10 +1491,17 @@ function updateArena(dt) {
     const botBonus  = botsDown * 6;
     const carMul = CARS[carIdx].coinMul || 1.0;
     const base  = Math.floor(placeBase * lvlMul) + timeCoin + botBonus;
-    const total = Math.floor(base * carMul);
+    let masterBonus = 0;
+    // unlock next level + award master bonus for first-time L10 clear
+    if (placement === 1 && arenaLevel > arenaProgress) {
+      arenaProgress = arenaLevel;
+      localStorage.setItem('headon_arena_progress', arenaProgress);
+      if (arenaLevel === 10) masterBonus = 1000;
+    }
+    const total = Math.floor(base * carMul) + masterBonus;
     const gemEarned = Math.random() < (CARS[carIdx].gemChance || 0);
     if (gemEarned) addGems(1);
-    return { placeBase, lvlMul, timeCoin, botBonus, botsDown, base, total, carMul, gemEarned };
+    return { placeBase, lvlMul, timeCoin, botBonus, botsDown, base, total, carMul, gemEarned, masterBonus };
   }
 
   // player wins — all bots eliminated first
@@ -1509,7 +1517,7 @@ function updateArena(dt) {
       waves:0, waveCoins:0, topSpeedKmh:0, topSpeedBonus: Math.floor(e.placeBase * e.lvlMul),
       total: e.total, mode:'ARENA', placement: arenaPlacement,
       carMul: e.carMul, gemEarned: e.gemEarned,
-      lvlMul: e.lvlMul, botBonus: e.botBonus, botsDown: e.botsDown,
+      lvlMul: e.lvlMul, botBonus: e.botBonus, botsDown: e.botsDown, masterBonus: e.masterBonus,
     };
     lastEarned = e.total; if (e.total > 0) setCoins(coins + e.total);
     return;
@@ -1529,7 +1537,7 @@ function updateArena(dt) {
       waves:0, waveCoins:0, topSpeedKmh: arenaPlayer.fwd * 3.6, topSpeedBonus: Math.floor(e.placeBase * e.lvlMul),
       total: e.total, mode:'ARENA', placement: arenaPlacement,
       carMul: e.carMul, gemEarned: e.gemEarned,
-      lvlMul: e.lvlMul, botBonus: e.botBonus, botsDown: e.botsDown,
+      lvlMul: e.lvlMul, botBonus: e.botBonus, botsDown: e.botsDown, masterBonus: e.masterBonus,
     };
     lastEarned = e.total; if (e.total > 0) setCoins(coins + e.total);
   }
@@ -1697,6 +1705,39 @@ function spawnPaintFX(carX, carY, carZ, scale) {
   }
 }
 
+function spawnPaintGroundTrail(carX, carSpeed) {
+  const paintSpec = SHOP_PAINTS.find(p => p.id === equippedPaint);
+  if (!paintSpec || !['inferno','snow','ocean'].includes(paintSpec.special)) return;
+  if (Math.random() > 0.35) return; // thin out spawns
+  // project rear-centre of car to screen
+  const rp = project3D(carX + (Math.random()-0.5)*1.2, 0.01, -2.1);
+  if (rp.behind) return;
+  // drift speed: matches road scroll so marks appear to stay on the ground
+  const drift = 1.8 + carSpeed * 0.06 + Math.random() * 1.2;
+  if (paintSpec.special === 'inferno') {
+    const cols = ['#cc2200','#dd3300','#ff4400','#ff6600','#441100'];
+    particles.push({ x: rp.x, y: rp.y,
+      vx: (Math.random()-0.5)*1.2, vy: drift,
+      life: 2000, max: 2000,
+      size: 22 + Math.random()*18, color: cols[Math.floor(Math.random()*cols.length)],
+      gravity: 0, kind: 'groundmark' });
+  } else if (paintSpec.special === 'snow') {
+    const cols = ['#ddeeff','#eef5ff','#ffffff','#c8e0ff'];
+    particles.push({ x: rp.x, y: rp.y,
+      vx: (Math.random()-0.5)*0.8, vy: drift,
+      life: 2000, max: 2000,
+      size: 18 + Math.random()*14, color: cols[Math.floor(Math.random()*cols.length)],
+      gravity: 0, kind: 'groundmark' });
+  } else if (paintSpec.special === 'ocean') {
+    const cols = ['#1a6ea8','#2980b9','#5dade2','#aed6f1'];
+    particles.push({ x: rp.x, y: rp.y,
+      vx: (Math.random()-0.5)*0.8, vy: drift,
+      life: 2000, max: 2000,
+      size: 20 + Math.random()*16, color: cols[Math.floor(Math.random()*cols.length)],
+      gravity: 0, kind: 'groundmark' });
+  }
+}
+
 // ===== update =====
 function update(dt) {
   menuBlink += dt;
@@ -1823,6 +1864,8 @@ function update(dt) {
 
   // paint special effects — emit ambient particles while driving
   if (speed > 5) spawnPaintFX(player.worldX, 0.6, 0, 1.0);
+  // paint ground trail marks — inferno/snow/ocean leave marks on the road
+  if (speed > 8) spawnPaintGroundTrail(player.worldX, speed);
 
   if (headOn) {
     const accelRate = 22 * car.accelMul * engineMul;
@@ -2086,9 +2129,10 @@ function drawArenaSelect() {
   ctx.font = 'bold 30px system-ui';
   ctx.fillText('⬢  ARENA', W/2, 50);
 
+  const allUnlocked = arenaProgress >= 10;
   ctx.fillStyle = '#aaa';
   ctx.font = '12px system-ui';
-  ctx.fillText('Choose a level', W/2, 72);
+  ctx.fillText(allUnlocked ? '🏆 All levels unlocked!' : 'Beat 1st place to unlock the next level', W/2, 72);
 
   const cols = 5, bw = 78, bh = 72, gapX = 8, gapY = 10;
   const totalW = cols * bw + (cols - 1) * gapX;
@@ -2102,32 +2146,44 @@ function drawArenaSelect() {
     const by_ = startY + row * (bh + gapY);
     const level = i + 1;
     const hasBarrier = level <= 5;
-    const hov = mouse.x >= bx && mouse.x <= bx + bw && mouse.y >= by_ && mouse.y <= by_ + bh;
+    const locked = !allUnlocked && level > arenaProgress + 1;
+    const hov = !locked && mouse.x >= bx && mouse.x <= bx + bw && mouse.y >= by_ && mouse.y <= by_ + bh;
+    const done = level <= arenaProgress;
 
-    ctx.fillStyle = hov ? (hasBarrier ? 'rgba(0,220,255,0.85)' : 'rgba(255,68,221,0.85)') : 'rgba(14,14,28,0.88)';
+    ctx.fillStyle = locked ? 'rgba(20,20,24,0.92)'
+      : hov ? (hasBarrier ? 'rgba(0,220,255,0.85)' : 'rgba(255,68,221,0.85)')
+      : done ? 'rgba(30,50,30,0.88)' : 'rgba(14,14,28,0.88)';
     roundedRect(bx, by_, bw, bh, 9); ctx.fill();
-    ctx.strokeStyle = hasBarrier ? '#00f0ff' : '#ff44dd';
+    ctx.strokeStyle = locked ? '#333' : done ? '#44cc44' : (hasBarrier ? '#00f0ff' : '#ff44dd');
     ctx.lineWidth = hov ? 2.5 : 1.8;
     roundedRect(bx, by_, bw, bh, 9); ctx.stroke();
 
-    ctx.fillStyle = hov ? '#111' : '#ffd54a';
-    ctx.font = 'bold 26px system-ui';
-    ctx.fillText(level, bx + bw / 2, by_ + 32);
+    if (locked) {
+      ctx.fillStyle = '#444';
+      ctx.font = 'bold 22px system-ui';
+      ctx.fillText('🔒', bx + bw / 2, by_ + 36);
+      ctx.font = '9px system-ui';
+      ctx.fillText('beat lv ' + (level - 1), bx + bw / 2, by_ + 54);
+    } else {
+      ctx.fillStyle = hov ? '#111' : (done ? '#88ff88' : '#ffd54a');
+      ctx.font = 'bold 26px system-ui';
+      ctx.fillText(level, bx + bw / 2, by_ + 32);
 
-    ctx.fillStyle = hov ? '#222' : (hasBarrier ? '#00f0ff' : '#ff44dd');
-    ctx.font = 'bold 9px system-ui';
-    ctx.fillText(hasBarrier ? '🔒 BARRIER' : '🔓 OPEN', bx + bw / 2, by_ + 46);
+      ctx.fillStyle = hov ? '#222' : (done ? '#44cc44' : (hasBarrier ? '#00f0ff' : '#ff44dd'));
+      ctx.font = 'bold 9px system-ui';
+      ctx.fillText(done ? '✓ DONE' : (hasBarrier ? '🔒 BARRIER' : '🔓 OPEN'), bx + bw / 2, by_ + 46);
 
-    // difficulty pips
-    const pips = Math.ceil(level / 2);
-    for (let p = 0; p < 5; p++) {
-      ctx.fillStyle = p < pips ? (hov ? '#333' : '#ffd54a') : 'rgba(255,255,255,0.12)';
-      ctx.beginPath();
-      ctx.arc(bx + bw / 2 - 22 + p * 11, by_ + 61, 3.5, 0, Math.PI * 2);
-      ctx.fill();
+      // difficulty pips
+      const pips = Math.ceil(level / 2);
+      for (let p = 0; p < 5; p++) {
+        ctx.fillStyle = p < pips ? (hov ? '#333' : '#ffd54a') : 'rgba(255,255,255,0.12)';
+        ctx.beginPath();
+        ctx.arc(bx + bw / 2 - 22 + p * 11, by_ + 61, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
-    arenaSelectButtons.push({ x: bx, y: by_, w: bw, h: bh, level });
+    arenaSelectButtons.push({ x: bx, y: by_, w: bw, h: bh, level, locked });
   }
 
   ctx.font = '11px system-ui';
@@ -2241,6 +2297,10 @@ function drawParticles() {
       ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
       ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
       ctx.restore();
+    } else if (p.kind === 'groundmark') {
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, p.size, p.size * 0.28, 0, 0, Math.PI * 2);
+      ctx.fill();
     } else {
       ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
     }
@@ -2947,7 +3007,8 @@ function drawArenaCrash() {
   const colors  = ['', '#ffd700',   '#c0c0c0',  '#cd7f32',  '#ff5555'];
   const lvlMul  = earnings.lvlMul || 1;
   const aCarMul = earnings.carMul || 1;
-  const extraH  = (aCarMul > 1 ? 16 : 0) + (earnings.gemEarned ? 18 : 0);
+  const masterBonus = earnings.masterBonus || 0;
+  const extraH  = (aCarMul > 1 ? 16 : 0) + (earnings.gemEarned ? 18 : 0) + (masterBonus ? 22 : 0);
   ctx.fillStyle = 'rgba(0,0,0,0.82)';
   ctx.fillRect(0, H/2 - 134, W, 290 + extraH);
   ctx.textAlign = 'center';
@@ -2972,12 +3033,19 @@ function drawArenaCrash() {
   }
   ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 22px system-ui';
   ctx.fillText('+ ' + lastEarned + ' coins', W/2, H/2 + 28);
+  let lineY2 = H/2 + 46;
+  if (masterBonus) {
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 14px system-ui';
+    ctx.fillText('🏆 ALL LEVELS COMPLETE!  + ' + masterBonus + ' bonus!', W/2, lineY2);
+    lineY2 += 20;
+  }
   if (earnings.gemEarned) {
     ctx.fillStyle = '#b39ddb'; ctx.font = 'bold 13px system-ui';
-    ctx.fillText('◆ GEM FOUND!  ◆ ' + gems + ' total', W/2, H/2 + 46);
+    ctx.fillText('◆ GEM FOUND!  ◆ ' + gems + ' total', W/2, lineY2);
+    lineY2 += 18;
   }
   ctx.fillStyle = '#bbb'; ctx.font = '12px system-ui';
-  ctx.fillText('● ' + coins + '  ◆ ' + gems, W/2, earnings.gemEarned ? H/2 + 62 : H/2 + 48);
+  ctx.fillText('● ' + coins + '  ◆ ' + gems, W/2, lineY2);
   ctx.fillStyle = '#fff'; ctx.font = '14px system-ui';
   ctx.fillText('R  retry same level  ·  Space  change level / menu', W/2, H/2 + 94);
   ctx.textAlign = 'left';

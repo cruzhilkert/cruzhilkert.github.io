@@ -410,7 +410,7 @@ const BOT_STARTS  = [[7, 0], [-3.5, 6.06], [-3.5, -6.06]];
 let arenaBots = [];
 let arenaElimOrder = []; // pushed in order of elimination (first-in = last place)
 let arenaPlacement = null;
-let nitroSpawnTimer = 60000; // ms until next pickup spawns
+let nitroSpawnTimer = 0; // ms until next pickup spawns
 let nitroPickup = null;      // { mesh, x, z } or null
 let nitroTime = 0;           // ms of active boost remaining
 let skidMarks = []; // { wx, wy, wz, life, maxLife }
@@ -1244,7 +1244,7 @@ function startArena() {
   arenaElimOrder = []; arenaPlacement = null; skidMarks = [];
   // reset nitro
   if (nitroPickup) { arenaGroup.remove(nitroPickup.mesh); nitroPickup = null; }
-  nitroSpawnTimer = 60000; nitroTime = 0;
+  nitroSpawnTimer = 0; nitroTime = 0;
   dmg = { body: 0, tires: 0, engine: 0 };
   invulnTime = 0; crashes = 0; gameTime = 0; score = 0;
   earnings = null; lastEarned = 0;
@@ -1444,7 +1444,7 @@ function updateArena(dt) {
         arenaGroup.add(g);
         nitroPickup = { mesh: g, x: tile.x, z: tile.z };
       }
-      nitroSpawnTimer = 60000;
+      nitroSpawnTimer = 30000;
     }
   }
 
@@ -2209,8 +2209,7 @@ function drawArenaHud() {
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'center';
     ctx.fillText('⚡ NITRO', W / 2, ny - 4);
-  } else if (!nitroPickup && !arenaElimOrder.includes('player')) {
-    // show countdown to next nitro
+  } else if (!nitroPickup && !arenaElimOrder.includes('player') && nitroSpawnTimer > 0) {
     const remaining = Math.ceil(nitroSpawnTimer / 1000);
     ctx.globalAlpha = 0.55;
     ctx.font = '10px system-ui';

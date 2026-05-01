@@ -2024,9 +2024,9 @@ function update(dt) {
       const dim = e.mesh.userData.dim;
       const halfL = dim.l / 2;
       const halfW = dim.w / 2;
-      const myHalfL = 2.2;  // sedan-ish
-      const myHalfW = 0.9;
-      if (Math.abs(e.worldZ) < halfL + myHalfL && Math.abs(e.worldX - player.worldX) < halfW + myHalfW - 0.2) {
+      const myHalfL = 2.2;
+      const myHalfW = 1.2;
+      if (Math.abs(e.worldZ) < halfL + myHalfL && Math.abs(e.worldX - player.worldX) < halfW + myHalfW) {
         takeDamage(e);
         scene.remove(e.mesh);
         enemies.splice(i, 1);

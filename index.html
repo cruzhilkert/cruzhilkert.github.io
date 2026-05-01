@@ -129,7 +129,13 @@ let unlocked;
 try { unlocked = JSON.parse(localStorage.getItem('headon_unlocked')) || [0]; } catch(e){ unlocked=[0]; }
 if (!Array.isArray(unlocked) || !unlocked.includes(0)) unlocked = [0];
 if (!unlocked.includes(carIdx)) carIdx = 0;
-let best = +localStorage.getItem('headon_best') || 0;
+let bestClassic = +localStorage.getItem('headon_best_classic') || +localStorage.getItem('headon_best') || 0;
+let bestHeadOn  = +localStorage.getItem('headon_best_headon')  || 0;
+function getBest() { return MODES[modeIdx] === 'HEAD ON' ? bestHeadOn : bestClassic; }
+function saveBest(v) {
+  if (MODES[modeIdx] === 'HEAD ON') { bestHeadOn  = v; localStorage.setItem('headon_best_headon',  v); }
+  else                               { bestClassic = v; localStorage.setItem('headon_best_classic', v); }
+}
 let owned;
 try { owned = JSON.parse(localStorage.getItem('headon_owned')) || ['paint_stock','trail_default']; } catch(e){ owned=['paint_stock','trail_default']; }
 if (!owned.includes('paint_stock'))   owned.unshift('paint_stock');
@@ -1561,7 +1567,7 @@ function updateArena(dt) {
     arenaElimOrder.push('player');
     arenaPlacement = (BOT_COLORS.length + 1) - arenaElimOrder.indexOf('player');
     state = STATE.DEAD;
-    if (score > best) { best = Math.floor(score); localStorage.setItem('headon_best', best); }
+    if (score > getBest()) { saveBest(Math.floor(score)); }
     const e = calcArenaEarnings(arenaPlacement);
     earnings = {
       distanceKm:0, distanceCoins:0, speedingSec:gameTime,
@@ -1581,7 +1587,7 @@ function updateArena(dt) {
     arenaPlacement = (BOT_COLORS.length + 1) - arenaElimOrder.indexOf('player');
     state = STATE.DEAD;
     addShake(0.4, 600); playCrashSound(); crashes = 1;
-    if (score > best) { best = Math.floor(score); localStorage.setItem('headon_best', best); }
+    if (score > getBest()) { saveBest(Math.floor(score)); }
     const e = calcArenaEarnings(arenaPlacement);
     earnings = {
       distanceKm:0, distanceCoins:0, speedingSec:gameTime,
@@ -1672,7 +1678,7 @@ function takeDamage(e) {
   speedBoost = Math.max(-5, speedBoost - 6);
   if (dmg.body >= 0.99 && dmg.tires >= 0.99 && dmg.engine >= 0.99) {
     state = STATE.DEAD;
-    if (score > best) { best = Math.floor(score); localStorage.setItem('headon_best', best); }
+    if (score > getBest()) { saveBest(Math.floor(score)); }
     earnings = computeEarnings();
     lastEarned = earnings.total;
     if (lastEarned > 0) setCoins(coins + lastEarned);
@@ -2080,7 +2086,7 @@ function update(dt) {
         damageBanner = 1200;
         if (dmg.body >= 0.99 && dmg.tires >= 0.99 && dmg.engine >= 0.99) {
           state = STATE.DEAD;
-          if (score > best) { best = Math.floor(score); localStorage.setItem('headon_best', best); }
+          if (score > getBest()) { saveBest(Math.floor(score)); }
           earnings = computeEarnings();
           lastEarned = earnings.total;
           if (lastEarned > 0) setCoins(coins + lastEarned);
@@ -2415,7 +2421,7 @@ function drawHud() {
   ctx.textAlign = 'left';
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 14px system-ui';
-  ctx.fillText('Best: ' + best, 10, 24);
+  ctx.fillText('Best: ' + getBest(), 10, 24);
   ctx.fillText('Speed: ' + Math.floor(speed * 3.6) + ' km/h', W - 160, 24);
   ctx.font = '12px system-ui';
   ctx.fillStyle = '#ccc';
@@ -2657,6 +2663,23 @@ function drawMenu() {
     { label: 'GEM SHOP', sub: '◆ ' + gems,            x: bx+(bw+gap)*2, y: by, w: bw, h: bh, action: () => { state = STATE.GEM_SHOP; } },
     { label: 'MODE ▶', sub: MODES[modeIdx],  x: bx+(bw+gap)*3, y: by, w: bw, h: bh, action: cycleMode },
   ];
+
+  // records row — between card and buttons
+  const ry = by - 62;
+  ctx.fillStyle = 'rgba(0,0,0,0.40)';
+  roundedRect(bx, ry, bw * 2 + gap, 26, 6); ctx.fill();
+  roundedRect(bx + bw*2 + gap*2, ry, bw * 2 + gap, 26, 6); ctx.fill();
+  ctx.textAlign = 'center'; ctx.font = 'bold 10px system-ui';
+  ctx.fillStyle = '#aaa';
+  ctx.fillText('HEAD ON RECORD', bx + bw + gap/2, ry + 10);
+  ctx.fillStyle = bestHeadOn > 0 ? '#ffd54a' : '#555';
+  ctx.font = 'bold 13px system-ui';
+  ctx.fillText(bestHeadOn > 0 ? bestHeadOn : '—', bx + bw + gap/2, ry + 23);
+  ctx.fillStyle = '#aaa'; ctx.font = 'bold 10px system-ui';
+  ctx.fillText('CLASSIC RECORD', bx + bw*3 + gap*2 + gap/2, ry + 10);
+  ctx.fillStyle = bestClassic > 0 ? '#ffd54a' : '#555';
+  ctx.font = 'bold 13px system-ui';
+  ctx.fillText(bestClassic > 0 ? bestClassic : '—', bx + bw*3 + gap*2 + gap/2, ry + 23);
 
   // secondary row above main row
   const sBw = 100, sBh = 24;

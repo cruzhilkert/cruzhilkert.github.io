@@ -1734,7 +1734,7 @@ function spawnPaintFX(carX, carY, carZ, scale) {
 function spawnPaintGroundTrail(carX, carSpeed) {
   if (CARS[carIdx].kind === 'truck') return;
   const paintSpec = SHOP_PAINTS.find(p => p.id === equippedPaint);
-  if (!paintSpec || !['inferno','snow','ocean'].includes(paintSpec.special)) return;
+  if (!paintSpec || !['inferno','snow','ocean','obsidian'].includes(paintSpec.special)) return;
   if (Math.random() > 0.35) return; // thin out spawns
   // project rear-centre of car to screen
   const rp = project3D(carX + (Math.random()-0.5)*1.2, 0.01, -2.1);
@@ -1761,6 +1761,13 @@ function spawnPaintGroundTrail(carX, carSpeed) {
       vx: (Math.random()-0.5)*0.8, vy: drift,
       life: 2000, max: 2000,
       size: 20 + Math.random()*16, color: cols[Math.floor(Math.random()*cols.length)],
+      gravity: 0, kind: 'groundmark' });
+  } else if (paintSpec.special === 'obsidian') {
+    const cols = ['#2d0040','#4a0066','#1a0030','#3d005a','#0a0015'];
+    particles.push({ x: rp.x, y: rp.y,
+      vx: (Math.random()-0.5)*0.8, vy: drift,
+      life: 2000, max: 2000,
+      size: 24 + Math.random()*18, color: cols[Math.floor(Math.random()*cols.length)],
       gravity: 0, kind: 'groundmark' });
   }
 }
@@ -1834,6 +1841,9 @@ function update(dt) {
     const slideBoost = Math.min(1, lateralSpeed / 12);
     const trailSpec = SHOP_TRAILS.find(x => x.id === equippedTrail);
     const isFire = trailSpec && trailSpec.special === 'fire';
+    const obsidianTrail = equippedPaint === 'paint_obsidian';
+    const _obsCols = ['#2d0040','#4a0066','#6600aa','#1a0030','#3d005a'];
+    const getObsidianColor = () => _obsCols[Math.floor(Math.random()*_obsCols.length)];
     if (isFire) {
       // fire trail: flames trail backward behind the car (positive vy = down-screen = away)
       const exhaustPoints = [
@@ -1852,7 +1862,7 @@ function update(dt) {
             life: 280 + Math.random() * 220,
             max: 500,
             size: 10 + Math.random() * 14,
-            color: getFireColor(), gravity: 0, kind: 'spark',
+            color: obsidianTrail ? getObsidianColor() : getFireColor(), gravity: 0, kind: 'spark',
           });
         }
       }
@@ -1868,12 +1878,16 @@ function update(dt) {
             life: 350 + Math.random() * 200,
             max: 550,
             size: 16 + Math.random() * 20,
-            color: getFireColor(), gravity: 0, kind: 'spark',
+            color: obsidianTrail ? getObsidianColor() : getFireColor(), gravity: 0, kind: 'spark',
           });
         }
       }
     } else {
-      const trailColor = getTrailColor(_trailT);
+      const obsidianOn = equippedPaint === 'paint_obsidian';
+      const obsidianCols = ['#2d0040','#4a0066','#6600aa','#1a0030','#3d005a'];
+      const trailColor = obsidianOn
+        ? obsidianCols[Math.floor(Math.random()*obsidianCols.length)]
+        : getTrailColor(_trailT);
       for (let side = -1; side <= 1; side += 2) {
         const wp = project3D(player.worldX + side * 0.72, 0.05, -1.6);
         if (!wp.behind) {
@@ -2843,10 +2857,14 @@ function drawGarage() {
       ctx.fillText(isSecret ? '●'+paint.cost : (paint.cost===0?'FREE':'●'+paint.cost), px+swW/2, py+60);
       // button
       const bw2=swW-12,bh2=18,bx2=px+6,by2=py+swH-22;
+      const obsidianLocked = paint.id==='paint_obsidian' && !owned_ &&
+        !(equippedPaint==='paint_ocean' && equippedTrail==='trail_fire');
       if(equipped){
         garageBtn('ON',bx2,by2,bw2,bh2,null,{active:true,small:true});
       }else if(owned_){
         garageBtn('EQUIP',bx2,by2,bw2,bh2,()=>equipPaint(paint.id),{small:true});
+      }else if(obsidianLocked){
+        garageBtn('LOCKED',bx2,by2,bw2,bh2,null,{disabled:true,small:true});
       }else{
         const canAfford=coins>=paint.cost;
         garageBtn('BUY',bx2,by2,bw2,bh2,canAfford?()=>{setCoins(coins-paint.cost);ownItem(paint.id);equipPaint(paint.id);}:null,{disabled:!canAfford,small:true});

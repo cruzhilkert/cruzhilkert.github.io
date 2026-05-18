@@ -46,9 +46,9 @@ const CARS = [
   { name: 'TITAN',   kind: 'truck', body: 0x607d8b, accent: 0x263238, topMul: 1.20, steerMul: 1.20, accelMul: 1.65, brakeMul: 0.75, cost: 18000,  gemCost: 2,  coinMul: 4.5,  gemChance: 0.003,   hitsToKill:  7, desc: 'Explosive acceleration' },
   { name: 'VOLT',    kind: 'hatch', body: 0xffeb3b, accent: 0x5d4e00, topMul: 1.45, steerMul: 1.45, accelMul: 1.45, brakeMul: 1.15, cost: 25000,  gemCost: 3,  coinMul: 5.0,  gemChance: 0.005,   hitsToKill:  8, desc: 'Balanced mid-tier powerhouse' },
   { name: 'PHANTOM', kind: 'sport', body: 0x1a1a2e, accent: 0x9c27b0, topMul: 1.82, steerMul: 1.37, accelMul: 1.37, brakeMul: 0.72, cost: 35000,  gemCost: 5,  coinMul: 5.5,  gemChance: 0.008,   hitsToKill:  9, desc: 'Top speed monster' },
-  { name: 'BANSHEE', kind: 'sport', body: 0x00e676, accent: 0x004d20, topMul: 1.47, steerMul: 1.92, accelMul: 1.47, brakeMul: 1.55, cost: 45000,  gemCost: 6,  coinMul: 6.0,  gemChance: 0.013,   hitsToKill: 10, desc: 'Cornering machine' },
-  { name: 'BEAST',   kind: 'van',   body: 0xf44336, accent: 0x880000, topMul: 1.57, steerMul: 1.57, accelMul: 2.02, brakeMul: 0.78, cost: 55000,  gemCost: 7,  coinMul: 6.5,  gemChance: 0.02,    hitsToKill: 11, desc: 'Launch beast — raw power' },
-  { name: 'APEX',    kind: 'sport', body: 0x3f51b5, accent: 0x1a1f5e, topMul: 1.82, steerMul: 1.82, accelMul: 1.82, brakeMul: 1.30, cost: 65000,  gemCost: 8,  coinMul: 7.5,  gemChance: 0.04,    hitsToKill: 12, desc: 'Elite all-rounder' },
+  { name: 'BANSHEE', kind: 'sport', body: 0x00e676, accent: 0x004d20, topMul: 1.47, steerMul: 1.92, accelMul: 1.47, brakeMul: 1.55, cost: 55000,  gemCost: 8,  coinMul: 6.0,  gemChance: 0.013,   hitsToKill: 10, desc: 'Cornering machine' },
+  { name: 'BEAST',   kind: 'van',   body: 0xf44336, accent: 0x880000, topMul: 1.57, steerMul: 1.57, accelMul: 2.02, brakeMul: 0.78, cost: 65000,  gemCost: 9,  coinMul: 6.5,  gemChance: 0.02,    hitsToKill: 11, desc: 'Launch beast — raw power' },
+  { name: 'APEX',    kind: 'sport', body: 0x3f51b5, accent: 0x1a1f5e, topMul: 1.82, steerMul: 1.82, accelMul: 1.82, brakeMul: 1.30, cost: 75000,  gemCost: 10, coinMul: 7.5,  gemChance: 0.04,    hitsToKill: 12, desc: 'Elite all-rounder' },
   { name: 'STORM',   kind: 'sport', body: 0xe91e63, accent: 0x6a0030, topMul: 2.50, steerMul: 2.50, accelMul: 2.50, brakeMul: 1.50, cost: 150000, gemCost: 30, coinMul: 8.5,  gemChance: 0.06,    hitsToKill: 13, desc: 'Near-maxed all stats' },
   { name: 'F1',      kind: 'f1',    body: 0xff0044, accent: 0xffd700, topMul: 3.00, steerMul: 3.00, accelMul: 3.00, brakeMul: 3.00, cost: 250000, gemCost: 100, coinMul: 10.0, gemChance: 0.10,    hitsToKill: 15, desc: 'Ultimate speed machine' },
   { name: 'SWAT',    kind: 'swat',      body: 0x0d1b3e, accent: 0x1a3a6e, topMul: 1.0,  steerMul: 1.0,  accelMul: 1.2,  brakeMul: 0.90, cost: 15000,  gemCost: 0, coinMul: 4.0,  gemChance: 0.003,  hitsToKill: 5,  desc: 'Armored response unit',    missionOnly: true },
@@ -551,22 +551,28 @@ let rocketLocked = false;    // true when fully locked on
 let freeMap = false;
 let freemapFloor = null;
 let freeMapGrip = 3;
-let freeMapLives = 5;
-const FREE_MAP_MAX_LIVES = 5;
-function freeMapLoseLife() {
-  if (!freeMap || freeMapLives <= 0) return;
-  freeMapLives = Math.max(0, freeMapLives - 1);
-  if (freeMapGrip > freeMapLives) freeMapGrip = Math.max(1, freeMapLives);
-  if (freeMapLives <= 0) {
+let freeMapHP = 100;
+const FREE_MAP_MAX_HP = 100;
+const FREE_MAP_HP_TICKS = 5;
+function freeMapGripCap() { return Math.max(1, Math.ceil(freeMapHP / (FREE_MAP_MAX_HP / FREE_MAP_HP_TICKS))); }
+function freeMapTakeDamage(amount) {
+  if (!freeMap || freeMapHP <= 0) return;
+  freeMapHP = Math.max(0, freeMapHP - amount);
+  if (freeMapGrip > freeMapGripCap()) freeMapGrip = freeMapGripCap();
+  if (freeMapHP <= 0) {
     // respawn: heal back and warp to last safe spot
-    freeMapLives = FREE_MAP_MAX_LIVES;
-    freeMapGrip  = Math.min(freeMapGrip, freeMapLives);
+    freeMapHP = FREE_MAP_MAX_HP;
+    freeMapGrip  = Math.min(freeMapGrip, freeMapGripCap());
     arenaPlayer.x = freeMapLastSafeX; arenaPlayer.z = freeMapLastSafeZ;
     arenaPlayer.vx = 0; arenaPlayer.vz = 0; arenaPlayer.y = 0.5; arenaPlayer.vy = 0;
     freeMapStars = 0;
     for (const _fb of freeMapPoliceBullets) { if (_fb.mesh) arenaGroup.remove(_fb.mesh); }
     freeMapPoliceBullets.length = 0;
-    for (const _fn of freeMapNPCs) { if (_fn.type === 'police' && _fn.mesh) { arenaGroup.remove(_fn.mesh); _fn.alive = false; } }
+    for (const _fn of freeMapNPCs) {
+      if (_fn.mesh && (_fn.type === 'police' || _fn.type === 'swat' || _fn.type === 'tank' || _fn.type === 'rocket_car')) {
+        arenaGroup.remove(_fn.mesh); _fn.alive = false;
+      }
+    }
   }
 }
 let freeMapLastSafeX = 0, freeMapLastSafeZ = 0;
@@ -577,14 +583,19 @@ let freeMapBuildingMats = []; // solid materials toggled transparent when inside
 let freeMapInfiniteRockets = false;
 let freeMapInfiniteTurbo   = false;
 let freeMapStations = [];    // { x, z, r, type: 'rocket'|'turbo'|'reset' }
-let freeMapRaceSquares = []; // { x, z, half } — flat pads that spawn a rival when stood on
+let freeMapRaceSquares = []; // { x, z, half } — flat pads that warp to the race road when stood on
 let freeMapRaceCountdown = 0; // ms elapsed while standing on a race square
+let freeMapInRace = false;    // true while on the straight-road race map
+let freeMapRaceRoad = null;   // { halfW, minZ, maxZ } extents for barrier clamping
 let freeMapNPCs = [];        // road cars + police + F1 attackers + rival
 let freeMapPoliceBullets = [];
 let freeMapStars = 0;
 let freeMapStarCooldown = 0;   // ms before next star can be earned
 let freeMapMissileCooldown = 0; // ms before player can fire next missile in free map
 let freeMapPoliceTimer = 0;    // ms between police spawns
+let freeMapSwatTimer = 0;      // ms between SWAT spawns (3★+)
+let freeMapTankTimer = 0;      // ms between Tank spawns (4★+)
+let freeMapRocketCarTimer = 0; // ms between Rocket Car spawns (5★)
 let skidMarks = []; // { wx, wy, wz, life, maxLife }
 let icePatches = []; // { wx, wy, wz, life, maxLife } — left by ice trail in arena
 let arenaBombs = []; // { mesh, x, z, triggered } — championship final mines
@@ -695,6 +706,7 @@ function arenaTileAt(x, z) {
 function buildCityMap() {
   for (const m of freeMapMeshes) arenaGroup.remove(m);
   freeMapMeshes = []; freeMapBuildings = []; freeMapBuildingMats = []; freeMapStations = []; freeMapRaceSquares = []; freeMapRaceCountdown = 0;
+  freeMapInRace = false; freeMapRaceRoad = null;
   for (const t of arenaTiles) arenaGroup.remove(t.mesh);
   arenaTiles.length = 0;
 
@@ -765,13 +777,45 @@ function buildCityMap() {
   const DW = 6;               // door width
   const DH = 3.8;             // door height
 
-  const matWall  = new THREE.MeshLambertMaterial({ color: 0x575757 });
-  const matWallD = new THREE.MeshLambertMaterial({ color: 0x464646 });
+  // Equipment building (right) — black exterior
+  const matWall  = new THREE.MeshLambertMaterial({ color: 0x0a0a0a });
+  const matWallD = new THREE.MeshLambertMaterial({ color: 0x222222 });
   const matFlr   = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
-  const matRoofM = new THREE.MeshLambertMaterial({ color: 0x333333 });
+  const matRoofM = new THREE.MeshLambertMaterial({ color: 0x111111 });
   const matGlass = new THREE.MeshBasicMaterial({ color: 0x99ccff, transparent: true, opacity: 0.30, side: THREE.DoubleSide });
-  // track solid mats so we can fade them when player is inside
-  freeMapBuildingMats = [matWall, matWallD, matRoofM];
+
+  // Race building (left) — black & white checkered walls, red trim
+  const _checkerTex = (() => {
+    const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+    const cx = cv.getContext('2d');
+    for (let yy = 0; yy < 8; yy++) for (let xx = 0; xx < 8; xx++) {
+      cx.fillStyle = ((xx + yy) % 2 === 0) ? '#ffffff' : '#000000';
+      cx.fillRect(xx * 8, yy * 8, 8, 8);
+    }
+    const t = new THREE.CanvasTexture(cv);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(6, 3);
+    return t;
+  })();
+  const matWallRace  = new THREE.MeshLambertMaterial({ map: _checkerTex });
+  const matWallDRace = new THREE.MeshLambertMaterial({ color: 0xdd2222 });
+  const matRoofMRace = new THREE.MeshLambertMaterial({ color: 0xdd2222 });
+
+  // track solid mats so we can fade them when player is inside either building
+  freeMapBuildingMats = [matWall, matWallD, matRoofM, matWallRace, matWallDRace, matRoofMRace];
+
+  // text-sign helper: returns a sign mesh facing -Z (toward the road/spawn)
+  function makeBuildingSign(text, fg, bg, cx_, cy, cz, w = 11, h = 2.2) {
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 128;
+    const c2 = cv.getContext('2d');
+    c2.fillStyle = bg; c2.fillRect(0, 0, cv.width, cv.height);
+    c2.fillStyle = fg; c2.font = 'bold 80px system-ui'; c2.textAlign = 'center'; c2.textBaseline = 'middle';
+    c2.fillText(text, cv.width / 2, cv.height / 2 + 4);
+    const tex = new THREE.CanvasTexture(cv);
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex }));
+    sign.position.set(cx_, cy, cz);
+    sign.rotation.y = Math.PI; // face -Z
+    arenaGroup.add(sign); freeMapMeshes.push(sign);
+  }
 
   function addBox(cx, cy, cz, w, h, d, mat) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -881,7 +925,7 @@ function buildCityMap() {
   // register as speed-limit zone
   freeMapBuildings.push({ x: BX, z: BZ, hw: BHW, hd: BHD });
 
-  // --- second building: upper-left block (-32, 32), decorative center box ---
+  // --- second building (RACE): upper-left block (-32, 32), checkered walls ---
   const BX2 = -32, BZ2 = 32;
 
   const _bFlr2 = new THREE.Mesh(new THREE.PlaneGeometry(BHW*2 - WT, BHD*2 - WT), matFlr);
@@ -889,30 +933,34 @@ function buildCityMap() {
   arenaGroup.add(_bFlr2); freeMapMeshes.push(_bFlr2);
 
   // north wall
-  addBox(BX2, BH/2, BZ2 + BHD, BHW*2, BH, WT, matWall);
+  addBox(BX2, BH/2, BZ2 + BHD, BHW*2, BH, WT, matWallRace);
   addBox(BX2 - 4.5, BH * 0.62, BZ2 + BHD, 5, 2.2, 0.05, matGlass);
   addBox(BX2 + 4.5, BH * 0.62, BZ2 + BHD, 5, 2.2, 0.05, matGlass);
 
   // south wall — split around door (faces spawn)
-  addBox(BX2 - DW/2 - _swP/2, BH/2,           BZ2 - BHD, _swP, BH,      WT, matWall);
-  addBox(BX2 + DW/2 + _swP/2, BH/2,           BZ2 - BHD, _swP, BH,      WT, matWall);
-  addBox(BX2,                 DH + (BH-DH)/2, BZ2 - BHD, DW,   BH - DH, WT, matWall);
+  addBox(BX2 - DW/2 - _swP/2, BH/2,           BZ2 - BHD, _swP, BH,      WT, matWallRace);
+  addBox(BX2 + DW/2 + _swP/2, BH/2,           BZ2 - BHD, _swP, BH,      WT, matWallRace);
+  addBox(BX2,                 DH + (BH-DH)/2, BZ2 - BHD, DW,   BH - DH, WT, matWallRace);
 
   // east wall
-  addBox(BX2 + BHW, BH/2, BZ2, WT, BH, BHD*2, matWall);
+  addBox(BX2 + BHW, BH/2, BZ2, WT, BH, BHD*2, matWallRace);
   addBox(BX2 + BHW, BH * 0.62, BZ2, 0.05, 2.2, 7, matGlass);
 
   // west wall
-  addBox(BX2 - BHW, BH/2, BZ2, WT, BH, BHD*2, matWall);
+  addBox(BX2 - BHW, BH/2, BZ2, WT, BH, BHD*2, matWallRace);
   addBox(BX2 - BHW, BH * 0.62, BZ2, 0.05, 2.2, 7, matGlass);
 
-  // roof
-  addBox(BX2, BH + 0.25, BZ2, BHW*2 + 0.8, 0.5, BHD*2 + 0.8, matRoofM);
+  // red roof
+  addBox(BX2, BH + 0.25, BZ2, BHW*2 + 0.8, 0.5, BHD*2 + 0.8, matRoofMRace);
 
-  // door frame
-  addBox(BX2 - DW/2 - 0.12, DH/2,     BZ2 - BHD, 0.22,       DH,   0.22, matWallD);
-  addBox(BX2 + DW/2 + 0.12, DH/2,     BZ2 - BHD, 0.22,       DH,   0.22, matWallD);
-  addBox(BX2,               DH + 0.12, BZ2 - BHD, DW + 0.44, 0.22, 0.22, matWallD);
+  // red door frame
+  addBox(BX2 - DW/2 - 0.12, DH/2,     BZ2 - BHD, 0.22,       DH,   0.22, matWallDRace);
+  addBox(BX2 + DW/2 + 0.12, DH/2,     BZ2 - BHD, 0.22,       DH,   0.22, matWallDRace);
+  addBox(BX2,               DH + 0.12, BZ2 - BHD, DW + 0.44, 0.22, 0.22, matWallDRace);
+
+  // rooftop signs above each door, facing the road
+  makeBuildingSign('EQUIPMENT', '#ffffff', '#000000', BX,  BH + 1.6, BZ  - BHD - 0.05, 12, 2.0);
+  makeBuildingSign('RACE',      '#ff2222', '#ffffff', BX2, BH + 1.6, BZ2 - BHD - 0.05, 10, 2.4);
 
   // two flat blue race-start pads on the floor (stand 3s to warp to a race)
   const _raceMat = new THREE.MeshBasicMaterial({ color: 0x2266ff, transparent: true, opacity: 0.85 });
@@ -951,10 +999,22 @@ function spawnFreeMapNPC(type) {
     heading = dir > 0 ? 0 : Math.PI;
   }
 
-  let kind, color, accent, speed;
+  let kind, color, accent, speed, hp = 1, fireMin = 2200, fireRand = 1200, damage = 10, bulletCol = 0x00eeff, bulletSize = 0.22;
   if (type === 'police') {
-    kind = 'swat'; color = 0x112299; accent = 0xffffff;
+    kind = 'sedan'; color = 0x1144ff; accent = 0xffffff;
     speed = 10 + freeMapStars * 1.8;
+  } else if (type === 'swat') {
+    kind = 'swat'; color = 0x0d1b3e; accent = 0xeeeeee;
+    speed = 13 + freeMapStars * 1.6;
+    fireMin = 700; fireRand = 400; damage = 10; bulletCol = 0x66ddff;
+  } else if (type === 'tank') {
+    kind = 'tank'; color = 0x445533; accent = 0x222222;
+    speed = 8; hp = 2; fireMin = 2500; fireRand = 800; damage = 30;
+    bulletCol = 0xff8800; bulletSize = 0.4;
+  } else if (type === 'rocket_car') {
+    kind = 'rocketcar'; color = 0xcc1100; accent = 0xffaa00;
+    speed = 12; fireMin = 4500; fireRand = 1000; damage = 50;
+    bulletCol = 0xff2200; bulletSize = 0.5;
   } else if (type === 'f1') {
     kind = 'f1'; color = 0xff0044; accent = 0xffdd00; speed = 20;
   } else {
@@ -968,32 +1028,55 @@ function spawnFreeMapNPC(type) {
   mesh.rotation.y = heading;
   arenaGroup.add(mesh);
 
-  freeMapNPCs.push({ x, z, y: 0.2, heading, speed, mesh, type, laneAxis, laneCoord, laneOff, dir, shotTimer: 1500 + Math.random() * 2000, alive: true, id: Math.random() });
+  freeMapNPCs.push({ x, z, y: 0.2, heading, speed, mesh, type, laneAxis, laneCoord, laneOff, dir, shotTimer: 1500 + Math.random() * 2000, alive: true, id: Math.random(), hp, fireMin, fireRand, damage, bulletCol, bulletSize });
 }
 
-function fireFreeMapBullet(fromX, fromZ, toX, toZ) {
+function fireFreeMapBullet(fromX, fromZ, toX, toZ, damage = 10, color = 0x00eeff, size = 0.22) {
   const _bd = Math.max(0.01, Math.hypot(toX - fromX, toZ - fromZ));
   const spd = 30;
   const vx = (toX - fromX) / _bd * spd;
   const vz = (toZ - fromZ) / _bd * spd;
-  const mat  = new THREE.MeshBasicMaterial({ color: 0x00eeff });
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 6, 6), mat);
+  const mat  = new THREE.MeshBasicMaterial({ color });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(size, 6, 6), mat);
   mesh.position.set(fromX, 0.7, fromZ);
   arenaGroup.add(mesh);
-  freeMapPoliceBullets.push({ x: fromX, z: fromZ, y: 0.7, vx, vz, mesh, life: 3500 });
+  freeMapPoliceBullets.push({ x: fromX, z: fromZ, y: 0.7, vx, vz, mesh, life: 3500, damage, size });
 }
 
 function updateFreeMapTraffic(dt) {
   const dts = dt / 1000;
   freeMapStarCooldown    = Math.max(0, freeMapStarCooldown    - dt);
   freeMapPoliceTimer     = Math.max(0, freeMapPoliceTimer     - dt);
+  freeMapSwatTimer       = Math.max(0, freeMapSwatTimer       - dt);
+  freeMapTankTimer       = Math.max(0, freeMapTankTimer       - dt);
+  freeMapRocketCarTimer  = Math.max(0, freeMapRocketCarTimer  - dt);
   freeMapMissileCooldown = Math.max(0, freeMapMissileCooldown - dt);
 
-  // spawn police to match star count
-  const _policeAlive = freeMapNPCs.filter(n => n.type === 'police' && n.alive).length;
-  if (freeMapStars > 0 && _policeAlive < freeMapStars && freeMapPoliceTimer <= 0) {
+  // spawn police at a star-dependent rate: 1★=20s, 2★=10s, 3★=5s, 4★=4s, 5★=3s
+  if (freeMapStars > 0 && freeMapPoliceTimer <= 0) {
     spawnFreeMapNPC('police');
-    freeMapPoliceTimer = 1800;
+    freeMapPoliceTimer = [20000, 10000, 5000, 4000, 3000][freeMapStars - 1];
+  }
+  // SWAT — 3★ every 10s, 4★+ every 15s
+  if (freeMapStars >= 3 && freeMapSwatTimer <= 0) {
+    spawnFreeMapNPC('swat');
+    freeMapSwatTimer = freeMapStars === 3 ? 10000 : 15000;
+  }
+  // Tank — 4★+ every 15s
+  if (freeMapStars >= 4 && freeMapTankTimer <= 0) {
+    spawnFreeMapNPC('tank');
+    freeMapTankTimer = 15000;
+  }
+  // Rocket Car — 5★ every 15s
+  if (freeMapStars >= 5 && freeMapRocketCarTimer <= 0) {
+    spawnFreeMapNPC('rocket_car');
+    freeMapRocketCarTimer = 15000;
+  }
+
+  // top up traffic so the streets stay busy
+  const _aliveTraffic = freeMapNPCs.filter(n => n.alive && n.type === 'npc').length;
+  if (_aliveTraffic < 40 && !freeMapInRace) {
+    spawnFreeMapNPC('npc');
   }
 
   // update NPCs
@@ -1020,16 +1103,16 @@ function updateFreeMapTraffic(dt) {
         if (n.z >  _FM_SPAN) n.z = -_FM_SPAN;
         if (n.z < -_FM_SPAN) n.z =  _FM_SPAN;
       }
-    } else if (n.type === 'f1' || n.type === 'police') {
+    } else if (n.type === 'f1' || n.type === 'police' || n.type === 'swat' || n.type === 'tank' || n.type === 'rocket_car') {
       const _dx = arenaPlayer.x - n.x, _dz = arenaPlayer.z - n.z;
       const _dist = Math.hypot(_dx, _dz);
-      const _aggro = n.type === 'police' || _dist < 30;
+      const _aggro = n.type !== 'f1' || _dist < 30;
       if (_aggro) {
         const _ta = Math.atan2(_dx, _dz);
         let _hd = _ta - n.heading;
         while (_hd >  Math.PI) _hd -= Math.PI * 2;
         while (_hd < -Math.PI) _hd += Math.PI * 2;
-        const _turnRate = n.type === 'f1' ? 3.5 : 2.5;
+        const _turnRate = n.type === 'f1' ? 3.5 : (n.type === 'tank' ? 1.4 : 2.5);
         n.heading += Math.sign(_hd) * Math.min(Math.abs(_hd), _turnRate * dts);
         const _spd = _dist > 4 ? n.speed : n.speed * 0.3;
         n.x += Math.sin(n.heading) * _spd * dts;
@@ -1037,8 +1120,10 @@ function updateFreeMapTraffic(dt) {
         // fire at player
         n.shotTimer -= dt;
         if (n.shotTimer <= 0 && _dist < 45) {
-          n.shotTimer = 2200 + Math.random() * 1200;
-          fireFreeMapBullet(n.x, n.z, arenaPlayer.x, arenaPlayer.z);
+          const _fmin = n.fireMin != null ? n.fireMin : 2200;
+          const _frnd = n.fireRand != null ? n.fireRand : 1200;
+          n.shotTimer = _fmin + Math.random() * _frnd;
+          fireFreeMapBullet(n.x, n.z, arenaPlayer.x, arenaPlayer.z, n.damage || 10, n.bulletCol || 0x00eeff, n.bulletSize || 0.22);
         }
       } else {
         // idle cruise (F1 only when out of range)
@@ -1058,9 +1143,10 @@ function updateFreeMapTraffic(dt) {
     b.x += b.vx * dts; b.z += b.vz * dts;
     if (b.mesh) b.mesh.position.set(b.x, b.y, b.z);
     // hit player
-    if (Math.hypot(b.x - arenaPlayer.x, b.z - arenaPlayer.z) < 1.5) {
+    const _bHitR = 1.5 + (b.size || 0.22);
+    if (Math.hypot(b.x - arenaPlayer.x, b.z - arenaPlayer.z) < _bHitR) {
       arenaPlayer.vx *= 0.15; arenaPlayer.vz *= 0.15;  // brief stun
-      freeMapLoseLife();
+      freeMapTakeDamage(b.damage || 10);
       if (b.mesh) arenaGroup.remove(b.mesh);
       freeMapPoliceBullets.splice(i, 1);
       continue;
@@ -1078,6 +1164,7 @@ function cleanupFreeMapTraffic() {
   for (const b of freeMapPoliceBullets) { if (b.mesh) arenaGroup.remove(b.mesh); }
   freeMapPoliceBullets = [];
   freeMapStars = 0; freeMapStarCooldown = 0; freeMapPoliceTimer = 0; freeMapMissileCooldown = 0;
+  freeMapSwatTimer = 0; freeMapTankTimer = 0; freeMapRocketCarTimer = 0;
 }
 
 function freeMapWarpToClassic() {
@@ -1110,6 +1197,93 @@ function freeMapSpawnRival() {
     dir: 1,
     shotTimer: 99999, alive: true, id: Math.random(),
   });
+}
+
+// Tear down the city map and build a single straight road with side barriers.
+// Player drives south (-Z); free-map physics still apply.
+function buildRaceRoadMap() {
+  for (const m of freeMapMeshes) arenaGroup.remove(m);
+  freeMapMeshes = [];
+  freeMapBuildings = []; freeMapBuildingMats = [];
+  freeMapStations = []; freeMapRaceSquares = [];
+  freeMapRaceCountdown = 0; freeMapInBuilding = false;
+  cleanupFreeMapTraffic();
+  freeMapInRace = true;
+
+  const ROAD_W   = 14;
+  const ROAD_LEN = 600;
+  const Z0       = 10;                       // road starts here (north) and runs to Z0 - ROAD_LEN
+  const ZC       = Z0 - ROAD_LEN / 2;        // center Z
+
+  const matAsphalt  = new THREE.MeshLambertMaterial({ color: 0x252525 });
+  const matGround   = new THREE.MeshLambertMaterial({ color: 0x101010 });
+  const matYellow   = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+  const matWhite    = new THREE.MeshBasicMaterial({ color: 0xdddddd });
+  const matBarrierR = new THREE.MeshLambertMaterial({ color: 0xcc2222 });
+  const matBarrierW = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
+
+  // dark ground on either side
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, ROAD_LEN + 40), matGround);
+  ground.rotation.x = -Math.PI / 2; ground.position.set(0, -0.02, ZC);
+  arenaGroup.add(ground); freeMapMeshes.push(ground);
+
+  // asphalt
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_W, ROAD_LEN), matAsphalt);
+  road.rotation.x = -Math.PI / 2; road.position.set(0, 0, ZC);
+  arenaGroup.add(road); freeMapMeshes.push(road);
+
+  // center yellow line
+  const cen = new THREE.Mesh(new THREE.PlaneGeometry(0.45, ROAD_LEN), matYellow);
+  cen.rotation.x = -Math.PI / 2; cen.position.set(0, 0.01, ZC);
+  arenaGroup.add(cen); freeMapMeshes.push(cen);
+
+  // white edge lines
+  for (const sx of [-1, 1]) {
+    const ed = new THREE.Mesh(new THREE.PlaneGeometry(0.3, ROAD_LEN), matWhite);
+    ed.rotation.x = -Math.PI / 2;
+    ed.position.set(sx * (ROAD_W / 2 - 0.3), 0.01, ZC);
+    arenaGroup.add(ed); freeMapMeshes.push(ed);
+  }
+
+  // dashed lane markers
+  for (let z = Z0 - 5; z > Z0 - ROAD_LEN; z -= 10) {
+    for (const sx of [-1, 1]) {
+      const d = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 5.5), matWhite);
+      d.rotation.x = -Math.PI / 2;
+      d.position.set(sx * ROAD_W / 4, 0.02, z);
+      arenaGroup.add(d); freeMapMeshes.push(d);
+    }
+  }
+
+  // red/white striped side barriers
+  const segLen   = 6;
+  const segCount = Math.ceil(ROAD_LEN / segLen);
+  for (const sx of [-1, 1]) {
+    for (let i = 0; i < segCount; i++) {
+      const mat = (i % 2 === 0) ? matBarrierR : matBarrierW;
+      const seg = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.4, segLen), mat);
+      seg.position.set(sx * (ROAD_W / 2 + 0.4), 0.7, Z0 - segLen / 2 - i * segLen);
+      arenaGroup.add(seg); freeMapMeshes.push(seg);
+    }
+  }
+
+  // end caps so the player can't drive off the ends
+  for (const ez of [Z0, Z0 - ROAD_LEN]) {
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(ROAD_W + 2, 1.4, 0.6), matBarrierR);
+    cap.position.set(0, 0.7, ez);
+    arenaGroup.add(cap); freeMapMeshes.push(cap);
+  }
+
+  freeMapRaceRoad = {
+    halfW: ROAD_W / 2 - 0.6,
+    minZ:  Z0 - ROAD_LEN + 0.6,
+    maxZ:  Z0 - 0.6,
+  };
+
+  // place player at the start (north end), facing south
+  arenaPlayer.x = 0; arenaPlayer.z = Z0 - 4; arenaPlayer.y = 0.2;
+  arenaPlayer.vx = 0; arenaPlayer.vz = 0; arenaPlayer.fwd = 0;
+  arenaPlayer.heading = Math.PI; // -Z
 }
 
 // ===== car builder =====
@@ -1844,7 +2018,7 @@ canvas3d.addEventListener('click', e => {
     const _gbX = W/2 - 95, _gbY = 10, _gbW = 38, _gbH = 28;
     for (let g = 1; g <= 5; g++) {
       const _bx = _gbX + (g-1)*(_gbW+4);
-      if (x >= _bx && x <= _bx+_gbW && y >= _gbY && y <= _gbY+_gbH && g <= freeMapLives) { freeMapGrip = g; }
+      if (x >= _bx && x <= _bx+_gbW && y >= _gbY && y <= _gbY+_gbH && g <= freeMapGripCap()) { freeMapGrip = g; }
     }
   }
 });
@@ -1906,7 +2080,7 @@ function startGame() {
   if (MODES[modeIdx] === 'ARENA') { state = STATE.ARENA_SELECT; return; }
   if (MODES[modeIdx] === 'FREE MAP') {
     freeMap = true; battleRoyale = false; champActive = false;
-    freeMapLives = FREE_MAP_MAX_LIVES; freeMapGrip = Math.min(freeMapGrip, freeMapLives);
+    freeMapHP = FREE_MAP_MAX_HP; freeMapGrip = Math.min(freeMapGrip, freeMapGripCap());
     startArena();
     return;
   }
@@ -2433,12 +2607,13 @@ function startArena() {
     cleanupFreeMapTraffic();
     buildCityMap();
     for (const m of mountainMeshes) m.visible = false;
-    for (let _ni = 0; _ni < 22; _ni++) spawnFreeMapNPC('npc');
+    for (let _ni = 0; _ni < 40; _ni++) spawnFreeMapNPC('npc');
     if (Math.random() < 0.02) { spawnFreeMapNPC('f1'); spawnFreeMapNPC('f1'); }
   } else {
     cleanupFreeMapTraffic();
     for (const m of freeMapMeshes) arenaGroup.remove(m);
     freeMapMeshes = []; freeMapBuildings = [];
+    freeMapInRace = false; freeMapRaceRoad = null;
     buildArena(battleRoyale ? 80 : isChampFinal ? 22 : HEX_RADIUS);
     for (const m of mountainMeshes) m.visible = true;
   }
@@ -2647,7 +2822,7 @@ function updateArena(dt) {
         else if (_fst.type === 'reset')  {
           freeMapInfiniteRockets = false; freeMapInfiniteTurbo = false;
           rocketCharges = 0; nitroTime = 0;
-          freeMapLives = FREE_MAP_MAX_LIVES;
+          freeMapHP = FREE_MAP_MAX_HP;
         }
       }
     }
@@ -2663,7 +2838,7 @@ function updateArena(dt) {
     }
     if (_onSquare && newSpeed < 0.5) {
       freeMapRaceCountdown += dt;
-      if (freeMapRaceCountdown >= 3000) { freeMapSpawnRival(); freeMapRaceCountdown = 0; }
+      if (freeMapRaceCountdown >= 3000) { buildRaceRoadMap(); freeMapRaceCountdown = 0; }
     } else {
       freeMapRaceCountdown = 0;
     }
@@ -2678,7 +2853,7 @@ function updateArena(dt) {
     }
   }
   const _fmTopMul = freeMap ? effTop(carIdx) : 1;
-  let speedCap = nitroTime > 0 ? 58 * _fmTopMul : (freeMapInBuilding ? 8 : 28 * _fmTopMul);
+  let speedCap = freeMapInBuilding ? 8 : (nitroTime > 0 ? 80 * _fmTopMul : 28 * _fmTopMul);
   // free-map hard cap: 250 km/h ≈ 69.4 m/s
   if (freeMap && !freeMapInBuilding) speedCap = Math.min(speedCap, 69.4);
   if (newSpeed > speedCap) { arenaPlayer.vx *= speedCap / newSpeed; arenaPlayer.vz *= speedCap / newSpeed; }
@@ -2689,6 +2864,14 @@ function updateArena(dt) {
 
   arenaPlayer.x += arenaPlayer.vx * dts;
   arenaPlayer.z += arenaPlayer.vz * dts;
+  // race road: clamp inside the barriers
+  if (freeMap && freeMapInRace && freeMapRaceRoad) {
+    const _rr = freeMapRaceRoad;
+    if (arenaPlayer.x >  _rr.halfW) { arenaPlayer.x =  _rr.halfW; arenaPlayer.vx = Math.min(0, arenaPlayer.vx); }
+    if (arenaPlayer.x < -_rr.halfW) { arenaPlayer.x = -_rr.halfW; arenaPlayer.vx = Math.max(0, arenaPlayer.vx); }
+    if (arenaPlayer.z >  _rr.maxZ)  { arenaPlayer.z =  _rr.maxZ;  arenaPlayer.vz = Math.min(0, arenaPlayer.vz); }
+    if (arenaPlayer.z <  _rr.minZ)  { arenaPlayer.z =  _rr.minZ;  arenaPlayer.vz = Math.max(0, arenaPlayer.vz); }
+  }
   _trailT += dts;
 
   // free map: player bumps NPC → +1 star
@@ -2702,7 +2885,7 @@ function updateArena(dt) {
           spawnExplosion3D(_fn.x, 0.5, _fn.z);
           freeMapStars = Math.min(5, freeMapStars + 1);
           freeMapStarCooldown = 2500;
-          freeMapLoseLife();
+          freeMapTakeDamage(20);
           break;
         }
       }
@@ -3080,8 +3263,10 @@ function updateArena(dt) {
   if (rocketCharges > 0 && !arenaElimOrder.includes('player')) {
     // sticky: keep current target while alive AND its screen projection is still on the canvas
     let _keep = false;
-    if (rocketLockTarget && rocketLockTarget.state === 'alive') {
-      const _cp = project3D(rocketLockTarget.x, rocketLockTarget.y + 0.8, rocketLockTarget.z);
+    const _tgtAlive = rocketLockTarget && (rocketLockTarget.state === 'alive' || rocketLockTarget.alive === true);
+    if (_tgtAlive) {
+      const _ty = (rocketLockTarget.y != null ? rocketLockTarget.y : 0.2) + 0.8;
+      const _cp = project3D(rocketLockTarget.x, _ty, rocketLockTarget.z);
       if (!_cp.behind && _cp.x >= 0 && _cp.x <= W && _cp.y >= 0 && _cp.y <= H) _keep = true;
     }
     if (_keep) {
@@ -3089,17 +3274,20 @@ function updateArena(dt) {
       if (rocketLockTimer >= 1800) rocketLocked = true;
     } else {
       // acquire a fresh target — closest to crosshair within the aim cone
-      let _bestBot = null, _bestDist = Infinity;
-      for (const bot of arenaBots) {
-        if (bot.state !== 'alive') continue;
-        const _proj = project3D(bot.x, bot.y + 0.8, bot.z);
+      const _candidates = freeMap
+        ? freeMapNPCs.filter(n => n.alive)
+        : arenaBots.filter(b => b.state === 'alive');
+      let _best = null, _bestDist = Infinity;
+      for (const c of _candidates) {
+        const _cy = (c.y != null ? c.y : 0.2) + 0.8;
+        const _proj = project3D(c.x, _cy, c.z);
         if (_proj.behind) continue;
         const _sd = Math.hypot(_proj.x - W / 2, _proj.y - (H / 2 - 95));
-        const _wd = Math.hypot(bot.x - arenaPlayer.x, bot.z - arenaPlayer.z);
-        if (_sd < 200 && _wd > 5 && _sd < _bestDist) { _bestDist = _sd; _bestBot = bot; }
+        const _wd = Math.hypot(c.x - arenaPlayer.x, c.z - arenaPlayer.z);
+        if (_sd < 200 && _wd > 5 && _sd < _bestDist) { _bestDist = _sd; _best = c; }
       }
-      if (_bestBot) {
-        rocketLockTarget = _bestBot; rocketLockTimer = 0; rocketLocked = false;
+      if (_best) {
+        rocketLockTarget = _best; rocketLockTimer = 0; rocketLocked = false;
       } else {
         rocketLockTarget = null; rocketLockTimer = 0; rocketLocked = false;
       }
@@ -3173,7 +3361,7 @@ function updateArena(dt) {
     r.life -= dt;
     const rdts = dt / 1000;
     // homing: steer toward locked target
-    if (r.target && r.target.state === 'alive') {
+    if (r.target && (r.target.state === 'alive' || r.target.alive === true)) {
       const _htdx = r.target.x - r.x, _htdz = r.target.z - r.z;
       const _hAngle = Math.atan2(_htdx, _htdz);
       const _rAngle = Math.atan2(r.vx, r.vz);
@@ -3192,16 +3380,20 @@ function updateArena(dt) {
     if (r.mesh) {
       r.mesh.position.set(r.x, r.y + Math.sin(gameTime * 8) * 0.05, r.z);
     }
-    // hit free-map NPCs — remove NPC, award star (except F1 and police give no stars)
+    // hit free-map NPCs — apply rocket damage (tanks survive one hit)
     if (freeMap) {
       for (const _fn of freeMapNPCs) {
         if (!_fn.alive) continue;
         if (Math.hypot(r.x - _fn.x, r.z - _fn.z) < 2.0) {
-          _fn.alive = false;
+          if (_fn.hp == null) _fn.hp = 1;
+          _fn.hp -= 1;
           spawnExplosion3D(_fn.x, 0.5, _fn.z);
-          if (_fn.type === 'npc' && freeMapStarCooldown <= 0) {
-            freeMapStars = Math.min(5, freeMapStars + 1);
-            freeMapStarCooldown = 2000;
+          if (_fn.hp <= 0) {
+            _fn.alive = false;
+            if (_fn.type === 'npc' && freeMapStarCooldown <= 0) {
+              freeMapStars = Math.min(5, freeMapStars + 1);
+              freeMapStarCooldown = 2000;
+            }
           }
           if (r.mesh) arenaGroup.remove(r.mesh);
           arenaRockets.splice(ri, 1);
@@ -3760,8 +3952,9 @@ function update(dt) {
   }
 
   if (headOn) {
-    const accelRate = 22 * effAccel(carIdx) * engineMul;
-    const maxBoost = 18 * effTop(carIdx) * bodyMul;
+    // classic mode: same accel + max-boost for every car
+    const accelRate = 22 * engineMul;
+    const maxBoost = 18 * bodyMul;
     if (keys['arrowup']||keys['w']) speedBoost = Math.min(maxBoost, speedBoost + accelRate * dts);
     else if (keys['arrowdown']||keys['s']) speedBoost = Math.max(-7, speedBoost - accelRate * dts);
     else speedBoost *= Math.pow(0.5, dts * 3);
@@ -3861,7 +4054,8 @@ function update(dt) {
   }
 
   score += dts * 18 * d.scoreMul;
-  speed = Math.min(d.maxSpeed * effTop(carIdx) * bodyMul, d.startSpeed + score * 0.08) + speedBoost;
+  // classic mode: same top speed regardless of car choice
+  speed = Math.min(d.maxSpeed * bodyMul, d.startSpeed + score * 0.08) + speedBoost;
 
   // speed floor — HARD forces you to stay above 60 km/h (~16.7 m/s)
   // (only in HEAD ON where braking is possible, so the rule has teeth)
@@ -4254,15 +4448,31 @@ function drawFreeMapHud() {
     ctx.fillStyle = '#fff';
     ctx.fillText(_spd + ' km/h', 12, 30);
   }
-  // lives — hearts under the speedometer
+  // HP bar — under the speedometer, with 5 tick lines
   {
-    ctx.textAlign = 'left'; ctx.font = 'bold 14px system-ui';
-    for (let _l = 0; _l < FREE_MAP_MAX_LIVES; _l++) {
-      ctx.globalAlpha = _l < freeMapLives ? 1 : 0.25;
-      ctx.fillStyle = _l < freeMapLives ? '#ff5577' : '#555';
-      ctx.fillText('♥', 12 + _l * 16, 50);
+    const _hbX = 12, _hbY = 42, _hbW = 92, _hbH = 12;
+    const _hpFrac = Math.max(0, freeMapHP / FREE_MAP_MAX_HP);
+    // background
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.beginPath(); ctx.roundRect(_hbX - 2, _hbY - 2, _hbW + 4, _hbH + 4, 3); ctx.fill();
+    // fill (green → yellow → red as HP drops)
+    let _hpCol = '#22cc44';
+    if (_hpFrac < 0.6) _hpCol = '#ffcc22';
+    if (_hpFrac < 0.3) _hpCol = '#ff3322';
+    ctx.fillStyle = _hpCol;
+    ctx.fillRect(_hbX, _hbY, _hbW * _hpFrac, _hbH);
+    // tick lines (5 segments)
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+    for (let _t = 1; _t < FREE_MAP_HP_TICKS; _t++) {
+      const _tx = _hbX + (_hbW * _t / FREE_MAP_HP_TICKS);
+      ctx.beginPath(); ctx.moveTo(_tx, _hbY); ctx.lineTo(_tx, _hbY + _hbH); ctx.stroke();
     }
-    ctx.globalAlpha = 1;
+    // outline
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+    ctx.strokeRect(_hbX, _hbY, _hbW, _hbH);
+    // numeric HP
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText(Math.ceil(freeMapHP) + ' HP', _hbX + _hbW + 6, _hbY + _hbH - 2);
   }
   // wanted stars — top right
   if (freeMapStars > 0) {
@@ -4295,7 +4505,7 @@ function drawFreeMapHud() {
   for (let g = 1; g <= 5; g++) {
     const _bx = _gbX + (g-1)*(_gbW+_gbGap);
     const _active = g === freeMapGrip;
-    const _locked = g > freeMapLives;
+    const _locked = g > freeMapGripCap();
     const _col = _locked ? '#444' : _gripColors[g-1];
     ctx.globalAlpha = _locked ? 0.18 : (_active ? 1 : 0.28);
     ctx.fillStyle = _col;
@@ -4467,8 +4677,9 @@ function drawArenaHud() {
 
   // rocket targeting scope
   if (rocketCharges > 0 && !arenaElimOrder.includes('player')) {
-    if (rocketLockTarget && rocketLockTarget.state === 'alive') {
-      const _tp = project3D(rocketLockTarget.x, rocketLockTarget.y + 0.8, rocketLockTarget.z);
+    if (rocketLockTarget && (rocketLockTarget.state === 'alive' || rocketLockTarget.alive === true)) {
+      const _ty = (rocketLockTarget.y != null ? rocketLockTarget.y : 0.2) + 0.8;
+      const _tp = project3D(rocketLockTarget.x, _ty, rocketLockTarget.z);
       if (!_tp.behind) {
         const _locked = rocketLocked;
         const _prog = Math.min(1, rocketLockTimer / 1800);
@@ -5099,23 +5310,41 @@ function drawGarage() {
     const slotGap = 5, slotW = (W - 28 - slotGap * 4) / 3;
     slotDefs.forEach((slot, si) => {
       const tier = getUpg(garageCarSelected, slot.key);
-      const tc = TIER_COLORS[tier] || '#555';
+      const tc = TIER_COLORS[tier] || '#666';
       const isOpen = garageSlotPicker === slot.key;
-      const sx = 14 + slotGap + si * (slotW + slotGap), sy = panY + 28, sh = panH - 34;
-      ctx.fillStyle = isOpen ? 'rgba(255,68,221,0.18)' : tier > 0 ? tc + '18' : 'rgba(255,255,255,0.04)';
+      const invCount = (upgradeInventory[slot.key] || []).length;
+      const sx = 14 + slotGap + si * (slotW + slotGap);
+      const sy = isOpen ? panY + 24 : panY + 28;
+      const sh = isOpen ? panH - 28 : panH - 34;
+      // solid filled background (no transparency)
+      if (isOpen) {
+        ctx.fillStyle = '#3a0a30';
+      } else if (tier > 0) {
+        ctx.fillStyle = tc; ctx.globalAlpha = 0.22; ctx.beginPath(); ctx.roundRect(sx, sy, slotW, sh, 5); ctx.fill(); ctx.globalAlpha = 1;
+        ctx.fillStyle = '#181020';
+      } else {
+        ctx.fillStyle = '#181020';
+      }
       ctx.beginPath(); ctx.roundRect(sx, sy, slotW, sh, 5); ctx.fill();
-      ctx.strokeStyle = isOpen ? '#ff44dd' : tier > 0 ? tc : 'rgba(255,255,255,0.10)'; ctx.lineWidth = isOpen ? 2 : 1;
+      ctx.strokeStyle = isOpen ? '#ff44dd' : tier > 0 ? tc : '#444';
+      ctx.lineWidth = isOpen ? 2.5 : 1.5;
       ctx.beginPath(); ctx.roundRect(sx, sy, slotW, sh, 5); ctx.stroke();
       ctx.textAlign = 'center';
-      ctx.fillStyle = tier > 0 ? tc : '#555'; ctx.font = '13px system-ui';
-      ctx.fillText(slot.icon, sx + slotW/2, sy + 15);
-      ctx.fillStyle = tier > 0 ? '#ccc' : '#555'; ctx.font = 'bold 8px system-ui';
-      ctx.fillText(slot.name, sx + slotW/2, sy + 26);
-      ctx.fillStyle = tier > 0 ? tc : '#333'; ctx.font = 'bold 7px system-ui';
-      ctx.fillText(tier > 0 ? TIER_NAMES[tier] : 'EMPTY', sx + slotW/2, sy + 36);
-      for (let p = 0; p < 5; p++) {
-        ctx.fillStyle = p < tier ? tc : 'rgba(255,255,255,0.10)';
-        ctx.beginPath(); ctx.arc(sx + slotW/2 - 14 + p*7, sy + sh - 8, 2.5, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = tier > 0 ? tc : '#888'; ctx.font = '15px system-ui';
+      ctx.fillText(slot.icon, sx + slotW/2, sy + 16);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 10px system-ui';
+      ctx.fillText(slot.name, sx + slotW/2, sy + 30);
+      ctx.fillStyle = tier > 0 ? tc : '#666'; ctx.font = 'bold 9px system-ui';
+      ctx.fillText(tier > 0 ? TIER_NAMES[tier] : 'EMPTY', sx + slotW/2, sy + 43);
+      // inventory count badge in top-right corner
+      const badgeX = sx + slotW - 18, badgeY = sy + 4;
+      ctx.fillStyle = invCount > 0 ? '#ff44dd' : '#333';
+      ctx.beginPath(); ctx.roundRect(badgeX, badgeY, 14, 14, 3); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 9px system-ui';
+      ctx.fillText(invCount > 9 ? '9+' : String(invCount), badgeX + 7, badgeY + 10);
+      if (isOpen) {
+        ctx.fillStyle = '#ff88ee'; ctx.font = 'bold 9px system-ui';
+        ctx.fillText('▼ TAP TO CLOSE', sx + slotW/2, sy + sh - 6);
       }
       garageButtons.push({ x:sx, y:sy, w:slotW, h:sh, action:()=>{ garageSlotPicker = garageSlotPicker===slot.key ? null : slot.key; }, disabled:false });
     });

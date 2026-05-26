@@ -201,18 +201,13 @@ let _trailT = 0; // global trail time for color cycling
 // ===== runtime state =====
 const STATE = { MENU: 'menu', HELP: 'help', PLAYING: 'playing', DEAD: 'dead', ARENA: 'arena', GARAGE: 'garage', ARENA_SELECT: 'arena_select', GEM_SHOP: 'gem_shop', MISSIONS: 'missions', MISSIONS_GARAGE: 'missions_garage', LEVEL: 'level', CHAMPIONSHIP: 'championship', SETTINGS: 'settings', DEVICE_SELECT: 'device_select', INTRO: 'intro' };
 let device = localStorage.getItem('headon_device') || null; // 'computer' | 'mobile' | null
-// Intro animation plays first every launch; it routes onward when finished.
+// Intro animation plays first every launch and ALWAYS hands off to the
+// device-select screen so the player can confirm/switch each session.
 let state = STATE.INTRO;
 let introStart = 0;
 let introParticles = [];
 function endIntro() {
-  if (!device) { state = STATE.DEVICE_SELECT; return; }
-  if (!localStorage.getItem('headon_tutorial_shown')) {
-    state = STATE.HELP;
-    localStorage.setItem('headon_tutorial_shown', '1');
-    return;
-  }
-  state = STATE.MENU;
+  state = STATE.DEVICE_SELECT;
 }
 let garageTab = 'cars'; // 'cars' | 'paint' | 'trails'
 let garagePaintSelected = null;
@@ -4857,9 +4852,7 @@ function drawIntro() {
   let layerAlpha = 1;
   if (t > T_CAP_OUT_DONE_TOTAL) {
     layerAlpha = Math.max(0, 1 - (t - T_CAP_OUT_DONE_TOTAL) / T_FADE);
-    if (!device) drawDeviceSelect();
-    else if (!localStorage.getItem('headon_tutorial_shown')) drawHelp();
-    else drawMenu();
+    drawDeviceSelect();
   }
 
   ctx.save();

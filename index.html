@@ -4,13 +4,13 @@
 <meta charset="UTF-8">
 <title>Head On 3D</title>
 <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-XV5FQ2ZGYT"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ERCRY9GPKY"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
 
-  gtag('config', 'G-XV5FQ2ZGYT');
+  gtag('config', 'G-ERCRY9GPKY');
 </script>
 <style>
   html, body { margin: 0; padding: 0; height: 100%; background: #111; color: #eee; font-family: system-ui, sans-serif; overflow: hidden; }
@@ -199,10 +199,21 @@ function getFireColor() { const cols = ['#ffee00','#ffdd00','#ffaa00','#ff7700',
 let _trailT = 0; // global trail time for color cycling
 
 // ===== runtime state =====
-const STATE = { MENU: 'menu', HELP: 'help', PLAYING: 'playing', DEAD: 'dead', ARENA: 'arena', GARAGE: 'garage', ARENA_SELECT: 'arena_select', GEM_SHOP: 'gem_shop', MISSIONS: 'missions', MISSIONS_GARAGE: 'missions_garage', LEVEL: 'level', CHAMPIONSHIP: 'championship', SETTINGS: 'settings', DEVICE_SELECT: 'device_select' };
+const STATE = { MENU: 'menu', HELP: 'help', PLAYING: 'playing', DEAD: 'dead', ARENA: 'arena', GARAGE: 'garage', ARENA_SELECT: 'arena_select', GEM_SHOP: 'gem_shop', MISSIONS: 'missions', MISSIONS_GARAGE: 'missions_garage', LEVEL: 'level', CHAMPIONSHIP: 'championship', SETTINGS: 'settings', DEVICE_SELECT: 'device_select', INTRO: 'intro' };
 let device = localStorage.getItem('headon_device') || null; // 'computer' | 'mobile' | null
-let state = device ? STATE.MENU : STATE.DEVICE_SELECT;
-if (device && !localStorage.getItem('headon_tutorial_shown')) { state = STATE.HELP; localStorage.setItem('headon_tutorial_shown', '1'); }
+// Intro animation plays first every launch; it routes onward when finished.
+let state = STATE.INTRO;
+let introStart = 0;
+let introParticles = [];
+function endIntro() {
+  if (!device) { state = STATE.DEVICE_SELECT; return; }
+  if (!localStorage.getItem('headon_tutorial_shown')) {
+    state = STATE.HELP;
+    localStorage.setItem('headon_tutorial_shown', '1');
+    return;
+  }
+  state = STATE.MENU;
+}
 let garageTab = 'cars'; // 'cars' | 'paint' | 'trails'
 let garagePaintSelected = null;
 let garageTrailSelected = null;
@@ -2158,6 +2169,13 @@ window.addEventListener('keydown', e => {
   ensureAudio();
   const k = e.key.toLowerCase();
   keys[k] = true;
+  if (state === STATE.INTRO) {
+    introParticles = []; introEmbers = [];
+    introShock = null; introShock2 = null; introShock3 = null;
+    endIntro();
+    e.preventDefault && e.preventDefault();
+    return;
+  }
   if (state === STATE.MENU && (k === ' ' || k === 'enter')) {
     startGame();
   }
@@ -2279,7 +2297,7 @@ function _mobilePtToCanvas(e) {
   return [(e.clientX - r.left) * (W / r.width), (e.clientY - r.top) * (H / r.height)];
 }
 canvas3d.addEventListener('pointerdown', e => {
-  if (device !== 'mobile' || state !== STATE.ARENA) return;
+  if (device !== 'mobile' || (state !== STATE.ARENA && state !== STATE.PLAYING)) return;
   const [cx, cy] = _mobilePtToCanvas(e);
   const k = _mobileHitTest(cx, cy);
   if (k) {
@@ -2347,6 +2365,12 @@ canvas3d.addEventListener('click', e => {
   const r = canvas3d.getBoundingClientRect();
   const x = (e.clientX - r.left) * (W / r.width);
   const y = (e.clientY - r.top)  * (H / r.height);
+  if (state === STATE.INTRO) {
+    introParticles = []; introEmbers = [];
+    introShock = null; introShock2 = null; introShock3 = null;
+    endIntro();
+    return;
+  }
   if (state === STATE.DEVICE_SELECT) {
     const b = deviceSelectButtons.find(btn => x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h);
     if (b) {
@@ -4789,9 +4813,235 @@ function drawHud2D() {
   if (state === STATE.MISSIONS_GARAGE) drawMissionsGarage();
   if (state === STATE.LEVEL) drawLevel();
   if (state === STATE.SETTINGS) drawSettings();
+  if (state === STATE.INTRO) drawIntro();
   if (state === STATE.DEVICE_SELECT) drawDeviceSelect();
-  // Mobile on-screen touch controls — only while actively driving on mobile.
-  if (device === 'mobile' && state === STATE.ARENA) drawMobileControls();
+  // Mobile on-screen touch controls — render whenever the player is actively
+  // driving on mobile (Classic, Arena, Free Map, race track all share keys[]).
+  if (device === 'mobile' && (state === STATE.ARENA || state === STATE.PLAYING)) drawMobileControls();
+}
+
+// HEAD ON intro — HEAD slides in from the LEFT at the top row, ON slides
+// in from the RIGHT at the bottom row. When they're in place, a big
+// explosion lights up the gap between them; GAMES fades in from below;
+// the brand then ignites — flickering fire flames lick the letters.
+let introShock = null;     // primary shockwave ring
+let introShock2 = null;    // secondary shockwave ring (delayed)
+let introShock3 = null;    // tertiary shockwave ring (slower, magenta)
+let introEmbers = [];      // ongoing fire embers floating above HEAD ON
+function drawIntro() {
+  if (introStart === 0) introStart = performance.now();
+  const t = performance.now() - introStart;
+  // Phase durations
+  const T_SLIDE = 1100;      // HEAD + ON slide in
+  const T_BANG = 350;        // explosion at impact
+  const T_CAP_IN = 700;      // GAMES rises in
+  const T_HOLD = 1000;       // hold the full scene
+  const T_CAP_OUT = 900;     // GAMES slowly fades
+  const T_FADE = 500;        // screen fades to black, then transition
+  const T_END = T_SLIDE + T_BANG + T_CAP_IN + T_HOLD + T_CAP_OUT + T_FADE;
+
+  ctx.save();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  // A touch bigger than the previous pass — but tight enough to never overflow.
+  const fontSize = Math.round(Math.min(W * 0.26, H * 0.19));
+  ctx.font = 'bold italic ' + fontSize + 'px system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const cx = W / 2;
+  // Rows closer together so HEAD and ON read as a single stacked logo.
+  const headY = H * 0.42;
+  const onY   = H * 0.55;
+  ctx.lineJoin = 'round';
+
+  const slideT = Math.min(1, t / T_SLIDE);
+  const eased = 1 - Math.pow(1 - slideT, 3);
+  // HEAD slides in from the left at headY; ON slides in from the right at onY.
+  const headStart = -fontSize * 2;
+  const onStart   = W + fontSize * 2;
+  const headX = headStart + (cx - headStart) * eased;
+  const onX   = onStart   + (cx - onStart)   * eased;
+
+  // Camera shake during the bang
+  const bang = t >= T_SLIDE && t < T_SLIDE + T_BANG;
+  const shakeAmt = bang ? (1 - (t - T_SLIDE) / T_BANG) * 14 : 0;
+  const dx = (Math.random() - 0.5) * 2 * shakeAmt;
+  const dy = (Math.random() - 0.5) * 2 * shakeAmt;
+
+  // Full-screen white→magenta flash at impact
+  if (bang) {
+    const f = 1 - (t - T_SLIDE) / T_BANG;
+    ctx.globalAlpha = Math.max(0, f) * 0.95;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = Math.max(0, f) * 0.35;
+    ctx.fillStyle = '#ff44dd';
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+  }
+
+  // Explosion centered between the two rows
+  const explosionY = (headY + onY) / 2;
+  if (t >= T_SLIDE && introParticles.length === 0) {
+    for (let i = 0; i < 180; i++) {
+      const ang = (Math.PI * 2) * (i / 180) + Math.random() * 0.25;
+      const sp = 6 + Math.random() * 22;
+      introParticles.push({
+        x: cx, y: explosionY,
+        vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+        life: 1, size: 2 + Math.random() * 5,
+        col: ['#ffd54a', '#ff44dd', '#00f0ff', '#ff6622', '#ffffff', '#34ff9e'][Math.floor(Math.random() * 6)],
+      });
+    }
+    introShock  = { r: 8,  life: 1,    speed: 18, col: '#ffffff', w: 5, cy: explosionY };
+    introShock2 = { r: 0,  life: 1.15, speed: 12, col: '#00f0ff', w: 3, cy: explosionY, delay: 90  };
+    introShock3 = { r: 0,  life: 1.30, speed: 9,  col: '#ff44dd', w: 4, cy: explosionY, delay: 180 };
+  }
+
+  // Tick + draw particles and shockwaves
+  if (t >= T_SLIDE) {
+    for (const p of introParticles) {
+      if (p.life <= 0) continue;
+      p.x += p.vx; p.y += p.vy; p.vy += 0.18;
+      p.life -= 0.011;
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle = p.col;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    const since = t - T_SLIDE;
+    for (const s of [introShock, introShock2, introShock3]) {
+      if (!s || s.life <= 0) continue;
+      if ((s.delay || 0) > since) continue;
+      s.r += s.speed;
+      s.life -= 0.018;
+      ctx.globalAlpha = Math.max(0, s.life);
+      ctx.strokeStyle = s.col;
+      ctx.lineWidth = s.w;
+      ctx.beginPath(); ctx.arc(cx, s.cy, s.r, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Fire effect — once the words are locked in, embers drift up off the letters.
+  if (t > T_SLIDE + T_BANG) {
+    const headW = ctx.measureText('HEAD').width;
+    const onW   = ctx.measureText('ON').width;
+    // Spawn a few new embers per frame from along each word's baseline.
+    for (let k = 0; k < 3; k++) {
+      // pick which word
+      const isHead = Math.random() < 0.5;
+      const baseW = isHead ? headW : onW;
+      const baseY = isHead ? headY + fontSize * 0.35 : onY + fontSize * 0.35;
+      introEmbers.push({
+        x: cx + (Math.random() - 0.5) * baseW * 0.9,
+        y: baseY + (Math.random() - 0.5) * 4,
+        vx: (Math.random() - 0.5) * 0.6,
+        vy: -(1.0 + Math.random() * 1.8),
+        life: 1,
+        size: 1.5 + Math.random() * 2.5,
+      });
+    }
+    // Tick + render embers (fire palette: white → yellow → orange → red, fade out)
+    for (const em of introEmbers) {
+      if (em.life <= 0) continue;
+      em.x += em.vx;
+      em.y += em.vy;
+      em.vy -= 0.02;
+      em.life -= 0.025;
+      const L = Math.max(0, em.life);
+      let col;
+      if      (L > 0.75) col = '#ffffff';
+      else if (L > 0.5)  col = '#ffe070';
+      else if (L > 0.25) col = '#ff7722';
+      else               col = '#cc1c1c';
+      ctx.globalAlpha = L;
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(em.x, em.y, em.size, 0, Math.PI * 2); ctx.fill();
+    }
+    introEmbers = introEmbers.filter(e => e.life > 0);
+    ctx.globalAlpha = 1;
+  }
+
+  // Chromatic-aberration title at the two stacked rows.
+  function drawTitleWord(text, x, y, primaryCol, primaryGlow) {
+    ctx.shadowColor = '#ff44dd'; ctx.shadowBlur = 32;
+    ctx.fillStyle = 'rgba(255, 68, 221, 0.55)';
+    ctx.fillText(text, x - 3, y);
+    ctx.shadowColor = '#00f0ff'; ctx.shadowBlur = 32;
+    ctx.fillStyle = 'rgba(0, 240, 255, 0.55)';
+    ctx.fillText(text, x + 3, y);
+    ctx.shadowColor = primaryGlow; ctx.shadowBlur = 24;
+    ctx.fillStyle = primaryCol;
+    ctx.fillText(text, x, y);
+    ctx.shadowBlur = 0;
+  }
+  drawTitleWord('HEAD', headX + dx, headY + dy, '#ffffff', '#ffffff');
+  drawTitleWord('ON',   onX   + dx, onY   + dy, '#ffd54a', '#ffaa22');
+
+  // GAMES caption — rises up from below after the explosion, holds, then
+  // slowly fades back out before the screen fades to the next state.
+  const T_CAP_START = T_SLIDE + T_BANG;
+  const T_CAP_IN_DONE  = T_CAP_START + T_CAP_IN;
+  const T_HOLD_DONE    = T_CAP_IN_DONE + T_HOLD;
+  const T_CAP_OUT_DONE = T_HOLD_DONE + T_CAP_OUT;
+  if (t > T_CAP_START) {
+    let capAlpha = 0, eIn = 1;
+    if (t < T_CAP_IN_DONE) {
+      const p = (t - T_CAP_START) / T_CAP_IN;
+      eIn = 1 - Math.pow(1 - p, 3);
+      capAlpha = p;
+    } else if (t < T_HOLD_DONE) {
+      capAlpha = 1;
+    } else if (t < T_CAP_OUT_DONE) {
+      capAlpha = 1 - (t - T_HOLD_DONE) / T_CAP_OUT;
+    }
+    if (capAlpha > 0) {
+      const capSize = Math.round(fontSize * 0.40);
+      const capRest = H * 0.72;
+      const capFromY = H + capSize;
+      const capY = capFromY + (capRest - capFromY) * eIn;
+      ctx.globalAlpha = capAlpha;
+      ctx.shadowColor = '#9be3ff'; ctx.shadowBlur = 22;
+      ctx.fillStyle = '#9be3ff';
+      ctx.font = 'bold ' + capSize + 'px system-ui';
+      ctx.fillText('GAMES', cx, capY);
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // Skip hint
+  if (t > T_CAP_START + 200 && t < T_CAP_OUT_DONE) {
+    ctx.fillStyle = '#666';
+    ctx.font = '11px system-ui';
+    ctx.fillText('tap or press a key to skip', cx, H - 22);
+  }
+
+  // Subtle scanlines for arcade feel
+  ctx.globalAlpha = 0.06;
+  ctx.fillStyle = '#000';
+  for (let sy = 0; sy < H; sy += 3) ctx.fillRect(0, sy, W, 1);
+  ctx.globalAlpha = 1;
+
+  // Final fade-to-black before handing off to the next screen.
+  if (t > T_CAP_OUT_DONE) {
+    const fade = Math.min(1, (t - T_CAP_OUT_DONE) / T_FADE);
+    ctx.globalAlpha = fade;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+  ctx.restore();
+
+  if (t >= T_END) {
+    introParticles = []; introEmbers = [];
+    introShock = null; introShock2 = null; introShock3 = null;
+    endIntro();
+  }
 }
 
 // One-time device pick on first launch — also reachable later via Settings.

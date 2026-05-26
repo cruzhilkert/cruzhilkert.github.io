@@ -3,15 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <title>Head On 3D</title>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XV5FQ2ZGYT"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-XV5FQ2ZGYT');
+</script>
 <style>
   html, body { margin: 0; padding: 0; height: 100%; background: #111; color: #eee; font-family: system-ui, sans-serif; overflow: hidden; }
-  #wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
-  #stage { position: relative; width: 480px; height: 560px; }
-  #stage canvas { display: block; position: absolute; top: 0; left: 0; width: 480px; height: 560px; }
+  #wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 6px; padding: 6px; box-sizing: border-box; }
+  #stage { position: relative; aspect-ratio: 480 / 560; height: 100%; max-width: 100vw; max-height: 100vh; flex: 1 1 auto; min-height: 0; }
+  #stage canvas { display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   #game3d { z-index: 1; border: 2px solid #555; box-sizing: border-box; }
   #hud { z-index: 2; pointer-events: none; }
-  #title { margin: 0 0 8px; font-size: 28px; letter-spacing: 6px; color: #ffd54a; }
-  #controls { margin-top: 8px; font-size: 14px; letter-spacing: 1px; }
+  #title { margin: 0; font-size: 20px; letter-spacing: 6px; color: #ffd54a; flex: 0 0 auto; }
+  #controls { margin: 0; font-size: 12px; letter-spacing: 1px; flex: 0 0 auto; text-align: center; }
 </style>
 </head>
 <body>
@@ -36,18 +45,18 @@ const W = canvas3d.width, H = canvas3d.height;
 const CARS = [
   // avg stat budget rises strictly with cost; specialists trade ±0.30 within their budget
   // coinMul: coins earned × this; gemChance: probability of 1 gem drop per run; gemCost: gems required to buy
-  { name: 'CRUISER', kind: 'sedan', body: 0x7f8c8d, accent: 0x4a5658, topMul: 0.69, steerMul: 0.69, accelMul: 0.69, brakeMul: 1.20, cost: 0,      gemCost: 0,  coinMul: 1.0,  gemChance: 0.0001,  hitsToKill:  1, desc: 'Barely moves — for beginners' },
-  { name: 'BLAZE',   kind: 'sedan', body: 0xe74c3c, accent: 0x7c1d12, topMul: 1.20, steerMul: 0.75, accelMul: 0.75, brakeMul: 0.70, cost: 2000,   gemCost: 0,  coinMul: 1.5,  gemChance: 0.0002,  hitsToKill:  2, desc: 'Straight-line speed specialist' },
-  { name: 'NIMBLE',  kind: 'hatch', body: 0x2ecc71, accent: 0x125a30, topMul: 0.80, steerMul: 1.25, accelMul: 0.80, brakeMul: 1.35, cost: 3000,   gemCost: 0,  coinMul: 2.0,  gemChance: 0.0003,  hitsToKill:  2, desc: 'Nimble handling specialist' },
-  { name: 'BRUTE',   kind: 'van',   body: 0x9b59b6, accent: 0x4a2266, topMul: 0.85, steerMul: 0.85, accelMul: 1.30, brakeMul: 0.80, cost: 4000,   gemCost: 0,  coinMul: 2.5,  gemChance: 0.0004,  hitsToKill:  3, desc: 'Hard-launching accel specialist' },
-  { name: 'GHOST',   kind: 'sport', body: 0xecf0f1, accent: 0x34495e, topMul: 1.05, steerMul: 1.05, accelMul: 1.05, brakeMul: 1.05, cost: 5000,   gemCost: 0,  coinMul: 3.0,  gemChance: 0.0007,  hitsToKill:  4, desc: 'Solid all-rounder' },
-  { name: 'ROCKET',  kind: 'sport', body: 0xff5722, accent: 0x7a2000, topMul: 1.45, steerMul: 1.00, accelMul: 1.00, brakeMul: 0.65, cost: 8000,   gemCost: 0,  coinMul: 3.5,  gemChance: 0.001,   hitsToKill:  5, desc: 'High-speed sprinter' },
+  { name: 'CRUISER', kind: 'sedan', body: 0x7f8c8d, accent: 0x4a5658, topMul: 1.00, steerMul: 0.85, accelMul: 0.85, brakeMul: 1.20, cost: 0,      gemCost: 0,  coinMul: 1.0,  gemChance: 0.0001,  hitsToKill:  1, desc: 'Reliable starter — modest top speed' },
+  { name: 'BLAZE',   kind: 'sedan', body: 0xe74c3c, accent: 0x7c1d12, topMul: 1.40, steerMul: 0.90, accelMul: 0.90, brakeMul: 1.20, cost: 2000,   gemCost: 0,  coinMul: 1.5,  gemChance: 0.0002,  hitsToKill:  2, desc: 'Straight-line speed specialist' },
+  { name: 'NIMBLE',  kind: 'hatch', body: 0x2ecc71, accent: 0x125a30, topMul: 1.00, steerMul: 1.35, accelMul: 0.95, brakeMul: 1.45, cost: 3000,   gemCost: 0,  coinMul: 2.0,  gemChance: 0.0003,  hitsToKill:  2, desc: 'Nimble handling specialist' },
+  { name: 'BRUTE',   kind: 'van',   body: 0x9b59b6, accent: 0x4a2266, topMul: 1.15, steerMul: 1.10, accelMul: 1.45, brakeMul: 1.10, cost: 4000,   gemCost: 0,  coinMul: 2.5,  gemChance: 0.0004,  hitsToKill:  3, desc: 'Hard-launching accel specialist' },
+  { name: 'GHOST',   kind: 'sport', body: 0xecf0f1, accent: 0x34495e, topMul: 1.25, steerMul: 1.25, accelMul: 1.25, brakeMul: 1.25, cost: 5000,   gemCost: 0,  coinMul: 3.0,  gemChance: 0.0007,  hitsToKill:  4, desc: 'Solid all-rounder' },
+  { name: 'ROCKET',  kind: 'sport', body: 0xff5722, accent: 0x7a2000, topMul: 1.60, steerMul: 1.15, accelMul: 1.20, brakeMul: 1.15, cost: 8000,   gemCost: 0,  coinMul: 3.5,  gemChance: 0.001,   hitsToKill:  5, desc: 'High-speed sprinter' },
   { name: 'VIPER',   kind: 'sport', body: 0x00bcd4, accent: 0x005f70, topMul: 1.10, steerMul: 1.55, accelMul: 1.10, brakeMul: 1.40, cost: 12000,  gemCost: 1,  coinMul: 4.0,  gemChance: 0.002,   hitsToKill:  6, desc: 'Sharp precision handler' },
-  { name: 'TITAN',   kind: 'truck', body: 0x607d8b, accent: 0x263238, topMul: 1.20, steerMul: 1.20, accelMul: 1.65, brakeMul: 0.75, cost: 18000,  gemCost: 2,  coinMul: 4.5,  gemChance: 0.003,   hitsToKill:  7, desc: 'Explosive acceleration' },
+  { name: 'TITAN',   kind: 'truck', body: 0x607d8b, accent: 0x263238, topMul: 1.20, steerMul: 1.20, accelMul: 1.65, brakeMul: 1.15, cost: 18000,  gemCost: 2,  coinMul: 4.5,  gemChance: 0.003,   hitsToKill:  7, desc: 'Explosive acceleration' },
   { name: 'VOLT',    kind: 'hatch', body: 0xffeb3b, accent: 0x5d4e00, topMul: 1.45, steerMul: 1.45, accelMul: 1.45, brakeMul: 1.15, cost: 25000,  gemCost: 3,  coinMul: 5.0,  gemChance: 0.005,   hitsToKill:  8, desc: 'Balanced mid-tier powerhouse' },
-  { name: 'PHANTOM', kind: 'sport', body: 0x1a1a2e, accent: 0x9c27b0, topMul: 1.82, steerMul: 1.37, accelMul: 1.37, brakeMul: 0.72, cost: 35000,  gemCost: 5,  coinMul: 5.5,  gemChance: 0.008,   hitsToKill:  9, desc: 'Top speed monster' },
+  { name: 'PHANTOM', kind: 'sport', body: 0x1a1a2e, accent: 0x9c27b0, topMul: 1.82, steerMul: 1.37, accelMul: 1.37, brakeMul: 1.15, cost: 35000,  gemCost: 5,  coinMul: 5.5,  gemChance: 0.008,   hitsToKill:  9, desc: 'Top speed monster' },
   { name: 'BANSHEE', kind: 'sport', body: 0x00e676, accent: 0x004d20, topMul: 1.47, steerMul: 1.92, accelMul: 1.47, brakeMul: 1.55, cost: 55000,  gemCost: 8,  coinMul: 6.0,  gemChance: 0.013,   hitsToKill: 10, desc: 'Cornering machine' },
-  { name: 'BEAST',   kind: 'van',   body: 0xf44336, accent: 0x880000, topMul: 1.57, steerMul: 1.57, accelMul: 2.02, brakeMul: 0.78, cost: 65000,  gemCost: 9,  coinMul: 6.5,  gemChance: 0.02,    hitsToKill: 11, desc: 'Launch beast — raw power' },
+  { name: 'BEAST',   kind: 'van',   body: 0xf44336, accent: 0x880000, topMul: 1.60, steerMul: 1.57, accelMul: 2.10, brakeMul: 1.30, cost: 65000,  gemCost: 9,  coinMul: 6.5,  gemChance: 0.02,    hitsToKill: 11, desc: 'Launch beast — raw power' },
   { name: 'APEX',    kind: 'sport', body: 0x3f51b5, accent: 0x1a1f5e, topMul: 1.82, steerMul: 1.82, accelMul: 1.82, brakeMul: 1.30, cost: 75000,  gemCost: 10, coinMul: 7.5,  gemChance: 0.04,    hitsToKill: 12, desc: 'Elite all-rounder' },
   { name: 'STORM',   kind: 'sport', body: 0xe91e63, accent: 0x6a0030, topMul: 2.50, steerMul: 2.50, accelMul: 2.50, brakeMul: 1.50, cost: 150000, gemCost: 30, coinMul: 8.5,  gemChance: 0.06,    hitsToKill: 13, desc: 'Near-maxed all stats' },
   { name: 'F1',      kind: 'f1',    body: 0xff0044, accent: 0xffd700, topMul: 3.00, steerMul: 3.00, accelMul: 3.00, brakeMul: 3.00, cost: 250000, gemCost: 100, coinMul: 10.0, gemChance: 0.10,    hitsToKill: 15, desc: 'Ultimate speed machine' },
@@ -190,9 +199,10 @@ function getFireColor() { const cols = ['#ffee00','#ffdd00','#ffaa00','#ff7700',
 let _trailT = 0; // global trail time for color cycling
 
 // ===== runtime state =====
-const STATE = { MENU: 'menu', HELP: 'help', PLAYING: 'playing', DEAD: 'dead', ARENA: 'arena', GARAGE: 'garage', ARENA_SELECT: 'arena_select', GEM_SHOP: 'gem_shop', MISSIONS: 'missions', MISSIONS_GARAGE: 'missions_garage', LEVEL: 'level', CHAMPIONSHIP: 'championship' };
-let state = STATE.MENU;
-if (!localStorage.getItem('headon_tutorial_shown')) { state = STATE.HELP; localStorage.setItem('headon_tutorial_shown', '1'); }
+const STATE = { MENU: 'menu', HELP: 'help', PLAYING: 'playing', DEAD: 'dead', ARENA: 'arena', GARAGE: 'garage', ARENA_SELECT: 'arena_select', GEM_SHOP: 'gem_shop', MISSIONS: 'missions', MISSIONS_GARAGE: 'missions_garage', LEVEL: 'level', CHAMPIONSHIP: 'championship', SETTINGS: 'settings', DEVICE_SELECT: 'device_select' };
+let device = localStorage.getItem('headon_device') || null; // 'computer' | 'mobile' | null
+let state = device ? STATE.MENU : STATE.DEVICE_SELECT;
+if (device && !localStorage.getItem('headon_tutorial_shown')) { state = STATE.HELP; localStorage.setItem('headon_tutorial_shown', '1'); }
 let garageTab = 'cars'; // 'cars' | 'paint' | 'trails'
 let garagePaintSelected = null;
 let garageTrailSelected = null;
@@ -316,6 +326,23 @@ let earnings = null;     // breakdown for TOTALED screen
 let crashAutoTimer = 0;  // ms until auto-restart after crash
 
 let menuButtons = [];
+let settingsButtons = [];
+let playerName = (localStorage.getItem('headon_username') || 'PLAYER').slice(0, 14);
+let raceWins = +localStorage.getItem('headon_race_wins') || 0;
+const RANK_TIERS = ['BRONZE', 'SILVER', 'GOLD', 'PRO', 'GOD'];
+const RANK_THRESHOLDS = [3, 5, 7, 9]; // wins to advance from BRONZE→SILVER→GOLD→PRO→GOD
+const RANK_COLORS = ['#cd7f32', '#d8d8d8', '#ffd54a', '#66ddff', '#ff66ff'];
+function getRank(wins) {
+  let w = Math.max(0, wins | 0);
+  for (let i = 0; i < RANK_THRESHOLDS.length; i++) {
+    if (w < RANK_THRESHOLDS[i]) return { idx: i, tier: RANK_TIERS[i], have: w, need: RANK_THRESHOLDS[i] };
+    w -= RANK_THRESHOLDS[i];
+  }
+  return { idx: RANK_TIERS.length - 1, tier: 'GOD', have: 0, need: 0 };
+}
+let raceResultsShown = false;     // true while the post-race screen overlay is up
+let raceResultsData = null;       // snapshot of results: { newWins, oldRank, newRank, promoted }
+let soundOn = localStorage.getItem('headon_sound_on') !== '0'; // default ON
 const mouse = { x: -1, y: -1 };
 
 let shakeMag = 0;
@@ -577,6 +604,7 @@ function freeMapTakeDamage(amount) {
 }
 let freeMapLastSafeX = 0, freeMapLastSafeZ = 0;
 let freeMapBuildings = []; // { x, z, hw, hd } for speed zone
+let freeMapBorder = null;  // { halfX, halfZ } — player clamp bounds for free map
 let freeMapMeshes = [];    // meshes to remove on cleanup
 let freeMapInBuilding = false;
 let freeMapBuildingMats = []; // solid materials toggled transparent when inside
@@ -584,9 +612,26 @@ let freeMapInfiniteRockets = false;
 let freeMapInfiniteTurbo   = false;
 let freeMapStations = [];    // { x, z, r, type: 'rocket'|'turbo'|'reset' }
 let freeMapRaceSquares = []; // { x, z, half } — flat pads that warp to the race road when stood on
+let freeMapShowOffPads = []; // { x, z, half } — pads that pop up a "show off" info panel when stood on
+let freeMapOnShowOff = false; // true while player is on any show-off pad
+let freeMapLastShowPad = null; // the specific pad we were on last frame, or null
 let freeMapRaceCountdown = 0; // ms elapsed while standing on a race square
-let freeMapInRace = false;    // true while on the straight-road race map
-let freeMapRaceRoad = null;   // { halfW, minZ, maxZ } extents for barrier clamping
+let freeMapInRace = false;    // true while on the race track map
+let freeMapRaceRoad = null;   // { outer, inner, spawn, ramp, finish } race-track data
+let freeMapRaceLaps = 0;       // laps completed in current race
+let freeMapRaceLapArmed = false; // true once player has left finish-line region; re-arms each lap
+let freeMapRaceRival = null;     // { mesh } rival car at the start (visual)
+let freeMapRaceObstacles = [];   // [{ x, z, r }] bounceable obstacles in race mode
+let freeMapRaceEntryPad = null;  // { x, z } pad the player triggered to enter the race
+let raceMapSelectShown = false;  // true while the pre-race map-select overlay is up
+const RACE_LAPS_TO_WIN = 3;
+const RACE_MAPS = [
+  { id: 'green_grove', name: 'GREEN GROVE', theme: 'grass',  ready: true,
+    blurb: '3 laps  ·  ramp jump  ·  pillar slalom  ·  overpass' },
+  { id: 'volcano',     name: 'VOLCANO',     theme: 'magma',  ready: false,
+    blurb: 'Coming soon  ·  magma flats  ·  3 laps' },
+];
+let raceMapSelectIdx = 0;
 let freeMapNPCs = [];        // road cars + police + F1 attackers + rival
 let freeMapPoliceBullets = [];
 let freeMapStars = 0;
@@ -705,7 +750,7 @@ function arenaTileAt(x, z) {
 
 function buildCityMap() {
   for (const m of freeMapMeshes) arenaGroup.remove(m);
-  freeMapMeshes = []; freeMapBuildings = []; freeMapBuildingMats = []; freeMapStations = []; freeMapRaceSquares = []; freeMapRaceCountdown = 0;
+  freeMapMeshes = []; freeMapBuildings = []; freeMapBuildingMats = []; freeMapStations = []; freeMapRaceSquares = []; freeMapShowOffPads = []; freeMapLastShowPad = null; freeMapRaceCountdown = 0; freeMapBorder = null;
   freeMapInRace = false; freeMapRaceRoad = null;
   for (const t of arenaTiles) arenaGroup.remove(t.mesh);
   arenaTiles.length = 0;
@@ -768,23 +813,23 @@ function buildCityMap() {
     }
   }
 
-  // --- building: closest block to spawn (positive x,z quadrant) ---
-  // Block center (32,32); entry door faces south toward spawn (0,0)
-  const BX = 32, BZ = 32;
+  // ===== buildings =====
+  // Shared geometry constants
   const BHW = 13, BHD = 13;  // half extents
   const BH = 10;              // wall height
   const WT = 0.55;            // wall thickness
   const DW = 6;               // door width
   const DH = 3.8;             // door height
+  const _swP = BHW - DW/2;    // side-panel width on south wall
 
-  // Equipment building (right) — black exterior
+  // Equipment building materials (black)
   const matWall  = new THREE.MeshLambertMaterial({ color: 0x0a0a0a });
   const matWallD = new THREE.MeshLambertMaterial({ color: 0x222222 });
   const matFlr   = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
   const matRoofM = new THREE.MeshLambertMaterial({ color: 0x111111 });
   const matGlass = new THREE.MeshBasicMaterial({ color: 0x99ccff, transparent: true, opacity: 0.30, side: THREE.DoubleSide });
 
-  // Race building (left) — black & white checkered walls, red trim
+  // Race building materials (checkered + red trim)
   const _checkerTex = (() => {
     const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
     const cx = cv.getContext('2d');
@@ -799,11 +844,15 @@ function buildCityMap() {
   const matWallRace  = new THREE.MeshLambertMaterial({ map: _checkerTex });
   const matWallDRace = new THREE.MeshLambertMaterial({ color: 0xdd2222 });
   const matRoofMRace = new THREE.MeshLambertMaterial({ color: 0xdd2222 });
+  const matPodBase   = new THREE.MeshLambertMaterial({ color: 0x222233 });
 
-  // track solid mats so we can fade them when player is inside either building
   freeMapBuildingMats = [matWall, matWallD, matRoofM, matWallRace, matWallDRace, matRoofMRace];
 
-  // text-sign helper: returns a sign mesh facing -Z (toward the road/spawn)
+  function addBox(cx, cy, cz, w, h, d, mat) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(cx, cy, cz);
+    arenaGroup.add(m); freeMapMeshes.push(m);
+  }
   function makeBuildingSign(text, fg, bg, cx_, cy, cz, w = 11, h = 2.2) {
     const cv = document.createElement('canvas'); cv.width = 512; cv.height = 128;
     const c2 = cv.getContext('2d');
@@ -816,162 +865,189 @@ function buildCityMap() {
     sign.rotation.y = Math.PI; // face -Z
     arenaGroup.add(sign); freeMapMeshes.push(sign);
   }
+  // Shared 4-walls + roof + south-facing door + sign, registered as a speed zone.
+  function addBuildingShell(cx, cz, mWall, mDoor, mRoof, label, lblFg, lblBg, lblW, lblH) {
+    const flr = new THREE.Mesh(new THREE.PlaneGeometry(BHW*2 - WT, BHD*2 - WT), matFlr);
+    flr.rotation.x = -Math.PI/2; flr.position.set(cx, 0.01, cz);
+    arenaGroup.add(flr); freeMapMeshes.push(flr);
 
-  function addBox(cx, cy, cz, w, h, d, mat) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-    m.position.set(cx, cy, cz);
-    arenaGroup.add(m); freeMapMeshes.push(m);
+    addBox(cx, BH/2, cz + BHD, BHW*2, BH, WT, mWall);                  // north
+    addBox(cx - 4.5, BH * 0.62, cz + BHD, 5, 2.2, 0.05, matGlass);
+    addBox(cx + 4.5, BH * 0.62, cz + BHD, 5, 2.2, 0.05, matGlass);
+
+    addBox(cx - DW/2 - _swP/2, BH/2,           cz - BHD, _swP, BH,      WT, mWall);  // south left
+    addBox(cx + DW/2 + _swP/2, BH/2,           cz - BHD, _swP, BH,      WT, mWall);  // south right
+    addBox(cx,                 DH + (BH-DH)/2, cz - BHD, DW,   BH - DH, WT, mWall);  // door header
+
+    addBox(cx + BHW, BH/2, cz, WT, BH, BHD*2, mWall);                  // east
+    addBox(cx + BHW, BH * 0.62, cz, 0.05, 2.2, 7, matGlass);
+    addBox(cx - BHW, BH/2, cz, WT, BH, BHD*2, mWall);                  // west
+    addBox(cx - BHW, BH * 0.62, cz, 0.05, 2.2, 7, matGlass);
+
+    addBox(cx, BH + 0.25, cz, BHW*2 + 0.8, 0.5, BHD*2 + 0.8, mRoof);   // roof
+
+    addBox(cx - DW/2 - 0.12, DH/2,     cz - BHD, 0.22,       DH,   0.22, mDoor);
+    addBox(cx + DW/2 + 0.12, DH/2,     cz - BHD, 0.22,       DH,   0.22, mDoor);
+    addBox(cx,               DH + 0.12, cz - BHD, DW + 0.44, 0.22, 0.22, mDoor);
+
+    makeBuildingSign(label, lblFg, lblBg, cx, BH + 1.6, cz - BHD - 0.05, lblW, lblH);
+    freeMapBuildings.push({ x: cx, z: cz, hw: BHW, hd: BHD });
   }
 
-  // interior floor
-  const _bFlr = new THREE.Mesh(new THREE.PlaneGeometry(BHW*2 - WT, BHD*2 - WT), matFlr);
-  _bFlr.rotation.x = -Math.PI/2; _bFlr.position.set(BX, 0.01, BZ);
-  arenaGroup.add(_bFlr); freeMapMeshes.push(_bFlr);
-
-  // north wall — full width, no door
-  addBox(BX, BH/2, BZ + BHD, BHW*2, BH, WT, matWall);
-  // glass windows on north wall (two strips)
-  addBox(BX - 4.5, BH * 0.62, BZ + BHD, 5, 2.2, 0.05, matGlass);
-  addBox(BX + 4.5, BH * 0.62, BZ + BHD, 5, 2.2, 0.05, matGlass);
-
-  // south wall — split around door opening
-  const _swP = BHW - DW/2;  // each side panel width
-  addBox(BX - DW/2 - _swP/2, BH/2,                BZ - BHD, _swP, BH,       WT, matWall); // left
-  addBox(BX + DW/2 + _swP/2, BH/2,                BZ - BHD, _swP, BH,       WT, matWall); // right
-  addBox(BX,                  DH + (BH-DH)/2,      BZ - BHD, DW,  BH - DH,  WT, matWall); // header above door
-
-  // east wall — full depth
-  addBox(BX + BHW, BH/2, BZ, WT, BH, BHD*2, matWall);
-  // glass window on east wall
-  addBox(BX + BHW, BH * 0.62, BZ, 0.05, 2.2, 7, matGlass);
-
-  // west wall — full depth
-  addBox(BX - BHW, BH/2, BZ, WT, BH, BHD*2, matWall);
-  // glass window on west wall
-  addBox(BX - BHW, BH * 0.62, BZ, 0.05, 2.2, 7, matGlass);
-
-  // flat roof slab (slightly overhanging)
-  addBox(BX, BH + 0.25, BZ, BHW*2 + 0.8, 0.5, BHD*2 + 0.8, matRoofM);
-
-  // door frame — thin accent strip around the opening
-  addBox(BX - DW/2 - 0.12, DH/2, BZ - BHD, 0.22, DH, 0.22, matWallD); // left post
-  addBox(BX + DW/2 + 0.12, DH/2, BZ - BHD, 0.22, DH, 0.22, matWallD); // right post
-  addBox(BX,               DH + 0.12, BZ - BHD, DW + 0.44, 0.22, 0.22, matWallD); // lintel
-
-  // --- interactive stations on the right interior wall ---
-  // Rocket (left), Turbo (middle), Reset/X (right) — placed against the east wall
-  const _stDefs = [
-    { x: BX - 6, z: BZ + 4, type: 'rocket', padCol: 0x2255ff, itemCol: 0xff5500 },
-    { x: BX,     z: BZ + 4, type: 'turbo',  padCol: 0xff8800, itemCol: 0xffee00 },
-    { x: BX + 6, z: BZ + 4, type: 'reset',  padCol: 0xdd1111, itemCol: 0xff2222 },
-  ];
-  const matPodBase = new THREE.MeshLambertMaterial({ color: 0x222233 });
-
-  for (const _sd of _stDefs) {
-    // floor circle pad
-    const padMat = new THREE.MeshBasicMaterial({ color: _sd.padCol, transparent: true, opacity: 0.75 });
-    const pad = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 0.08, 24), padMat);
-    pad.position.set(_sd.x, 0.05, _sd.z);
-    arenaGroup.add(pad); freeMapMeshes.push(pad);
-
-    // pedestal behind circle
-    const ped = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.4, 0.9), matPodBase);
-    ped.position.set(_sd.x, 0.7, _sd.z + 2.8);
-    arenaGroup.add(ped); freeMapMeshes.push(ped);
-
-    const iMat = new THREE.MeshLambertMaterial({ color: _sd.itemCol });
-
-    if (_sd.type === 'rocket') {
-      // small rocket: cylinder body + cone nose
-      const rb = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.75, 8), iMat);
-      rb.position.set(_sd.x, 1.8, _sd.z + 2.8);
-      arenaGroup.add(rb); freeMapMeshes.push(rb);
-      const rn = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.45, 8), iMat);
-      rn.position.set(_sd.x, 2.38, _sd.z + 2.8);
-      arenaGroup.add(rn); freeMapMeshes.push(rn);
-      // fins
-      const finMat = new THREE.MeshLambertMaterial({ color: 0xcc2200 });
-      for (let _a = 0; _a < 4; _a++) {
-        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.35, 0.35), finMat);
-        fin.position.set(_sd.x + Math.sin(_a * Math.PI/2) * 0.28, 1.55, _sd.z + 2.8 + Math.cos(_a * Math.PI/2) * 0.28);
-        arenaGroup.add(fin); freeMapMeshes.push(fin);
+  function addEquipmentBuilding(cx, cz) {
+    addBuildingShell(cx, cz, matWall, matWallD, matRoofM, 'EQUIPMENT', '#ffffff', '#000000', 12, 2.0);
+    const _stDefs = [
+      { x: cx - 4, z: cz + 4, type: 'rocket', padCol: 0x2255ff, itemCol: 0xff5500 },
+      { x: cx + 4, z: cz + 4, type: 'reset',  padCol: 0xdd1111, itemCol: 0xff2222 },
+    ];
+    for (const _sd of _stDefs) {
+      const padMat = new THREE.MeshBasicMaterial({ color: _sd.padCol, transparent: true, opacity: 0.75 });
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 0.08, 24), padMat);
+      pad.position.set(_sd.x, 0.05, _sd.z);
+      arenaGroup.add(pad); freeMapMeshes.push(pad);
+      const ped = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.4, 0.9), matPodBase);
+      ped.position.set(_sd.x, 0.7, _sd.z + 2.8);
+      arenaGroup.add(ped); freeMapMeshes.push(ped);
+      const iMat = new THREE.MeshLambertMaterial({ color: _sd.itemCol });
+      if (_sd.type === 'rocket') {
+        const rb = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.75, 8), iMat);
+        rb.position.set(_sd.x, 1.8, _sd.z + 2.8);
+        arenaGroup.add(rb); freeMapMeshes.push(rb);
+        const rn = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.45, 8), iMat);
+        rn.position.set(_sd.x, 2.38, _sd.z + 2.8);
+        arenaGroup.add(rn); freeMapMeshes.push(rn);
+        const finMat = new THREE.MeshLambertMaterial({ color: 0xcc2200 });
+        for (let _a = 0; _a < 4; _a++) {
+          const fin = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.35, 0.35), finMat);
+          fin.position.set(_sd.x + Math.sin(_a * Math.PI/2) * 0.28, 1.55, _sd.z + 2.8 + Math.cos(_a * Math.PI/2) * 0.28);
+          arenaGroup.add(fin); freeMapMeshes.push(fin);
+        }
+      } else if (_sd.type === 'turbo') {
+        const bMat = new THREE.MeshLambertMaterial({ color: 0xffee00 });
+        const t1 = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.22, 0.22), bMat);
+        t1.rotation.z = -0.6; t1.position.set(_sd.x + 0.1, 2.05, _sd.z + 2.8);
+        arenaGroup.add(t1); freeMapMeshes.push(t1);
+        const t2 = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.22, 0.22), bMat);
+        t2.rotation.z = -0.6; t2.position.set(_sd.x - 0.1, 1.72, _sd.z + 2.8);
+        arenaGroup.add(t2); freeMapMeshes.push(t2);
+        const t3 = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.18, 0.18), bMat);
+        t3.rotation.z = -0.6; t3.position.set(_sd.x + 0.12, 2.35, _sd.z + 2.8);
+        arenaGroup.add(t3); freeMapMeshes.push(t3);
+      } else if (_sd.type === 'reset') {
+        const xMat = new THREE.MeshLambertMaterial({ color: 0xff2222 });
+        const xa = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.22, 0.22), xMat);
+        xa.rotation.z = Math.PI / 4; xa.position.set(_sd.x, 2.0, _sd.z + 2.8);
+        arenaGroup.add(xa); freeMapMeshes.push(xa);
+        const xb = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.22, 0.22), xMat);
+        xb.rotation.z = -Math.PI / 4; xb.position.set(_sd.x, 2.0, _sd.z + 2.8);
+        arenaGroup.add(xb); freeMapMeshes.push(xb);
       }
-    } else if (_sd.type === 'turbo') {
-      // lightning bolt shape: stacked angled boxes
-      const bMat = new THREE.MeshLambertMaterial({ color: 0xffee00 });
-      const t1 = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.22, 0.22), bMat);
-      t1.rotation.z = -0.6; t1.position.set(_sd.x + 0.1, 2.05, _sd.z + 2.8);
-      arenaGroup.add(t1); freeMapMeshes.push(t1);
-      const t2 = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.22, 0.22), bMat);
-      t2.rotation.z = -0.6; t2.position.set(_sd.x - 0.1, 1.72, _sd.z + 2.8);
-      arenaGroup.add(t2); freeMapMeshes.push(t2);
-      const t3 = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.18, 0.18), bMat);
-      t3.rotation.z = -0.6; t3.position.set(_sd.x + 0.12, 2.35, _sd.z + 2.8);
-      arenaGroup.add(t3); freeMapMeshes.push(t3);
-    } else if (_sd.type === 'reset') {
-      // X shape: two crossed bars
-      const xMat = new THREE.MeshLambertMaterial({ color: 0xff2222 });
-      const xa = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.22, 0.22), xMat);
-      xa.rotation.z = Math.PI / 4; xa.position.set(_sd.x, 2.0, _sd.z + 2.8);
-      arenaGroup.add(xa); freeMapMeshes.push(xa);
-      const xb = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.22, 0.22), xMat);
-      xb.rotation.z = -Math.PI / 4; xb.position.set(_sd.x, 2.0, _sd.z + 2.8);
-      arenaGroup.add(xb); freeMapMeshes.push(xb);
+      freeMapStations.push({ x: _sd.x, z: _sd.z, r: 2.2, type: _sd.type });
     }
-
-    freeMapStations.push({ x: _sd.x, z: _sd.z, r: 2.2, type: _sd.type });
   }
 
-  // register as speed-limit zone
-  freeMapBuildings.push({ x: BX, z: BZ, hw: BHW, hd: BHD });
-
-  // --- second building (RACE): upper-left block (-32, 32), checkered walls ---
-  const BX2 = -32, BZ2 = 32;
-
-  const _bFlr2 = new THREE.Mesh(new THREE.PlaneGeometry(BHW*2 - WT, BHD*2 - WT), matFlr);
-  _bFlr2.rotation.x = -Math.PI/2; _bFlr2.position.set(BX2, 0.01, BZ2);
-  arenaGroup.add(_bFlr2); freeMapMeshes.push(_bFlr2);
-
-  // north wall
-  addBox(BX2, BH/2, BZ2 + BHD, BHW*2, BH, WT, matWallRace);
-  addBox(BX2 - 4.5, BH * 0.62, BZ2 + BHD, 5, 2.2, 0.05, matGlass);
-  addBox(BX2 + 4.5, BH * 0.62, BZ2 + BHD, 5, 2.2, 0.05, matGlass);
-
-  // south wall — split around door (faces spawn)
-  addBox(BX2 - DW/2 - _swP/2, BH/2,           BZ2 - BHD, _swP, BH,      WT, matWallRace);
-  addBox(BX2 + DW/2 + _swP/2, BH/2,           BZ2 - BHD, _swP, BH,      WT, matWallRace);
-  addBox(BX2,                 DH + (BH-DH)/2, BZ2 - BHD, DW,   BH - DH, WT, matWallRace);
-
-  // east wall
-  addBox(BX2 + BHW, BH/2, BZ2, WT, BH, BHD*2, matWallRace);
-  addBox(BX2 + BHW, BH * 0.62, BZ2, 0.05, 2.2, 7, matGlass);
-
-  // west wall
-  addBox(BX2 - BHW, BH/2, BZ2, WT, BH, BHD*2, matWallRace);
-  addBox(BX2 - BHW, BH * 0.62, BZ2, 0.05, 2.2, 7, matGlass);
-
-  // red roof
-  addBox(BX2, BH + 0.25, BZ2, BHW*2 + 0.8, 0.5, BHD*2 + 0.8, matRoofMRace);
-
-  // red door frame
-  addBox(BX2 - DW/2 - 0.12, DH/2,     BZ2 - BHD, 0.22,       DH,   0.22, matWallDRace);
-  addBox(BX2 + DW/2 + 0.12, DH/2,     BZ2 - BHD, 0.22,       DH,   0.22, matWallDRace);
-  addBox(BX2,               DH + 0.12, BZ2 - BHD, DW + 0.44, 0.22, 0.22, matWallDRace);
-
-  // rooftop signs above each door, facing the road
-  makeBuildingSign('EQUIPMENT', '#ffffff', '#000000', BX,  BH + 1.6, BZ  - BHD - 0.05, 12, 2.0);
-  makeBuildingSign('RACE',      '#ff2222', '#ffffff', BX2, BH + 1.6, BZ2 - BHD - 0.05, 10, 2.4);
-
-  // two flat blue race-start pads on the floor (stand 3s to warp to a race)
-  const _raceMat = new THREE.MeshBasicMaterial({ color: 0x2266ff, transparent: true, opacity: 0.85 });
-  for (const _ox of [-4, 4]) {
-    const sq = new THREE.Mesh(new THREE.BoxGeometry(3, 0.06, 3), _raceMat);
-    sq.position.set(BX2 + _ox, 0.04, BZ2);
-    arenaGroup.add(sq); freeMapMeshes.push(sq);
-    freeMapRaceSquares.push({ x: BX2 + _ox, z: BZ2, half: 1.5 });
+  function addRaceBuilding(cx, cz) {
+    addBuildingShell(cx, cz, matWallRace, matWallDRace, matRoofMRace, 'RACE', '#ff2222', '#ffffff', 10, 2.4);
+    // big race-start pads inside — touching one warps the player to the race road map.
+    const matRace = new THREE.MeshBasicMaterial({ color: 0x2266ff, transparent: true, opacity: 0.85 });
+    const PAD = 6;
+    for (const _ox of [-4.5, 4.5]) {
+      const sq = new THREE.Mesh(new THREE.BoxGeometry(PAD, 0.06, PAD), matRace);
+      sq.position.set(cx + _ox, 0.04, cz);
+      arenaGroup.add(sq); freeMapMeshes.push(sq);
+      freeMapRaceSquares.push({ x: cx + _ox, z: cz, half: PAD / 2 });
+    }
   }
 
-  freeMapBuildings.push({ x: BX2, z: BZ2, hw: BHW, hd: BHD });
+  // Show-off building (blue→purple gradient walls, gold trim).
+  // Inside is a single pad that pops up a HUD panel with the player's name,
+  // car, and equipped upgrades when you stand on it.
+  const _gradTex = (() => {
+    const cv = document.createElement('canvas'); cv.width = 64; cv.height = 256;
+    const cx2 = cv.getContext('2d');
+    const g = cx2.createLinearGradient(0, 0, 0, cv.height);
+    g.addColorStop(0,    '#2244ff');
+    g.addColorStop(0.5,  '#6633dd');
+    g.addColorStop(1,    '#aa22bb');
+    cx2.fillStyle = g; cx2.fillRect(0, 0, cv.width, cv.height);
+    const t = new THREE.CanvasTexture(cv);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 1);
+    return t;
+  })();
+  const matWallShow  = new THREE.MeshLambertMaterial({ map: _gradTex });
+  const matWallDShow = new THREE.MeshLambertMaterial({ color: 0xffd54a });
+  const matRoofMShow = new THREE.MeshLambertMaterial({ color: 0x6633dd });
+  freeMapBuildingMats.push(matWallShow, matWallDShow, matRoofMShow);
+
+  function addShowOffBuilding(cx, cz) {
+    addBuildingShell(cx, cz, matWallShow, matWallDShow, matRoofMShow, 'SHOW OFF', '#ffd54a', '#1a0a3a', 12, 2.2);
+    // Interactive pad — south half of the building (near the door)
+    const padX = cx, padZ = cz - 4;
+    const matPad = new THREE.MeshBasicMaterial({ color: 0xaa66ff, transparent: true, opacity: 0.85 });
+    const pad = new THREE.Mesh(new THREE.CircleGeometry(2.6, 48), matPad);
+    pad.rotation.x = -Math.PI / 2; pad.position.set(padX, 0.04, padZ);
+    arenaGroup.add(pad); freeMapMeshes.push(pad);
+    const matRim = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const rim = new THREE.Mesh(new THREE.RingGeometry(2.3, 2.6, 48), matRim);
+    rim.rotation.x = -Math.PI / 2; rim.position.set(padX, 0.05, padZ);
+    arenaGroup.add(rim); freeMapMeshes.push(rim);
+    // Podium — raised platform in the north half. Your car appears on top when
+    // you stand on the pad, and stays for everyone to see.
+    const podX = cx, podZ = cz + 5;
+    const matPodium = new THREE.MeshLambertMaterial({ color: 0xffd54a });
+    const podium = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.7, 1.2, 32), matPodium);
+    podium.position.set(podX, 0.6, podZ);
+    arenaGroup.add(podium); freeMapMeshes.push(podium);
+    const matTop = new THREE.MeshBasicMaterial({ color: 0xff44dd });
+    const topDisc = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 0.08, 32), matTop);
+    topDisc.position.set(podX, 1.25, podZ);
+    arenaGroup.add(topDisc); freeMapMeshes.push(topDisc);
+    // Billboard on the inside of the north wall, above the windows. Shows the
+    // current player's show-off info to anyone in the building.
+    const bbCanvas = document.createElement('canvas');
+    bbCanvas.width = 1024; bbCanvas.height = 256;
+    const bbCtx = bbCanvas.getContext('2d');
+    drawShowOffBillboardIdle(bbCtx, bbCanvas.width, bbCanvas.height);
+    const bbTex = new THREE.CanvasTexture(bbCanvas);
+    const bb = new THREE.Mesh(new THREE.PlaneGeometry(24, 6),
+      new THREE.MeshBasicMaterial({ map: bbTex }));
+    bb.position.set(cx, 6.0, cz + BHD - 0.06);
+    bb.rotation.y = Math.PI; // face south (toward the door & pad)
+    arenaGroup.add(bb); freeMapMeshes.push(bb);
+    freeMapShowOffPads.push({
+      x: padX, z: padZ, half: 2.6,
+      podiumX: podX, podiumY: 1.45, podiumZ: podZ,
+      carGroup: null,
+      bbCanvas, bbCtx, bbTex,
+    });
+  }
+
+  // 5 race buildings + 3 show-off buildings (equipment buildings removed for now)
+  addRaceBuilding( 32,   32);
+  addRaceBuilding(-32,   32);
+  addRaceBuilding( 224, -224);
+  addRaceBuilding(-224,  224);
+  addRaceBuilding(-224, -224);
+  addShowOffBuilding( 160,  32);
+  addShowOffBuilding(-160, -32);
+  addShowOffBuilding(  32, 224);
+
+  // ===== map border (circular abyss) =====
+  // A dark circular void surrounds the city — driving toward the edge feels like
+  // falling into an abyss. The player is clamped to MAP_R in the free-map step.
+  const MAP_R = SPAN;
+  const matVoid = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  const voidRing = new THREE.Mesh(new THREE.RingGeometry(MAP_R, MAP_R + 600, 96), matVoid);
+  voidRing.rotation.x = -Math.PI / 2;
+  voidRing.position.y = -0.04;
+  arenaGroup.add(voidRing); freeMapMeshes.push(voidRing);
+  // glowing magenta rim highlighting the boundary
+  const matRim = new THREE.MeshBasicMaterial({ color: 0xff44dd });
+  const rimRing = new THREE.Mesh(new THREE.RingGeometry(MAP_R - 0.8, MAP_R, 96), matRim);
+  rimRing.rotation.x = -Math.PI / 2;
+  rimRing.position.y = 0.02;
+  arenaGroup.add(rimRing); freeMapMeshes.push(rimRing);
+  freeMapBorder = { radius: MAP_R };
 }
 
 // ===== free map traffic =====
@@ -1045,39 +1121,9 @@ function fireFreeMapBullet(fromX, fromZ, toX, toZ, damage = 10, color = 0x00eeff
 
 function updateFreeMapTraffic(dt) {
   const dts = dt / 1000;
-  freeMapStarCooldown    = Math.max(0, freeMapStarCooldown    - dt);
-  freeMapPoliceTimer     = Math.max(0, freeMapPoliceTimer     - dt);
-  freeMapSwatTimer       = Math.max(0, freeMapSwatTimer       - dt);
-  freeMapTankTimer       = Math.max(0, freeMapTankTimer       - dt);
-  freeMapRocketCarTimer  = Math.max(0, freeMapRocketCarTimer  - dt);
+  // Free map is server-driven; this client no longer spawns traffic, police, or rivals.
+  // Only the player's own missile cooldown ticks here.
   freeMapMissileCooldown = Math.max(0, freeMapMissileCooldown - dt);
-
-  // spawn police at a star-dependent rate: 1★=20s, 2★=10s, 3★=5s, 4★=4s, 5★=3s
-  if (freeMapStars > 0 && freeMapPoliceTimer <= 0) {
-    spawnFreeMapNPC('police');
-    freeMapPoliceTimer = [20000, 10000, 5000, 4000, 3000][freeMapStars - 1];
-  }
-  // SWAT — 3★ every 10s, 4★+ every 15s
-  if (freeMapStars >= 3 && freeMapSwatTimer <= 0) {
-    spawnFreeMapNPC('swat');
-    freeMapSwatTimer = freeMapStars === 3 ? 10000 : 15000;
-  }
-  // Tank — 4★+ every 15s
-  if (freeMapStars >= 4 && freeMapTankTimer <= 0) {
-    spawnFreeMapNPC('tank');
-    freeMapTankTimer = 15000;
-  }
-  // Rocket Car — 5★ every 15s
-  if (freeMapStars >= 5 && freeMapRocketCarTimer <= 0) {
-    spawnFreeMapNPC('rocket_car');
-    freeMapRocketCarTimer = 15000;
-  }
-
-  // top up traffic so the streets stay busy
-  const _aliveTraffic = freeMapNPCs.filter(n => n.alive && n.type === 'npc').length;
-  if (_aliveTraffic < 40 && !freeMapInRace) {
-    spawnFreeMapNPC('npc');
-  }
 
   // update NPCs
   for (let i = freeMapNPCs.length - 1; i >= 0; i--) {
@@ -1200,90 +1246,324 @@ function freeMapSpawnRival() {
 }
 
 // Tear down the city map and build a single straight road with side barriers.
-// Player drives south (-Z); free-map physics still apply.
+// Tear down the race map and rebuild the city free-map, dropping the player
+// back at the race pad they entered from.
+function exitRaceMode() {
+  const entry = freeMapRaceEntryPad;
+  cleanupFreeMapTraffic();
+  for (const m of freeMapMeshes) arenaGroup.remove(m);
+  freeMapMeshes = [];
+  freeMapBuildings = []; freeMapBuildingMats = [];
+  freeMapStations = []; freeMapRaceSquares = []; freeMapShowOffPads = []; freeMapLastShowPad = null;
+  freeMapInRace = false; freeMapRaceRoad = null;
+  freeMapRaceLaps = 0; freeMapRaceLapArmed = false; freeMapRaceRival = null;
+  freeMapRaceObstacles = [];
+  freeMapRaceEntryPad = null;
+  raceResultsShown = false; raceResultsData = null;
+  raceMapSelectShown = false;
+  buildCityMap();
+  if (entry) {
+    // Place player just outside the race pad so they don't immediately re-trigger it.
+    arenaPlayer.x = entry.x - 5;
+    arenaPlayer.z = entry.z;
+    arenaPlayer.y = 0.2;
+    arenaPlayer.vx = 0; arenaPlayer.vz = 0; arenaPlayer.vy = 0;
+  }
+}
+
+// Long winding race track — a serpentine "4-rung" loop. Player starts at
+// the west end of rung 1 and races clockwise through:
+//   rung 1  east  (ramp + REAL GAP — fall = restart)
+//   south T → rung 2  west  (zig-zag cone chicane)
+//   south T → rung 3  east  (pillar slalom, narrowing)
+//   south T → rung 4  west  (long straight, passes UNDER overpass)
+//   long north T → back to start.
+// Drive surface stays at y=0.2; the overpass is decorative at y=7.
 function buildRaceRoadMap() {
   for (const m of freeMapMeshes) arenaGroup.remove(m);
   freeMapMeshes = [];
   freeMapBuildings = []; freeMapBuildingMats = [];
-  freeMapStations = []; freeMapRaceSquares = [];
+  freeMapStations = []; freeMapRaceSquares = []; freeMapShowOffPads = []; freeMapLastShowPad = null;
   freeMapRaceCountdown = 0; freeMapInBuilding = false;
+  freeMapBorder = null;
   cleanupFreeMapTraffic();
   freeMapInRace = true;
 
-  const ROAD_W   = 14;
-  const ROAD_LEN = 600;
-  const Z0       = 10;                       // road starts here (north) and runs to Z0 - ROAD_LEN
-  const ZC       = Z0 - ROAD_LEN / 2;        // center Z
+  const RW = 14, HW = RW / 2;
 
+  // ── Centerline waypoints (clockwise). Adjacent pairs are axis-aligned. ──
+  const W1 = { x: -180, z:   0 };   // start
+  const W2 = { x:  100, z:   0 };   // end of rung 1 (east)
+  const W3 = { x:  100, z:  50 };   // top of T south
+  const W4 = { x: -120, z:  50 };   // end of rung 2 (west)
+  const W5 = { x: -120, z: 100 };
+  const W6 = { x:  140, z: 100 };   // end of rung 3 (east)
+  const W7 = { x:  140, z: 150 };
+  const W8 = { x: -180, z: 150 };   // end of rung 4 (west)
+  // W8 → W1 closes the loop (north up the far west)
+
+  // Build axis-aligned road corridors between consecutive waypoints.
+  function corridor(a, b) {
+    if (a.z === b.z) {
+      return { x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: a.z - HW, z1: a.z + HW };
+    } else {
+      return { x0: a.x - HW, x1: a.x + HW, z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z) };
+    }
+  }
+  const segs = [
+    corridor(W1, W2), // rung 1 east
+    corridor(W2, W3), // south T
+    corridor(W3, W4), // rung 2 west
+    corridor(W4, W5), // south T
+    corridor(W5, W6), // rung 3 east
+    corridor(W6, W7), // south T
+    corridor(W7, W8), // rung 4 west
+    corridor(W8, W1), // long north T (back to start)
+  ];
+
+  // ── Materials ──
+  const matGround   = new THREE.MeshLambertMaterial({ color: 0x6cb04c });
   const matAsphalt  = new THREE.MeshLambertMaterial({ color: 0x252525 });
-  const matGround   = new THREE.MeshLambertMaterial({ color: 0x101010 });
   const matYellow   = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
   const matWhite    = new THREE.MeshBasicMaterial({ color: 0xdddddd });
   const matBarrierR = new THREE.MeshLambertMaterial({ color: 0xcc2222 });
   const matBarrierW = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
+  const matRamp     = new THREE.MeshLambertMaterial({ color: 0x553a22 });
+  const matCone     = new THREE.MeshLambertMaterial({ color: 0xff7720 });
+  const matConeBand = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const matPillar   = new THREE.MeshLambertMaterial({ color: 0x444455 });
+  const matBridge   = new THREE.MeshLambertMaterial({ color: 0x3a3a44 });
+  const matBridgeT  = new THREE.MeshLambertMaterial({ color: 0x666677 });
+  const matFinishB  = new THREE.MeshBasicMaterial({ color: 0x111111 });
+  const matFinishW  = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const matAbyss    = new THREE.MeshLambertMaterial({ color: 0x000000 });
 
-  // dark ground on either side
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, ROAD_LEN + 40), matGround);
-  ground.rotation.x = -Math.PI / 2; ground.position.set(0, -0.02, ZC);
-  arenaGroup.add(ground); freeMapMeshes.push(ground);
-
-  // asphalt
-  const road = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_W, ROAD_LEN), matAsphalt);
-  road.rotation.x = -Math.PI / 2; road.position.set(0, 0, ZC);
-  arenaGroup.add(road); freeMapMeshes.push(road);
-
-  // center yellow line
-  const cen = new THREE.Mesh(new THREE.PlaneGeometry(0.45, ROAD_LEN), matYellow);
-  cen.rotation.x = -Math.PI / 2; cen.position.set(0, 0.01, ZC);
-  arenaGroup.add(cen); freeMapMeshes.push(cen);
-
-  // white edge lines
-  for (const sx of [-1, 1]) {
-    const ed = new THREE.Mesh(new THREE.PlaneGeometry(0.3, ROAD_LEN), matWhite);
-    ed.rotation.x = -Math.PI / 2;
-    ed.position.set(sx * (ROAD_W / 2 - 0.3), 0.01, ZC);
-    arenaGroup.add(ed); freeMapMeshes.push(ed);
+  // ── Helpers ──
+  function flat(cx, cz, w, d, mat, y = 0.0) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
+    m.rotation.x = -Math.PI / 2; m.position.set(cx, y, cz);
+    arenaGroup.add(m); freeMapMeshes.push(m);
+    return m;
+  }
+  function box(cx, cy, cz, w, h, d, mat) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(cx, cy, cz);
+    arenaGroup.add(m); freeMapMeshes.push(m);
+    return m;
   }
 
-  // dashed lane markers
-  for (let z = Z0 - 5; z > Z0 - ROAD_LEN; z -= 10) {
+  // Outer ground covering whole track area + padding
+  let allX0 = Infinity, allX1 = -Infinity, allZ0 = Infinity, allZ1 = -Infinity;
+  for (const s of segs) {
+    allX0 = Math.min(allX0, s.x0); allX1 = Math.max(allX1, s.x1);
+    allZ0 = Math.min(allZ0, s.z0); allZ1 = Math.max(allZ1, s.z1);
+  }
+  flat((allX0 + allX1) / 2, (allZ0 + allZ1) / 2,
+       (allX1 - allX0) + 200, (allZ1 - allZ0) + 140, matGround, -0.05);
+
+  // ── Asphalt for each segment ──
+  for (const s of segs) {
+    flat((s.x0 + s.x1) / 2, (s.z0 + s.z1) / 2, s.x1 - s.x0, s.z1 - s.z0, matAsphalt);
+  }
+
+  // ── Gap in rung 1: cut a hole in the road by drawing a black "abyss"
+  //    rectangle over the asphalt, and skip the boundary/ground for that x range. ──
+  const GAP_X0 = -95, GAP_X1 = -85;    // small gap — just a little jump.
+  flat((GAP_X0 + GAP_X1) / 2, 0, GAP_X1 - GAP_X0, RW, matAbyss, 0.005);
+
+  // ── Lane markings ──
+  // Yellow center stripe along each segment centerline.
+  function centerStripe(a, b) {
+    if (a.z === b.z) {
+      const len = Math.abs(b.x - a.x) - RW * 2;
+      if (len > 0) flat((a.x + b.x) / 2, a.z, len, 0.45, matYellow, 0.01);
+    } else {
+      const len = Math.abs(b.z - a.z) - RW * 2;
+      if (len > 0) flat(a.x, (a.z + b.z) / 2, 0.45, len, matYellow, 0.01);
+    }
+  }
+  const waypoints = [W1, W2, W3, W4, W5, W6, W7, W8, W1];
+  for (let i = 0; i < waypoints.length - 1; i++) centerStripe(waypoints[i], waypoints[i + 1]);
+  // White edge lines along each segment's outer sides — trimmed by HW at
+  // each end so the corner overlap zones stay clear of crossing stripes.
+  for (const s of segs) {
+    const cx = (s.x0 + s.x1) / 2, cz = (s.z0 + s.z1) / 2;
+    const ew = s.x1 - s.x0 > s.z1 - s.z0;
+    if (ew) {
+      const len = (s.x1 - s.x0) - HW * 2;
+      if (len > 0) {
+        flat(cx, s.z0 + 0.3, len, 0.3, matWhite, 0.01);
+        flat(cx, s.z1 - 0.3, len, 0.3, matWhite, 0.01);
+      }
+    } else {
+      const len = (s.z1 - s.z0) - HW * 2;
+      if (len > 0) {
+        flat(s.x0 + 0.3, cz, 0.3, len, matWhite, 0.01);
+        flat(s.x1 - 0.3, cz, 0.3, len, matWhite, 0.01);
+      }
+    }
+  }
+
+  // Striped barriers along the long sides of every segment. The boundary
+  // clamp does the real work; these are visual cues for the edges.
+  function rail(a0, a1, fixed, axis) {
+    const segLen = 6, span = a1 - a0;
+    const n = Math.max(1, Math.ceil(span / segLen));
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n;
+      const c = a0 + span * t;
+      const mat = i % 2 === 0 ? matBarrierR : matBarrierW;
+      if (axis === 'x') {
+        box(c, 0.6, fixed, (span / n) * 0.94, 1.2, 0.5, mat);
+      } else {
+        box(fixed, 0.6, c, 0.5, 1.2, (span / n) * 0.94, mat);
+      }
+    }
+  }
+  for (const s of segs) {
+    const ew = (s.x1 - s.x0) > (s.z1 - s.z0);
+    if (ew) {
+      rail(s.x0 + HW, s.x1 - HW, s.z0 - 0.4, 'x');
+      rail(s.x0 + HW, s.x1 - HW, s.z1 + 0.4, 'x');
+    } else {
+      rail(s.z0 + HW, s.z1 - HW, s.x0 - 0.4, 'z');
+      rail(s.z0 + HW, s.z1 - HW, s.x1 + 0.4, 'z');
+    }
+  }
+
+  // Outside-corner caps. At each waypoint, close the L-shaped gap between the
+  // two trimmed segment rails so the outside of every turn has a continuous wall.
+  const _wps = [W1, W2, W3, W4, W5, W6, W7, W8];
+  for (let i = 0; i < _wps.length; i++) {
+    const prev = _wps[(i - 1 + _wps.length) % _wps.length];
+    const w    = _wps[i];
+    const next = _wps[(i + 1) % _wps.length];
+    const inDx = Math.sign(w.x - prev.x), inDz = Math.sign(w.z - prev.z);
+    const outDx = Math.sign(next.x - w.x), outDz = Math.sign(next.z - w.z);
+    // Outside-corner direction: continue in incoming axis, opposite outgoing axis.
+    const ox = inDx !== 0 ? inDx : -outDx;
+    const oz = inDz !== 0 ? inDz : -outDz;
+    const cornerX = w.x + ox * (HW + 0.4);
+    const cornerZ = w.z + oz * (HW + 0.4);
+    // Horizontal arm along z=cornerZ, from waypoint to corner
+    box(w.x + ox * (HW + 0.4) / 2, 0.6, cornerZ,
+        HW + 0.4, 1.2, 0.5,
+        matBarrierR);
+    // Vertical arm along x=cornerX, from waypoint to corner
+    box(cornerX, 0.6, w.z + oz * (HW + 0.4) / 2,
+        0.5, 1.2, HW + 0.4,
+        matBarrierW);
+  }
+
+  // ── Ramp at start of rung 1 (a little jump, just enough to clear the gap) ──
+  const rampL = 10, rampH = 1.5;
+  const rampCx = -110, rampX0 = rampCx - rampL / 2, rampX1 = rampCx + rampL / 2;
+  const rampY0 = 0.2, rampY1 = 0.2 + rampH;
+  const ramp = new THREE.Mesh(new THREE.BoxGeometry(rampL, 0.3, RW * 0.9), matRamp);
+  ramp.position.set(rampCx, rampH / 2, 0);
+  ramp.rotation.z = Math.atan2(rampH, rampL);
+  arenaGroup.add(ramp); freeMapMeshes.push(ramp);
+
+  // Tall side walls around the ramp + gap area so the player can't fly
+  // sideways and skip onto another part of the track.
+  const matWall = new THREE.MeshLambertMaterial({ color: 0x55556a });
+  const wallY = 5, wallH = 9;
+  const wallX0 = -140, wallX1 = -70, wallLen = wallX1 - wallX0;
+  for (const sz of [-HW - 0.4, HW + 0.4]) {
+    box((wallX0 + wallX1) / 2, wallH / 2, sz, wallLen, wallH, 0.6, matWall);
+  }
+
+  // Bouncy obstacle list — per-frame collision pushes the car back from these.
+  freeMapRaceObstacles = [];
+
+  // ── Zig-zag cone chicane on rung 2 (going west) ──
+  function placeCone(x, z) {
+    const c = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.7, 12), matCone);
+    c.position.set(x, 0.85, z);
+    arenaGroup.add(c); freeMapMeshes.push(c);
+    const b2 = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.78, 0.18, 12), matConeBand);
+    b2.position.set(x, 1.05, z);
+    arenaGroup.add(b2); freeMapMeshes.push(b2);
+    freeMapRaceObstacles.push({ x, z, r: 0.9 });
+  }
+  for (let i = 0; i < 7; i++) {
+    const x = 70 - i * 28;
+    const z = 50 + (i % 2 === 0 ? -4 : 4);
+    placeCone(x, z);
+  }
+
+  // ── Pillar slalom on rung 3 (going east) ──
+  for (let i = 0; i < 6; i++) {
+    const x = -90 + i * 38;
+    const z = 100 + (i % 2 === 0 ? 3 : -3);
+    box(x, 1.6, z, 2.2, 3.2, 2.2, matPillar);
+    freeMapRaceObstacles.push({ x, z, r: 1.6 });
+  }
+
+  // ── Fluffy clouds dotted around the sky ──
+  const matCloud = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  function cloud(cx, cy, cz, scale) {
+    for (const p of [
+      [0, 0, 0, 1.0], [2.5, 0.3, 0.5, 0.8], [-2.4, 0.2, -0.4, 0.85],
+      [1.0, 0.8, -0.6, 0.7], [-1.2, 0.7, 0.7, 0.75], [3.6, 0.0, -0.2, 0.65],
+    ]) {
+      const r = 2.0 * scale * p[3];
+      const s = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), matCloud);
+      s.position.set(cx + p[0] * scale, cy + p[1] * scale, cz + p[2] * scale);
+      arenaGroup.add(s); freeMapMeshes.push(s);
+    }
+  }
+  const cloudSpots = [
+    [-150,  45, -90, 1.4], [ -40,  60,-120, 1.7], [  80,  50,-100, 1.3],
+    [ 180,  55,  20, 1.5], [ 220,  70,  90, 1.8], [ 100,  55, 220, 1.4],
+    [-100,  65, 240, 1.6], [-220,  50, 180, 1.5], [-260,  60,  40, 1.7],
+    [   0,  80,   0, 2.0], [ 140,  90, 140, 1.9], [-160,  85, -20, 1.6],
+  ];
+  for (const c of cloudSpots) cloud(c[0], c[1], c[2], c[3]);
+
+  // ── Overpass spanning rung 4 (decorative, drive under it) ──
+  const oX = -20, oY = 7;
+  box(oX, oY, 150, 18, 0.7, RW + 8, matBridge);
+  for (const sx of [-1, 1]) {
+    box(oX, oY + 1.1, 150 + sx * (HW + 3.9), 18, 0.18, 0.3, matBridgeT);
+    box(oX, oY + 0.4, 150 + sx * (HW + 3.9), 18, 0.18, 0.3, matBridgeT);
+  }
+  for (const sz of [150 - HW - 3.6, 150 + HW + 3.6]) {
     for (const sx of [-1, 1]) {
-      const d = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 5.5), matWhite);
-      d.rotation.x = -Math.PI / 2;
-      d.position.set(sx * ROAD_W / 4, 0.02, z);
-      arenaGroup.add(d); freeMapMeshes.push(d);
+      box(oX + sx * 8, oY / 2, sz, 2.4, oY, 2.4, matBridgeT);
     }
   }
 
-  // red/white striped side barriers
-  const segLen   = 6;
-  const segCount = Math.ceil(ROAD_LEN / segLen);
-  for (const sx of [-1, 1]) {
-    for (let i = 0; i < segCount; i++) {
-      const mat = (i % 2 === 0) ? matBarrierR : matBarrierW;
-      const seg = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.4, segLen), mat);
-      seg.position.set(sx * (ROAD_W / 2 + 0.4), 0.7, Z0 - segLen / 2 - i * segLen);
-      arenaGroup.add(seg); freeMapMeshes.push(seg);
-    }
+  // ── Start/finish checker stripe across rung 1 just east of spawn ──
+  const finishX = W1.x + 8;
+  const checks = 14, checkW = RW / checks;
+  for (let i = 0; i < checks; i++) {
+    flat(finishX, -HW + checkW * (i + 0.5), 0.9, checkW,
+         i % 2 === 0 ? matFinishW : matFinishB, 0.015);
   }
 
-  // end caps so the player can't drive off the ends
-  for (const ez of [Z0, Z0 - ROAD_LEN]) {
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(ROAD_W + 2, 1.4, 0.6), matBarrierR);
-    cap.position.set(0, 0.7, ez);
-    arenaGroup.add(cap); freeMapMeshes.push(cap);
-  }
+  // ── Rival car parked next to spawn ──
+  const _rivalCar = buildCar({ kind: 'sport', color: 0x22aaff, accent: 0x113355, isPlayer: false });
+  _rivalCar.position.set(W1.x, 0.2, 3.5);
+  _rivalCar.rotation.y = Math.PI / 2; // face east
+  arenaGroup.add(_rivalCar); freeMapMeshes.push(_rivalCar);
+  freeMapRaceRival = { mesh: _rivalCar };
 
   freeMapRaceRoad = {
-    halfW: ROAD_W / 2 - 0.6,
-    minZ:  Z0 - ROAD_LEN + 0.6,
-    maxZ:  Z0 - 0.6,
+    segments: segs,
+    spawn:    { x: W1.x, z: 0, heading: Math.PI / 2 },
+    ramp:     { x0: rampX0, x1: rampX1, zHalf: RW * 0.45, y0: rampY0, y1: rampY1 },
+    gap:      { x0: GAP_X0, x1: GAP_X1, zHalf: HW },
+    finish:   { x: finishX, z0: -HW, z1: HW, awayX: 50 }, // re-arm once player passes x>awayX
   };
+  freeMapRaceLaps = 0;
+  freeMapRaceLapArmed = false;
 
-  // place player at the start (north end), facing south
-  arenaPlayer.x = 0; arenaPlayer.z = Z0 - 4; arenaPlayer.y = 0.2;
-  arenaPlayer.vx = 0; arenaPlayer.vz = 0; arenaPlayer.fwd = 0;
-  arenaPlayer.heading = Math.PI; // -Z
+  arenaPlayer.x = W1.x - 6; arenaPlayer.z = 0; arenaPlayer.y = 0.2;
+  arenaPlayer.vx = 0; arenaPlayer.vz = 0; arenaPlayer.vy = 0; arenaPlayer.fwd = 0;
+  arenaPlayer.heading = Math.PI / 2; // face east (+X)
+  arenaPlayer._racePrevX = undefined;
+  arenaPlayer._wasOnRamp = false;
 }
 
 // ===== car builder =====
@@ -1899,6 +2179,42 @@ window.addEventListener('keydown', e => {
     }
   }
   if (state === STATE.PLAYING && k === 'c') cockpitView = !cockpitView;
+  if (raceResultsShown && (k === ' ' || k === 'enter')) {
+    // Race over — return to the city free-map at the pad the player entered from.
+    exitRaceMode();
+    e.preventDefault && e.preventDefault();
+    return;
+  }
+  if (raceMapSelectShown) {
+    if (k === 'arrowleft'  || k === 'a') {
+      raceMapSelectIdx = (raceMapSelectIdx - 1 + RACE_MAPS.length) % RACE_MAPS.length;
+      e.preventDefault && e.preventDefault();
+      return;
+    }
+    if (k === 'arrowright' || k === 'd') {
+      raceMapSelectIdx = (raceMapSelectIdx + 1) % RACE_MAPS.length;
+      e.preventDefault && e.preventDefault();
+      return;
+    }
+    if (k === ' ' || k === 'enter') {
+      const _picked = RACE_MAPS[raceMapSelectIdx];
+      if (_picked && _picked.ready) {
+        raceMapSelectShown = false;
+        buildRaceRoadMap();
+      }
+      // Non-ready maps simply ignore the confirm — the panel makes the
+      // "not playable yet" hint visible.
+      e.preventDefault && e.preventDefault();
+      return;
+    }
+    if (k === 'escape') {
+      raceMapSelectShown = false;
+      // Nudge the player off the race pad so they don't immediately retrigger it.
+      if (freeMapRaceEntryPad) arenaPlayer.x = freeMapRaceEntryPad.x - 5;
+      e.preventDefault && e.preventDefault();
+      return;
+    }
+  }
   if (state === STATE.ARENA && k === 'escape') { if (freeMap) { freeMap = false; state = STATE.MENU; } else state = STATE.ARENA_SELECT; }
   if (state === STATE.ARENA && k === ' ' && arenaPlayer.onGround) {
     arenaPlayer.vy = 10; arenaPlayer.onGround = false;
@@ -1927,6 +2243,7 @@ window.addEventListener('keydown', e => {
   if (state === STATE.CHAMPIONSHIP && k === 'escape') state = STATE.ARENA_SELECT;
   if (state === STATE.GEM_SHOP && (k === 'escape' || k === ' ' || k === 'enter')) state = STATE.MENU;
   if (state === STATE.MISSIONS && k === 'escape') state = STATE.MENU;
+  if (state === STATE.SETTINGS && k === 'escape') state = STATE.MENU;
   if (state === STATE.MISSIONS_GARAGE && k === 'escape') state = STATE.MISSIONS;
   if (state === STATE.LEVEL && k === 'escape') { levelCleanup(); state = STATE.MISSIONS; }
   if (state === STATE.LEVEL && k === ' ') {
@@ -1943,6 +2260,54 @@ window.addEventListener('keydown', e => {
   }
 });
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+// Mobile on-screen controls — map pointer/touch down/up on the four pad
+// circles to the same keys[] entries the keyboard uses.
+const _mobileActive = new Map(); // pointerId -> key
+function _mobileHitTest(cx, cy) {
+  if (!mobileBtnLayout) return null;
+  for (const name of ['left','right','brake','gas']) {
+    const b = mobileBtnLayout[name];
+    if (!b) continue;
+    const dx = cx - b.cx, dy = cy - b.cy;
+    if (dx*dx + dy*dy <= b.r * b.r) return b.key;
+  }
+  return null;
+}
+function _mobilePtToCanvas(e) {
+  const r = canvas3d.getBoundingClientRect();
+  return [(e.clientX - r.left) * (W / r.width), (e.clientY - r.top) * (H / r.height)];
+}
+canvas3d.addEventListener('pointerdown', e => {
+  if (device !== 'mobile' || state !== STATE.ARENA) return;
+  const [cx, cy] = _mobilePtToCanvas(e);
+  const k = _mobileHitTest(cx, cy);
+  if (k) {
+    keys[k] = true;
+    _mobileActive.set(e.pointerId, k);
+    e.preventDefault && e.preventDefault();
+  }
+});
+canvas3d.addEventListener('pointermove', e => {
+  if (!_mobileActive.has(e.pointerId)) return;
+  const [cx, cy] = _mobilePtToCanvas(e);
+  const newKey = _mobileHitTest(cx, cy);
+  const oldKey = _mobileActive.get(e.pointerId);
+  if (newKey !== oldKey) {
+    if (oldKey) keys[oldKey] = false;
+    if (newKey) keys[newKey] = true;
+    if (newKey) _mobileActive.set(e.pointerId, newKey);
+    else _mobileActive.delete(e.pointerId);
+  }
+});
+function _mobileRelease(e) {
+  const k = _mobileActive.get(e.pointerId);
+  if (k) keys[k] = false;
+  _mobileActive.delete(e.pointerId);
+}
+canvas3d.addEventListener('pointerup',     _mobileRelease);
+canvas3d.addEventListener('pointercancel', _mobileRelease);
+canvas3d.addEventListener('pointerleave',  _mobileRelease);
 canvas3d.addEventListener('mousemove', e => {
   const r = canvas3d.getBoundingClientRect();
   mouse.x = (e.clientX - r.left) * (W / r.width);
@@ -1950,7 +2315,8 @@ canvas3d.addEventListener('mousemove', e => {
   const hovering = (state === STATE.MENU && btnAt(mouse.x, mouse.y)) ||
                    (state === STATE.GARAGE && garageButtons.find(b => !b.disabled && mouse.x >= b.x && mouse.x <= b.x+b.w && mouse.y >= b.y && mouse.y <= b.y+b.h)) ||
                    (state === STATE.ARENA_SELECT && arenaSelectButtons.find(b => mouse.x >= b.x && mouse.x <= b.x+b.w && mouse.y >= b.y && mouse.y <= b.y+b.h)) ||
-                   (state === STATE.GEM_SHOP && gemShopButtons.find(b => mouse.x >= b.x && mouse.x <= b.x+b.w && mouse.y >= b.y && mouse.y <= b.y+b.h));
+                   (state === STATE.GEM_SHOP && gemShopButtons.find(b => mouse.x >= b.x && mouse.x <= b.x+b.w && mouse.y >= b.y && mouse.y <= b.y+b.h)) ||
+                   (state === STATE.SETTINGS && settingsButtons.find(b => mouse.x >= b.x && mouse.x <= b.x+b.w && mouse.y >= b.y && mouse.y <= b.y+b.h));
   canvas3d.style.cursor = hovering ? 'pointer' : 'default';
 });
 canvas3d.addEventListener('wheel', e => {
@@ -1981,6 +2347,19 @@ canvas3d.addEventListener('click', e => {
   const r = canvas3d.getBoundingClientRect();
   const x = (e.clientX - r.left) * (W / r.width);
   const y = (e.clientY - r.top)  * (H / r.height);
+  if (state === STATE.DEVICE_SELECT) {
+    const b = deviceSelectButtons.find(btn => x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h);
+    if (b) {
+      device = b.id;
+      localStorage.setItem('headon_device', device);
+      state = STATE.MENU;
+      if (!localStorage.getItem('headon_tutorial_shown')) {
+        state = STATE.HELP;
+        localStorage.setItem('headon_tutorial_shown', '1');
+      }
+    }
+    return;
+  }
   if (state === STATE.MENU) {
     const b = btnAt(x, y);
     if (b && !b.disabled && b.action) { b.action(); return; }
@@ -1999,6 +2378,9 @@ canvas3d.addEventListener('click', e => {
   } else if (state === STATE.MISSIONS || state === STATE.MISSIONS_GARAGE) {
     const b = missionsButtons.find(btn => x >= btn.x && x <= btn.x+btn.w && y >= btn.y && y <= btn.y+btn.h);
     if (b && !b.disabled && b.action) b.action();
+  } else if (state === STATE.SETTINGS) {
+    const b = settingsButtons.find(btn => x >= btn.x && x <= btn.x+btn.w && y >= btn.y && y <= btn.y+btn.h);
+    if (b && b.action) b.action();
   } else if (state === STATE.HELP) state = STATE.MENU;
   else if (state === STATE.DEAD) {
     if (champActive && earnings && earnings.mode === 'ARENA') {
@@ -2025,19 +2407,25 @@ canvas3d.addEventListener('click', e => {
 
 // ===== audio =====
 let audioCtx=null, engineOsc=null, engineGain=null, engineFilter=null, engineSub=null, engineSubGain=null;
+let masterGain = null;
+function audioOut() { return masterGain || (audioCtx && audioCtx.destination); }
+function applyMasterVolume() { if (masterGain) masterGain.gain.value = soundOn ? 1 : 0; }
 function initAudio() {
   if (audioCtx) return;
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     audioCtx = new Ctx();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = soundOn ? 1 : 0;
+    masterGain.connect(audioCtx.destination);
     engineOsc = audioCtx.createOscillator(); engineOsc.type = 'sawtooth'; engineOsc.frequency.value = 55;
     engineFilter = audioCtx.createBiquadFilter(); engineFilter.type = 'lowpass'; engineFilter.frequency.value = 700;
     engineGain = audioCtx.createGain(); engineGain.gain.value = 0.0001;
-    engineOsc.connect(engineFilter); engineFilter.connect(engineGain); engineGain.connect(audioCtx.destination);
+    engineOsc.connect(engineFilter); engineFilter.connect(engineGain); engineGain.connect(masterGain);
     engineOsc.start();
     engineSub = audioCtx.createOscillator(); engineSub.type = 'sine'; engineSub.frequency.value = 40;
     engineSubGain = audioCtx.createGain(); engineSubGain.gain.value = 0.0001;
-    engineSub.connect(engineSubGain); engineSubGain.connect(audioCtx.destination);
+    engineSub.connect(engineSubGain); engineSubGain.connect(masterGain);
     engineSub.start();
   } catch(e) { audioCtx = null; }
 }
@@ -2068,11 +2456,11 @@ function playCrashSound() {
   const src = audioCtx.createBufferSource(); src.buffer = buf;
   const filt = audioCtx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value = 800;
   const g = audioCtx.createGain(); g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
-  src.connect(filt); filt.connect(g); g.connect(audioCtx.destination); src.start(t);
+  src.connect(filt); filt.connect(g); g.connect(audioOut()); src.start(t);
   const o = audioCtx.createOscillator(); o.type='sine';
   o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(35, t + 0.45);
   const og = audioCtx.createGain(); og.gain.setValueAtTime(0.45, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
-  o.connect(og); og.connect(audioCtx.destination); o.start(t); o.stop(t + 0.6);
+  o.connect(og); og.connect(audioOut()); o.start(t); o.stop(t + 0.6);
 }
 
 // ===== lifecycle =====
@@ -2607,13 +2995,14 @@ function startArena() {
     cleanupFreeMapTraffic();
     buildCityMap();
     for (const m of mountainMeshes) m.visible = false;
-    for (let _ni = 0; _ni < 40; _ni++) spawnFreeMapNPC('npc');
-    if (Math.random() < 0.02) { spawnFreeMapNPC('f1'); spawnFreeMapNPC('f1'); }
+    // No client-side spawns: traffic, police, and rivals are server-driven.
   } else {
     cleanupFreeMapTraffic();
     for (const m of freeMapMeshes) arenaGroup.remove(m);
-    freeMapMeshes = []; freeMapBuildings = [];
+    freeMapMeshes = []; freeMapBuildings = []; freeMapBorder = null;
     freeMapInRace = false; freeMapRaceRoad = null;
+    freeMapRaceLaps = 0; freeMapRaceLapArmed = false; freeMapRaceRival = null;
+    freeMapRaceObstacles = [];
     buildArena(battleRoyale ? 80 : isChampFinal ? 22 : HEX_RADIUS);
     for (const m of mountainMeshes) m.visible = true;
   }
@@ -2772,9 +3161,11 @@ function updateArena(dt) {
     }
   }
 
-  // free driving input
-  const turn = ((keys['arrowleft']||keys['a']) ? 1 : 0) - ((keys['arrowright']||keys['d']) ? 1 : 0);
-  const accel = ((keys['arrowup']||keys['w']) ? 1 : 0) - ((keys['arrowdown']||keys['s']) ? 1 : 0);
+  // free driving input — frozen while the map-select or post-race overlay is up.
+  const _frozen = raceResultsShown || raceMapSelectShown;
+  const turn  = _frozen ? 0 : (((keys['arrowleft']||keys['a']) ? 1 : 0) - ((keys['arrowright']||keys['d']) ? 1 : 0));
+  const accel = _frozen ? 0 : (((keys['arrowup']||keys['w']) ? 1 : 0) - ((keys['arrowdown']||keys['s']) ? 1 : 0));
+  if (_frozen) { arenaPlayer.vx = 0; arenaPlayer.vz = 0; }
 
   // drift physics: velocity vector is separate from heading
   const speed = Math.hypot(arenaPlayer.vx, arenaPlayer.vz);
@@ -2829,18 +3220,52 @@ function updateArena(dt) {
     if (freeMapInfiniteRockets) rocketCharges = 5;
     if (freeMapInfiniteTurbo)   nitroTime = Math.max(nitroTime, 4500);
 
-    // race-square countdown: stand still on a blue pad for 3s to spawn a rival
-    let _onSquare = false;
-    for (const _sq of freeMapRaceSquares) {
-      if (Math.abs(arenaPlayer.x - _sq.x) < _sq.half && Math.abs(arenaPlayer.z - _sq.z) < _sq.half) {
-        _onSquare = true; break;
+    // Race-square trigger: touching a blue pad pops up the map-select screen.
+    // The actual race map is built once the player confirms the selection.
+    if (!raceMapSelectShown && !raceResultsShown) {
+      for (const _sq of freeMapRaceSquares) {
+        if (Math.abs(arenaPlayer.x - _sq.x) < _sq.half && Math.abs(arenaPlayer.z - _sq.z) < _sq.half) {
+          raceMapSelectShown = true;
+          raceMapSelectIdx = 0;
+          freeMapRaceEntryPad = { x: _sq.x, z: _sq.z };
+          arenaPlayer.vx = 0; arenaPlayer.vz = 0;
+          break;
+        }
       }
     }
-    if (_onSquare && newSpeed < 0.5) {
-      freeMapRaceCountdown += dt;
-      if (freeMapRaceCountdown >= 3000) { buildRaceRoadMap(); freeMapRaceCountdown = 0; }
-    } else {
-      freeMapRaceCountdown = 0;
+    // show-off pad detection — stepping onto a pad places your car on that
+    // pad's podium and publishes your loadout to the building's billboard.
+    // Both stay after you drive away so others can see them.
+    freeMapOnShowOff = false;
+    let _activeShow = null;
+    for (const _sp of freeMapShowOffPads) {
+      const _dx = arenaPlayer.x - _sp.x, _dz = arenaPlayer.z - _sp.z;
+      if (_dx * _dx + _dz * _dz < _sp.half * _sp.half) { freeMapOnShowOff = true; _activeShow = _sp; break; }
+    }
+    // Fire on every change of active pad — including walking directly from
+    // pad A onto pad B — so each pad always shows the most recent visitor.
+    if (_activeShow && _activeShow !== freeMapLastShowPad) {
+      if (_activeShow.carGroup) arenaGroup.remove(_activeShow.carGroup);
+      let _col = getPlayerBodyColor();
+      if (typeof _col !== 'number') _col = CARS[carIdx].body;
+      const _showCar = buildCar({
+        kind: CARS[carIdx].kind || 'sedan',
+        color: _col,
+        accent: CARS[carIdx].accent,
+        isPlayer: false,
+      });
+      _showCar.position.set(_activeShow.podiumX, _activeShow.podiumY, _activeShow.podiumZ);
+      arenaGroup.add(_showCar);
+      freeMapMeshes.push(_showCar);
+      _activeShow.carGroup = _showCar;
+      // Publish current player loadout onto this building's billboard.
+      drawShowOffContent(_activeShow.bbCtx, _activeShow.bbCanvas.width, _activeShow.bbCanvas.height);
+      _activeShow.bbTex.needsUpdate = true;
+    }
+    freeMapLastShowPad = _activeShow;
+    // Slowly rotate every showcased car on every podium
+    for (const _sp of freeMapShowOffPads) {
+      if (_sp.carGroup) _sp.carGroup.rotation.y += dts * 0.6;
     }
   }
 
@@ -2864,13 +3289,57 @@ function updateArena(dt) {
 
   arenaPlayer.x += arenaPlayer.vx * dts;
   arenaPlayer.z += arenaPlayer.vz * dts;
-  // race road: clamp inside the barriers
-  if (freeMap && freeMapInRace && freeMapRaceRoad) {
-    const _rr = freeMapRaceRoad;
-    if (arenaPlayer.x >  _rr.halfW) { arenaPlayer.x =  _rr.halfW; arenaPlayer.vx = Math.min(0, arenaPlayer.vx); }
-    if (arenaPlayer.x < -_rr.halfW) { arenaPlayer.x = -_rr.halfW; arenaPlayer.vx = Math.max(0, arenaPlayer.vx); }
-    if (arenaPlayer.z >  _rr.maxZ)  { arenaPlayer.z =  _rr.maxZ;  arenaPlayer.vz = Math.min(0, arenaPlayer.vz); }
-    if (arenaPlayer.z <  _rr.minZ)  { arenaPlayer.z =  _rr.minZ;  arenaPlayer.vz = Math.max(0, arenaPlayer.vz); }
+  // race road: keep the player inside the union of road corridors. Active
+  // even during jumps so the side walls actually stop sideways escapes.
+  if (freeMap && freeMapInRace && freeMapRaceRoad && freeMapRaceRoad.segments) {
+    const _segs = freeMapRaceRoad.segments;
+    let _in = false;
+    for (let i = 0; i < _segs.length; i++) {
+      const s = _segs[i];
+      if (arenaPlayer.x >= s.x0 && arenaPlayer.x <= s.x1 &&
+          arenaPlayer.z >= s.z0 && arenaPlayer.z <= s.z1) { _in = true; break; }
+    }
+    if (!_in) {
+      let _bd = Infinity, _bcx = 0, _bcz = 0;
+      for (let i = 0; i < _segs.length; i++) {
+        const s = _segs[i];
+        const cx = Math.max(s.x0, Math.min(s.x1, arenaPlayer.x));
+        const cz = Math.max(s.z0, Math.min(s.z1, arenaPlayer.z));
+        const d = (arenaPlayer.x - cx) * (arenaPlayer.x - cx) +
+                  (arenaPlayer.z - cz) * (arenaPlayer.z - cz);
+        if (d < _bd) { _bd = d; _bcx = cx; _bcz = cz; }
+      }
+      const _dx = arenaPlayer.x - _bcx, _dz = arenaPlayer.z - _bcz;
+      arenaPlayer.x = _bcx; arenaPlayer.z = _bcz;
+      const _len = Math.hypot(_dx, _dz);
+      if (_len > 0.0001) {
+        const _nx = _dx / _len, _nz = _dz / _len;
+        const _vd = arenaPlayer.vx * _nx + arenaPlayer.vz * _nz;
+        if (_vd > 0) { arenaPlayer.vx -= _vd * 1.4 * _nx; arenaPlayer.vz -= _vd * 1.4 * _nz; }
+      }
+    }
+  }
+  // Race obstacle bounce-back — cones and pillars push the player out
+  // and reflect inward velocity on contact.
+  if (freeMap && freeMapInRace && freeMapRaceObstacles.length) {
+    for (let i = 0; i < freeMapRaceObstacles.length; i++) {
+      const _o = freeMapRaceObstacles[i];
+      const _dx = arenaPlayer.x - _o.x;
+      const _dz = arenaPlayer.z - _o.z;
+      const _d2 = _dx * _dx + _dz * _dz;
+      const _cr = _o.r + 1.1;
+      if (_d2 < _cr * _cr) {
+        const _d = Math.sqrt(_d2) || 0.01;
+        const _nx = _dx / _d, _nz = _dz / _d;
+        arenaPlayer.x = _o.x + _nx * _cr;
+        arenaPlayer.z = _o.z + _nz * _cr;
+        const _vd = arenaPlayer.vx * _nx + arenaPlayer.vz * _nz;
+        if (_vd < 0) {
+          arenaPlayer.vx -= _vd * 1.7 * _nx;
+          arenaPlayer.vz -= _vd * 1.7 * _nz;
+        }
+      }
+    }
   }
   _trailT += dts;
 
@@ -2907,19 +3376,100 @@ function updateArena(dt) {
 
   // ground support
   if (freeMap) {
-    // flat city road at y=0.2
-    if (arenaPlayer.y <= 0.2 && arenaPlayer.vy <= 0) {
-      arenaPlayer.y = 0.2; arenaPlayer.vy = 0; arenaPlayer.onGround = true;
+    // clamp to circular map border (the visual abyss begins at this radius)
+    if (freeMapBorder && !freeMapInRace) {
+      const _d2 = arenaPlayer.x * arenaPlayer.x + arenaPlayer.z * arenaPlayer.z;
+      const _r  = freeMapBorder.radius;
+      if (_d2 > _r * _r) {
+        const _d = Math.sqrt(_d2);
+        const _nx = arenaPlayer.x / _d, _nz = arenaPlayer.z / _d;
+        arenaPlayer.x = _nx * _r;
+        arenaPlayer.z = _nz * _r;
+        const _vdot = arenaPlayer.vx * _nx + arenaPlayer.vz * _nz;
+        if (_vdot > 0) { arenaPlayer.vx -= _vdot * 1.6 * _nx; arenaPlayer.vz -= _vdot * 1.6 * _nz; }
+      }
+    }
+    // Per-frame ground height. In race mode, the starting ramp lifts the
+    // car along its sloped surface, then gravity takes over once they
+    // drive off the east edge.
+    let _groundY = 0.2;
+    let _onRamp = false;
+    if (freeMapInRace && freeMapRaceRoad) {
+      const _rp = freeMapRaceRoad.ramp;
+      if (_rp && arenaPlayer.x >= _rp.x0 && arenaPlayer.x <= _rp.x1 &&
+          Math.abs(arenaPlayer.z) < _rp.zHalf) {
+        const _t = (arenaPlayer.x - _rp.x0) / (_rp.x1 - _rp.x0);
+        _groundY = _rp.y0 + _t * (_rp.y1 - _rp.y0);
+        _onRamp = true;
+      }
+      // Jump gap — no road floor here. If the car is over the gap, the ground
+      // disappears and gravity drops them into the void (respawn at start).
+      const _gp = freeMapRaceRoad.gap;
+      if (_gp && !_onRamp &&
+          arenaPlayer.x > _gp.x0 && arenaPlayer.x < _gp.x1 &&
+          Math.abs(arenaPlayer.z) < _gp.zHalf) {
+        _groundY = -100;
+      }
+    }
+    if (arenaPlayer.y <= _groundY && arenaPlayer.vy <= 0) {
+      arenaPlayer.y = _groundY; arenaPlayer.vy = 0; arenaPlayer.onGround = true;
     } else {
       arenaPlayer.onGround = false;
       arenaPlayer.vy -= 18 * dts;
       arenaPlayer.y += arenaPlayer.vy * dts;
-      if (arenaPlayer.y < 0.2) { arenaPlayer.y = 0.2; arenaPlayer.vy = 0; arenaPlayer.onGround = true; }
+      if (arenaPlayer.y < _groundY) { arenaPlayer.y = _groundY; arenaPlayer.vy = 0; arenaPlayer.onGround = true; }
     }
+    // Launch boost — if the player just rolled off the top of the ramp going
+    // east, kick them up in proportion to their forward speed.
+    if (arenaPlayer._wasOnRamp && !_onRamp && freeMapInRace && freeMapRaceRoad && freeMapRaceRoad.ramp) {
+      const _spd = Math.hypot(arenaPlayer.vx, arenaPlayer.vz);
+      if (_spd > 4 && arenaPlayer.x >= freeMapRaceRoad.ramp.x1 - 0.5) {
+        arenaPlayer.vy = Math.max(arenaPlayer.vy, Math.min(_spd * 0.3, 9));
+        arenaPlayer.onGround = false;
+      }
+    }
+    arenaPlayer._wasOnRamp = _onRamp;
     if (arenaPlayer.onGround) { freeMapLastSafeX = arenaPlayer.x; freeMapLastSafeZ = arenaPlayer.z; }
     if (arenaPlayer.y < -4) {
-      arenaPlayer.x = freeMapLastSafeX; arenaPlayer.z = freeMapLastSafeZ;
+      if (freeMapInRace && freeMapRaceRoad && freeMapRaceRoad.spawn) {
+        const _sp = freeMapRaceRoad.spawn;
+        arenaPlayer.x = _sp.x - 4; arenaPlayer.z = _sp.z;
+        arenaPlayer.heading = _sp.heading;
+      } else {
+        arenaPlayer.x = freeMapLastSafeX; arenaPlayer.z = freeMapLastSafeZ;
+      }
       arenaPlayer.y = 0.5; arenaPlayer.vy = 0; arenaPlayer.vx = 0; arenaPlayer.vz = 0;
+    }
+    // Lap detection — increment when player crosses the finish line going east
+    // after having driven away from the start area at least once.
+    if (freeMapInRace && freeMapRaceRoad && freeMapRaceRoad.finish) {
+      const _fx = freeMapRaceRoad.finish.x;
+      const _awayThr = freeMapRaceRoad.finish.awayX !== undefined ? freeMapRaceRoad.finish.awayX : 0;
+      if (arenaPlayer.x > _awayThr) freeMapRaceLapArmed = true;
+      const _prevX = arenaPlayer._racePrevX;
+      if (_prevX !== undefined && _prevX < _fx && arenaPlayer.x >= _fx &&
+          freeMapRaceLapArmed &&
+          arenaPlayer.z >= freeMapRaceRoad.finish.z0 &&
+          arenaPlayer.z <= freeMapRaceRoad.finish.z1) {
+        freeMapRaceLaps += 1;
+        freeMapRaceLapArmed = false;
+        if (freeMapRaceLaps >= RACE_LAPS_TO_WIN) {
+          // Race complete — record the win, advance rank, show the results.
+          const _oldRank = getRank(raceWins);
+          raceWins += 1;
+          localStorage.setItem('headon_race_wins', raceWins);
+          const _newRank = getRank(raceWins);
+          raceResultsData = {
+            newWins:  raceWins,
+            oldRank:  _oldRank,
+            newRank:  _newRank,
+            promoted: _newRank.idx > _oldRank.idx,
+          };
+          raceResultsShown = true;
+          arenaPlayer.vx = 0; arenaPlayer.vz = 0;
+        }
+      }
+      arenaPlayer._racePrevX = arenaPlayer.x;
     }
   } else {
     const tile = arenaTileAt(arenaPlayer.x, arenaPlayer.z);
@@ -2943,18 +3493,18 @@ function updateArena(dt) {
 
   // tile state machine
   for (const t of arenaTiles) {
-    // obsidian infection — purple creep, spreads, then drops
+    // obsidian infection — purple creep, spreads, then drops. Tuned faster.
     if (t.infected && t.state === 'alive') {
       t.infectTimer += dt;
       t.spreadTimer  += dt;
-      // lerp color white → deep purple over 3s
-      const p = Math.min(1, t.infectTimer / 3000);
+      // lerp color white → deep purple over 1.2s
+      const p = Math.min(1, t.infectTimer / 1200);
       t.mesh.material.color.setRGB(0.08 + (1-p)*0.85, 0, 0.12 + p*0.45);
-      // spread to one random adjacent alive uninfected tile every ~3s (capped at 5 total infected)
-      if (t.spreadTimer >= 3000) {
+      // spread to a random adjacent alive uninfected tile every ~1s (capped at 9 total infected)
+      if (t.spreadTimer >= 1000) {
         t.spreadTimer = 0;
         const totalInfected = arenaTiles.filter(o => o.infected).length;
-        if (totalInfected < 5) {
+        if (totalInfected < 9) {
           const neighbors = arenaTiles.filter(o =>
             o !== t && !o.infected && o.state === 'alive' &&
             Math.hypot(o.x - t.x, o.z - t.z) < HEX_SIZE * 2.2
@@ -2965,8 +3515,8 @@ function updateArena(dt) {
           }
         }
       }
-      // after 3s tile drops
-      if (t.infectTimer >= 3000) {
+      // tile drops after 1.2s of infection
+      if (t.infectTimer >= 1200) {
         t.infected = false;
         t.state = 'fading'; t.timer = 0;
       }
@@ -4122,12 +4672,21 @@ function syncScene() {
   stars.visible = !inIndoor && !inArena && BACKGROUNDS[bgIdx].stars;
 
   if (inArena) {
-    scene.background = new THREE.Color(0x5bbde4);
-    scene.fog.color.set(0x5bbde4);
-    scene.fog.near = 90; scene.fog.far = 220;
-    hemi.color.set(0x5bbde4);
-    hemi.groundColor.set(0x0055bb);
-    ambient.intensity = 0.35;
+    if (freeMapInRace) {
+      scene.background = new THREE.Color(0x9ddcff); // bright sky
+      scene.fog.color.set(0xc4ebff);
+      scene.fog.near = 200; scene.fog.far = 600;
+      hemi.color.set(0xfffbe6);
+      hemi.groundColor.set(0x5fa84b);
+      ambient.intensity = 0.55;
+    } else {
+      scene.background = new THREE.Color(0x5bbde4);
+      scene.fog.color.set(0x5bbde4);
+      scene.fog.near = 90; scene.fog.far = 220;
+      hemi.color.set(0x5bbde4);
+      hemi.groundColor.set(0x0055bb);
+      ambient.intensity = 0.35;
+    }
   } else if (inGarage) {
     scene.background = new THREE.Color(0x808088);
     scene.fog.color.set(0x808088);
@@ -4229,6 +4788,190 @@ function drawHud2D() {
   if (state === STATE.MISSIONS) drawMissionsScreen();
   if (state === STATE.MISSIONS_GARAGE) drawMissionsGarage();
   if (state === STATE.LEVEL) drawLevel();
+  if (state === STATE.SETTINGS) drawSettings();
+  if (state === STATE.DEVICE_SELECT) drawDeviceSelect();
+  // Mobile on-screen touch controls — only while actively driving on mobile.
+  if (device === 'mobile' && state === STATE.ARENA) drawMobileControls();
+}
+
+// One-time device pick on first launch — also reachable later via Settings.
+let deviceSelectButtons = [];
+function drawDeviceSelect() {
+  ctx.save();
+  // Neon backdrop: dark with a swirling cyan/magenta radial wash.
+  const bg = ctx.createRadialGradient(W * 0.3, H * 0.3, 40, W / 2, H / 2, Math.max(W, H));
+  bg.addColorStop(0, '#241540');
+  bg.addColorStop(0.55, '#0e0928');
+  bg.addColorStop(1, '#04020a');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  // Faint diagonal neon grid lines for the synthwave feel.
+  ctx.strokeStyle = 'rgba(0, 240, 255, 0.10)';
+  ctx.lineWidth = 1;
+  for (let gy = 60; gy < H; gy += 28) {
+    ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy + 8); ctx.stroke();
+  }
+
+  // Title with neon glow
+  ctx.textAlign = 'center';
+  ctx.font = 'bold italic 44px system-ui';
+  for (let i = 6; i > 0; i--) {
+    ctx.fillStyle = 'rgba(255, 68, 221, ' + (0.05 + 0.05 * i) + ')';
+    ctx.fillText('HEAD ON', W / 2 + i, H * 0.18 + i);
+  }
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('HEAD ON', W / 2, H * 0.18);
+  ctx.font = 'bold 14px system-ui';
+  ctx.fillStyle = '#9be3ff';
+  ctx.fillText('PICK YOUR DEVICE', W / 2, H * 0.18 + 30);
+
+  // Two large neon buttons stacked vertically (compact widths for any aspect)
+  deviceSelectButtons = [];
+  const bw = Math.min(280, W - 80), bh = 92;
+  const cx = W / 2;
+  const opts = [
+    { id: 'computer', label: 'COMPUTER', sub: 'keyboard',     glow: '#00f0ff' },
+    { id: 'mobile',   label: 'MOBILE',   sub: 'on-screen controls', glow: '#34ff9e' },
+  ];
+  for (let i = 0; i < opts.length; i++) {
+    const o = opts[i];
+    const by = H / 2 - bh + i * (bh + 24);
+    const bx = cx - bw / 2;
+    const hov = mouse.x >= bx && mouse.x <= bx + bw && mouse.y >= by && mouse.y <= by + bh;
+    // outer neon halo
+    ctx.shadowColor = o.glow; ctx.shadowBlur = hov ? 24 : 14;
+    ctx.fillStyle = hov ? 'rgba(20, 30, 50, 0.95)' : 'rgba(10, 14, 28, 0.92)';
+    ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 14); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = o.glow; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 14); ctx.stroke();
+    // text
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 28px system-ui';
+    ctx.fillText(o.label, cx, by + 44);
+    ctx.fillStyle = '#cfd3e8'; ctx.font = '12px system-ui';
+    ctx.fillText(o.sub, cx, by + 70);
+    deviceSelectButtons.push({ x: bx, y: by, w: bw, h: bh, id: o.id });
+  }
+
+  ctx.fillStyle = '#888'; ctx.font = '11px system-ui';
+  ctx.fillText('You can change this later in Settings', cx, H - 30);
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+// Touch / on-screen controls for mobile play.
+let mobileBtnLayout = null;
+function drawMobileControls() {
+  ctx.save();
+  const r = Math.min(W, H) * 0.085;
+  const margin = 18;
+  const lx = margin + r, ly = H - margin - r;       // left  arrow center
+  const rx = lx + r * 2 + 14, ry = ly;              // right arrow center
+  const gx = W - margin - r, gy = H - margin - r;   // gas (right of pair)
+  const bx = gx - r * 2 - 14, by = gy;              // brake (left of pair)
+  // store hit-targets for the pointer handler
+  mobileBtnLayout = {
+    left:  { cx: lx, cy: ly, r: r, key: 'arrowleft'  },
+    right: { cx: rx, cy: ry, r: r, key: 'arrowright' },
+    brake: { cx: bx, cy: by, r: r, key: 'arrowdown'  },
+    gas:   { cx: gx, cy: gy, r: r, key: 'arrowup'    },
+  };
+  function pad(cx, cy, label, glow, pressed) {
+    ctx.globalAlpha = pressed ? 0.85 : 0.45;
+    ctx.shadowColor = glow; ctx.shadowBlur = pressed ? 24 : 10;
+    ctx.fillStyle = 'rgba(8, 10, 20, 0.7)';
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = glow; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold ' + Math.round(r * 0.7) + 'px system-ui';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, cx, cy + 2);
+    ctx.globalAlpha = 1;
+    ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+  }
+  pad(lx, ly, '◀', '#00f0ff', !!keys['arrowleft']);
+  pad(rx, ry, '▶', '#00f0ff', !!keys['arrowright']);
+  pad(bx, by, '⬇', '#ff44dd', !!keys['arrowdown']);
+  pad(gx, gy, '⬆', '#34ff9e', !!keys['arrowup']);
+  ctx.restore();
+}
+
+function drawSettings() {
+  // dim backdrop
+  ctx.fillStyle = 'rgba(0,0,0,0.92)';
+  ctx.fillRect(0, 0, W, H);
+
+  // title
+  ctx.fillStyle = '#ffd54a';
+  ctx.font = 'bold 26px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('SETTINGS', W / 2, 70);
+
+  settingsButtons = [];
+
+  // USERNAME row
+  ctx.fillStyle = '#bbb'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+  ctx.fillText('USERNAME', 40, 140);
+  // name display box
+  const _nbX = 40, _nbY = 150, _nbW = W - 80 - 90 - 10, _nbH = 36;
+  ctx.fillStyle = 'rgba(20,20,30,0.75)';
+  roundedRect(_nbX, _nbY, _nbW, _nbH, 5); ctx.fill();
+  ctx.strokeStyle = '#ff44dd'; ctx.lineWidth = 1.5;
+  roundedRect(_nbX, _nbY, _nbW, _nbH, 5); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 16px system-ui'; ctx.textBaseline = 'middle';
+  ctx.fillText(playerName, _nbX + 12, _nbY + _nbH / 2);
+  ctx.textBaseline = 'alphabetic';
+  // EDIT button next to name
+  const _ebX = _nbX + _nbW + 10, _ebW = 80;
+  ctx.fillStyle = mouse.x >= _ebX && mouse.x <= _ebX + _ebW && mouse.y >= _nbY && mouse.y <= _nbY + _nbH
+    ? 'rgba(255,68,221,0.85)' : 'rgba(20,20,30,0.75)';
+  roundedRect(_ebX, _nbY, _ebW, _nbH, 5); ctx.fill();
+  ctx.strokeStyle = '#ff44dd'; ctx.lineWidth = 1.5;
+  roundedRect(_ebX, _nbY, _ebW, _nbH, 5); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 13px system-ui';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('EDIT', _ebX + _ebW / 2, _nbY + _nbH / 2);
+  ctx.textBaseline = 'alphabetic';
+  settingsButtons.push({ x: _ebX, y: _nbY, w: _ebW, h: _nbH, action: () => {
+    const _v = prompt('Enter your username (max 14 chars):', playerName);
+    if (_v != null) {
+      const _n = _v.trim().slice(0, 14);
+      if (_n) { playerName = _n; localStorage.setItem('headon_username', playerName); }
+    }
+  }});
+
+  // SOUND row
+  ctx.fillStyle = '#bbb'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+  ctx.fillText('SOUND', 40, 230);
+  const _sbX = 40, _sbY = 240, _sbW = W - 80, _sbH = 40;
+  const _onHov = mouse.x >= _sbX && mouse.x <= _sbX + _sbW && mouse.y >= _sbY && mouse.y <= _sbY + _sbH;
+  ctx.fillStyle = soundOn ? 'rgba(40,200,90,0.85)' : 'rgba(200,40,40,0.8)';
+  if (_onHov) ctx.fillStyle = soundOn ? 'rgba(60,220,110,0.95)' : 'rgba(220,60,60,0.95)';
+  roundedRect(_sbX, _sbY, _sbW, _sbH, 5); ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+  roundedRect(_sbX, _sbY, _sbW, _sbH, 5); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 16px system-ui';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(soundOn ? '♪  SOUND  ON' : '✕  SOUND  OFF', _sbX + _sbW / 2, _sbY + _sbH / 2);
+  ctx.textBaseline = 'alphabetic';
+  settingsButtons.push({ x: _sbX, y: _sbY, w: _sbW, h: _sbH, action: () => {
+    soundOn = !soundOn;
+    localStorage.setItem('headon_sound_on', soundOn ? '1' : '0');
+    applyMasterVolume();
+  }});
+
+  // BACK button
+  const _bbX = W / 2 - 60, _bbY = H - 70, _bbW = 120, _bbH = 40;
+  const _bbHov = mouse.x >= _bbX && mouse.x <= _bbX + _bbW && mouse.y >= _bbY && mouse.y <= _bbY + _bbH;
+  ctx.fillStyle = _bbHov ? 'rgba(255,68,221,0.85)' : 'rgba(20,20,30,0.75)';
+  roundedRect(_bbX, _bbY, _bbW, _bbH, 6); ctx.fill();
+  ctx.strokeStyle = '#ff44dd'; ctx.lineWidth = 2;
+  roundedRect(_bbX, _bbY, _bbW, _bbH, 6); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 14px system-ui';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('← BACK', _bbX + _bbW / 2, _bbY + _bbH / 2);
+  ctx.textBaseline = 'alphabetic';
+  settingsButtons.push({ x: _bbX, y: _bbY, w: _bbW, h: _bbH, action: () => { state = STATE.MENU; } });
 }
 
 function drawArenaSelect() {
@@ -4303,27 +5046,18 @@ function drawArenaSelect() {
   ctx.fillStyle = '#ff44dd';
   ctx.fillText('Levels 6–10 ·  open edges  ·  aggressive AI', W / 2, startY + 2 * bh + gapY + 36);
 
-  // battle royale button
-  const _secretPaints = ['paint_obsidian', 'paint_moneyforever', 'paint_minecraft'];
-  const _zoneBlocked = _secretPaints.includes(equippedPaint);
+  // battle royale button — secret paints are now allowed in The Zone.
   const brW = 200, brH = 36, brX = W/2 - brW/2, brY = H - 132;
-  const brHov = !_zoneBlocked && mouse.x >= brX && mouse.x <= brX+brW && mouse.y >= brY && mouse.y <= brY+brH;
-  ctx.globalAlpha = _zoneBlocked ? 0.38 : 1;
+  const brHov = mouse.x >= brX && mouse.x <= brX+brW && mouse.y >= brY && mouse.y <= brY+brH;
   ctx.fillStyle = brHov ? '#ff4444' : 'rgba(255,40,40,0.14)';
   roundedRect(brX, brY, brW, brH, 7); ctx.fill();
-  ctx.strokeStyle = _zoneBlocked ? '#553333' : '#ff4444'; ctx.lineWidth = 2;
+  ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2;
   roundedRect(brX, brY, brW, brH, 7); ctx.stroke();
-  ctx.fillStyle = brHov ? '#fff' : (_zoneBlocked ? '#885555' : '#ff6666');
+  ctx.fillStyle = brHov ? '#fff' : '#ff6666';
   ctx.font = 'bold 13px system-ui'; ctx.textBaseline = 'middle';
   ctx.fillText('🟡 THE ZONE  —  50 cars', brX + brW/2, brY + brH/2);
   ctx.textBaseline = 'alphabetic';
-  ctx.globalAlpha = 1;
-  if (_zoneBlocked) {
-    ctx.fillStyle = '#ff8888';
-    ctx.font = '10px system-ui'; ctx.textAlign = 'center';
-    ctx.fillText('Secret paints cannot enter The Zone', brX + brW/2, brY - 8);
-  }
-  arenaSelectButtons.push({ x: brX, y: brY, w: brW, h: brH, level: -2, zoneBlocked: _zoneBlocked });
+  arenaSelectButtons.push({ x: brX, y: brY, w: brW, h: brH, level: -2, zoneBlocked: false });
 
   // championships button
   const chW = 180, chH = 34, chX = W/2 - chW/2, chY = H - 86;
@@ -4440,7 +5174,108 @@ function drawChampionship() {
   ctx.textAlign = 'left';
 }
 
+// Renders the show-off summary onto an arbitrary 2D canvas context.
+// Used by the in-world billboard inside each show-off building.
+function drawShowOffContent(c2, W, H) {
+  const car = CARS[carIdx];
+  const eTier = getUpg(carIdx, 'engine');
+  const wTier = getUpg(carIdx, 'wheels');
+  const bTier = getUpg(carIdx, 'brakes');
+  const paint = SHOP_PAINTS.find(p => p.id === equippedPaint);
+  const trail = SHOP_TRAILS.find(t => t.id === equippedTrail);
+
+  c2.fillStyle = '#0a041e';
+  c2.fillRect(0, 0, W, H);
+  const grad = c2.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#2244ff');
+  grad.addColorStop(1, '#aa22bb');
+  c2.strokeStyle = grad; c2.lineWidth = 8;
+  c2.strokeRect(4, 4, W - 8, H - 8);
+
+  c2.textBaseline = 'alphabetic';
+  c2.textAlign = 'center';
+
+  c2.fillStyle = '#ffd54a'; c2.font = 'bold 40px system-ui';
+  c2.fillText('★  SHOW OFF  ★', W / 2, 48);
+
+  c2.fillStyle = '#fff'; c2.font = 'bold 44px system-ui';
+  c2.fillText(playerName || 'PLAYER', W / 2, 96);
+
+  c2.fillStyle = '#b39ddb'; c2.font = 'bold 16px system-ui';
+  c2.fillText('CAR', W / 2, 122);
+  c2.fillStyle = '#fff'; c2.font = 'bold 28px system-ui';
+  c2.fillText(car.name, W / 2, 150);
+
+  const cells = [
+    { label: 'ENGINE', val: eTier > 0 ? TIER_NAMES[eTier] : '—', col: eTier > 0 ? TIER_COLORS[eTier] : '#555' },
+    { label: 'WHEELS', val: wTier > 0 ? TIER_NAMES[wTier] : '—', col: wTier > 0 ? TIER_COLORS[wTier] : '#555' },
+    { label: 'BRAKES', val: bTier > 0 ? TIER_NAMES[bTier] : '—', col: bTier > 0 ? TIER_COLORS[bTier] : '#555' },
+    { label: 'PAINT',  val: (paint && paint.name) || 'STOCK',    col: '#fff' },
+    { label: 'TRAIL',  val: (trail && trail.name) || 'DEFAULT',  col: '#fff' },
+  ];
+  const cellW = (W - 40) / cells.length;
+  cells.forEach((r, i) => {
+    const x = 20 + i * cellW + cellW / 2;
+    c2.fillStyle = '#888'; c2.font = 'bold 16px system-ui';
+    c2.fillText(r.label, x, 192);
+    c2.fillStyle = r.col; c2.font = 'bold 22px system-ui';
+    c2.fillText(r.val, x, 222);
+  });
+
+  c2.textAlign = 'left';
+}
+
+// Idle billboard art — drawn once when the building is built, before anyone
+// has stepped onto the pad to publish their info.
+function drawShowOffBillboardIdle(c2, W, H) {
+  c2.fillStyle = '#0a041e';
+  c2.fillRect(0, 0, W, H);
+  const grad = c2.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#2244ff');
+  grad.addColorStop(1, '#aa22bb');
+  c2.strokeStyle = grad; c2.lineWidth = 8;
+  c2.strokeRect(4, 4, W - 8, H - 8);
+  c2.textBaseline = 'alphabetic';
+  c2.textAlign = 'center';
+  c2.fillStyle = '#ffd54a'; c2.font = 'bold 48px system-ui';
+  c2.fillText('★  SHOW OFF  ★', W / 2, 110);
+  c2.fillStyle = '#b39ddb'; c2.font = 'bold 22px system-ui';
+  c2.fillText('STEP ONTO THE PAD', W / 2, 170);
+  c2.textAlign = 'left';
+}
+
 function drawFreeMapHud() {
+  // Race-mode lap counter (top center)
+  if (freeMapInRace) {
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('LAP', W / 2, 22);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 28px system-ui';
+    const _shown = Math.min(freeMapRaceLaps + 1, RACE_LAPS_TO_WIN);
+    ctx.fillText(_shown + ' / ' + RACE_LAPS_TO_WIN, W / 2, 52);
+    ctx.textAlign = 'left';
+    ctx.restore();
+  }
+  // (show-off info renders on an in-world billboard inside each SHOW OFF
+  // building — see addShowOffBuilding — so other players can see it.)
+  // faint username floating above the player's car
+  if (playerName) {
+    const _np = project3D(arenaPlayer.x, arenaPlayer.y + 2.4, arenaPlayer.z);
+    if (!_np.behind) {
+      ctx.save();
+      ctx.globalAlpha = 0.55;
+      ctx.font = 'bold 13px system-ui';
+      ctx.textAlign = 'center';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.strokeText(playerName, _np.x, _np.y);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(playerName, _np.x, _np.y);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+  }
   // speedometer — top left
   {
     const _spd = Math.round(Math.hypot(arenaPlayer.vx, arenaPlayer.vz) * 3.6);
@@ -4550,20 +5385,184 @@ function drawFreeMapHud() {
     ctx.fillText('BUILDING  —  SPEED LIMITED', W/2, H/2 + 62);
     ctx.globalAlpha = 1;
   }
-  // race-square countdown
-  if (freeMapRaceCountdown > 0) {
-    const _remain = Math.max(0, 3 - freeMapRaceCountdown / 1000);
-    ctx.globalAlpha = 0.95; ctx.fillStyle = '#66aaff';
-    ctx.font = 'bold 42px system-ui'; ctx.textAlign = 'center';
-    ctx.fillText(Math.ceil(_remain).toString(), W/2, H/2);
-    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#cce0ff';
-    ctx.fillText('HOLD STILL TO START RACE', W/2, H/2 + 24);
-    ctx.globalAlpha = 1;
-  }
   // subtle ESC hint
   ctx.globalAlpha = 0.3; ctx.fillStyle = '#fff'; ctx.font = '9px system-ui'; ctx.textAlign = 'center';
   ctx.fillText('ESC — exit', W/2, H - 8);
   ctx.globalAlpha = 1; ctx.textAlign = 'left';
+
+  // Pre-race map select & post-race results overlays
+  if (raceMapSelectShown) drawMapSelect();
+  if (raceResultsShown && raceResultsData) drawRaceResults();
+}
+
+// Race map select — arrows to switch between available maps. New themes
+// can be added by appending to RACE_MAPS; the panel auto-paginates.
+function drawMapSelect() {
+  const idx = ((raceMapSelectIdx % RACE_MAPS.length) + RACE_MAPS.length) % RACE_MAPS.length;
+  const map = RACE_MAPS[idx];
+  ctx.save();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.82)';
+  ctx.fillRect(0, 0, W, H);
+  const pw = Math.min(440, W - 40), ph = 410;
+  const px = (W - pw) / 2, py = (H - ph) / 2;
+  ctx.fillStyle = 'rgba(14, 6, 30, 0.96)';
+  ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 12); ctx.fill();
+  const grad = ctx.createLinearGradient(px, py, px, py + ph);
+  grad.addColorStop(0, '#2244ff'); grad.addColorStop(1, '#aa22bb');
+  ctx.strokeStyle = grad; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 12); ctx.stroke();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 24px system-ui';
+  ctx.fillText('SELECT MAP', W / 2, py + 42);
+
+  // Page dots
+  if (RACE_MAPS.length > 1) {
+    const dotsY = py + 62;
+    for (let i = 0; i < RACE_MAPS.length; i++) {
+      ctx.fillStyle = i === idx ? '#ffd54a' : '#555';
+      ctx.beginPath();
+      ctx.arc(W / 2 + (i - (RACE_MAPS.length - 1) / 2) * 14, dotsY, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Thumbnail framed box — colors depend on the map theme.
+  const tx = px + 40, ty = py + 78, tw = pw - 80, th = 180;
+  const theme = map.theme === 'magma'
+    ? { ground: '#5a1a14', track: '#2a1010', frame: '#ff6622', glow: '#ff8844' }
+    : { ground: '#6cb04c', track: '#3a3a3a', frame: '#ffd54a', glow: '#9be074' };
+  ctx.fillStyle = theme.ground;
+  ctx.beginPath(); ctx.roundRect(tx, ty, tw, th, 6); ctx.fill();
+  // For magma: add a few orange "glow" splotches as scenery.
+  if (map.theme === 'magma') {
+    for (const sp of [[0.18, 0.30], [0.74, 0.22], [0.32, 0.78], [0.85, 0.66]]) {
+      ctx.fillStyle = 'rgba(255, 140, 40, 0.45)';
+      ctx.beginPath();
+      ctx.arc(tx + sp[0] * tw, ty + sp[1] * th, 14, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // Track outline — only Green Grove has the real serpentine; Volcano shows
+  // a faint placeholder oval since the layout isn't done yet.
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (map.id === 'green_grove') {
+    ctx.strokeStyle = theme.track; ctx.lineWidth = 10;
+    ctx.beginPath();
+    const pad = 18;
+    const x0 = tx + pad, x1 = tx + tw - pad;
+    const y0 = ty + pad, y1 = ty + th - pad;
+    const my = (y0 + y1) / 2;
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y0);
+    ctx.lineTo(x1, my - 12);
+    ctx.lineTo(x0 + 18, my - 12);
+    ctx.lineTo(x0 + 18, my + 12);
+    ctx.lineTo(x1, my + 12);
+    ctx.lineTo(x1, y1);
+    ctx.lineTo(x0, y1);
+    ctx.closePath();
+    ctx.stroke();
+  } else {
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)'; ctx.lineWidth = 6;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.ellipse(tx + tw / 2, ty + th / 2, tw / 2 - 26, th / 2 - 26, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 22px system-ui';
+    ctx.fillText('COMING SOON', tx + tw / 2, ty + th / 2 + 8);
+  }
+  ctx.strokeStyle = theme.frame; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(tx, ty, tw, th, 6); ctx.stroke();
+
+  // Map name & blurb
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 26px system-ui';
+  ctx.fillText(map.name, W / 2, py + 295);
+  ctx.fillStyle = '#aaa'; ctx.font = '12px system-ui';
+  ctx.fillText(map.blurb, W / 2, py + 318);
+
+  // Footer prompts
+  if (map.ready) {
+    ctx.fillStyle = '#cce0ff'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('SPACE or ENTER — start race', W / 2, py + ph - 44);
+  } else {
+    ctx.fillStyle = '#ff9988'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('This map is not playable yet', W / 2, py + ph - 44);
+  }
+  if (RACE_MAPS.length > 1) {
+    ctx.fillStyle = '#888'; ctx.font = '11px system-ui';
+    ctx.fillText('← / → switch map     ·     ESC cancel', W / 2, py + ph - 18);
+  } else {
+    ctx.fillStyle = '#888'; ctx.font = '11px system-ui';
+    ctx.fillText('ESC — cancel', W / 2, py + ph - 18);
+  }
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+// Post-race "you win" screen — shows result + rank progress.
+function drawRaceResults() {
+  const r = raceResultsData;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.82)';
+  ctx.fillRect(0, 0, W, H);
+  const pw = Math.min(440, W - 40), ph = 360;
+  const px = (W - pw) / 2, py = (H - ph) / 2;
+  ctx.fillStyle = 'rgba(14, 6, 30, 0.96)';
+  ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 12); ctx.fill();
+  const grad = ctx.createLinearGradient(px, py, px, py + ph);
+  grad.addColorStop(0, '#2244ff'); grad.addColorStop(1, '#aa22bb');
+  ctx.strokeStyle = grad; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 12); ctx.stroke();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 32px system-ui';
+  ctx.fillText('YOU WIN!', W / 2, py + 50);
+
+  // Standings
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 14px system-ui';
+  ctx.fillText('FINAL STANDINGS', W / 2, py + 90);
+  ctx.fillStyle = '#7fffa7'; ctx.font = 'bold 18px system-ui';
+  ctx.fillText('1.  ' + (playerName || 'PLAYER'), W / 2, py + 118);
+  ctx.fillStyle = '#ff8888'; ctx.font = 'bold 18px system-ui';
+  ctx.fillText('2.  RIVAL', W / 2, py + 144);
+
+  // Rank
+  const rank = r.newRank;
+  const col = RANK_COLORS[rank.idx] || '#fff';
+  ctx.fillStyle = '#888'; ctx.font = 'bold 11px system-ui';
+  ctx.fillText('RANK', W / 2, py + 184);
+  ctx.fillStyle = col; ctx.font = 'bold 30px system-ui';
+  ctx.fillText(rank.tier, W / 2, py + 220);
+
+  // Progress bar (or "MAX")
+  if (rank.need > 0) {
+    const bx = px + 40, by = py + 240, bw = pw - 80, bh = 18;
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 6); ctx.fill();
+    const fillW = bw * (rank.have / rank.need);
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.roundRect(bx, by, fillW, bh, 6); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText(rank.have + ' / ' + rank.need + '  WINS', W / 2, by + 13);
+  } else {
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 14px system-ui';
+    ctx.fillText('★  MAXED OUT  ★', W / 2, py + 258);
+  }
+
+  if (r.promoted) {
+    ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 16px system-ui';
+    ctx.fillText('PROMOTED TO ' + rank.tier + '!', W / 2, py + 290);
+  } else if (r.oldRank.idx === rank.idx) {
+    ctx.fillStyle = '#bbb'; ctx.font = '12px system-ui';
+    ctx.fillText('Total wins: ' + r.newWins, W / 2, py + 290);
+  }
+
+  ctx.fillStyle = '#cce0ff'; ctx.font = 'bold 12px system-ui';
+  ctx.fillText('SPACE or ENTER to continue', W / 2, py + ph - 22);
+  ctx.textAlign = 'left';
+  ctx.restore();
 }
 
 function drawArenaHud() {
@@ -4982,29 +5981,114 @@ function drawCarStats(car, cx, cy) {
 
 function drawMenuButton(b) {
   const hovered = !b.disabled && mouse.x >= b.x && mouse.x <= b.x + b.w && mouse.y >= b.y && mouse.y <= b.y + b.h;
-  // body
+  // body — dark base; on hover it lights up
   ctx.fillStyle = b.disabled ? 'rgba(40,40,50,0.55)'
-                : hovered    ? 'rgba(255,68,221,0.85)'
-                             : 'rgba(20,20,30,0.7)';
+                : hovered    ? 'rgba(20,40,55,0.95)'
+                             : 'rgba(10,14,28,0.85)';
+  // glow halo behind the fill on hover
+  ctx.shadowColor = b.disabled ? 'transparent' : (hovered ? '#34ff9e' : '#00f0ff');
+  ctx.shadowBlur  = b.disabled ? 0 : (hovered ? 22 : 8);
   roundedRect(b.x, b.y, b.w, b.h, 6);
   ctx.fill();
-  // border (neon)
-  ctx.strokeStyle = b.disabled ? '#444' : (hovered ? '#fff' : '#ff44dd');
-  ctx.lineWidth = 2;
+  ctx.shadowBlur = 0;
+  // neon border
+  ctx.strokeStyle = b.disabled ? '#444' : (hovered ? '#34ff9e' : '#00f0ff');
+  ctx.lineWidth = 2.5;
   roundedRect(b.x, b.y, b.w, b.h, 6);
   ctx.stroke();
-  // label
-  ctx.fillStyle = b.disabled ? '#888' : (hovered ? '#fff' : '#ffd54a');
-  ctx.font = 'bold 13px system-ui';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(b.label, b.x + b.w/2, b.y + b.h/2);
-  ctx.textBaseline = 'alphabetic';
-  // sublabel beneath
-  if (b.sub) {
-    ctx.fillStyle = '#bbb';
-    ctx.font = '9px system-ui';
-    ctx.fillText(b.sub, b.x + b.w/2, b.y + b.h + 12);
+  // icon takes precedence over label
+  if (b.icon) {
+    const iconColor = b.disabled ? '#888' : (hovered ? '#fff' : '#ffd54a');
+    const iconSize = Math.min(b.w, b.h) * 0.72;
+    drawMenuIcon(b.icon, b.x + b.w/2, b.y + b.h/2, iconSize, iconColor);
+    return;
   }
+  // label (shifted up a bit when there's a sublabel so both fit inside)
+  ctx.fillStyle = b.disabled ? '#888' : (hovered ? '#fff' : '#ffd54a');
+  ctx.font = 'bold ' + (b.fontSize || 13) + 'px system-ui';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const labelY = b.sub ? b.y + b.h/2 - 8 : b.y + b.h/2;
+  ctx.fillText(b.label, b.x + b.w/2, labelY);
+  ctx.textBaseline = 'alphabetic';
+  // sublabel — drawn inside the button, below the main label
+  if (b.sub) {
+    ctx.fillStyle = hovered ? '#fff' : '#ff8fea';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(b.sub, b.x + b.w/2, b.y + b.h/2 + 11);
+    ctx.textBaseline = 'alphabetic';
+  }
+}
+
+function drawMenuIcon(kind, cx, cy, size, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(1.5, size * 0.07);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  if (kind === 'home') {
+    const s = size * 0.5;
+    // roof (filled triangle)
+    ctx.beginPath();
+    ctx.moveTo(cx - s, cy - s * 0.05);
+    ctx.lineTo(cx,     cy - s * 0.85);
+    ctx.lineTo(cx + s, cy - s * 0.05);
+    ctx.closePath();
+    ctx.fill();
+    // body (filled rect)
+    ctx.fillRect(cx - s * 0.78, cy - s * 0.05, s * 1.56, s * 0.95);
+    // door (cutout — use destination-out so it punches through both shapes)
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = '#000';
+    ctx.fillRect(cx - s * 0.22, cy + s * 0.18, s * 0.44, s * 0.72);
+    ctx.restore();
+  } else if (kind === 'gear') {
+    const r = size * 0.34;
+    const ri = size * 0.18;
+    const teeth = 8;
+    // teeth: small rectangles around the ring
+    for (let i = 0; i < teeth; i++) {
+      const a = (i / teeth) * Math.PI * 2;
+      const tx = cx + Math.cos(a) * (r + size * 0.06);
+      const ty = cy + Math.sin(a) * (r + size * 0.06);
+      ctx.save();
+      ctx.translate(tx, ty);
+      ctx.rotate(a);
+      ctx.fillRect(-size * 0.08, -size * 0.06, size * 0.16, size * 0.12);
+      ctx.restore();
+    }
+    // outer ring
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    // inner hole (knock out)
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath(); ctx.arc(cx, cy, ri, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  } else if (kind === 'cart') {
+    const s = size * 0.5;
+    // handle line from upper-left corner down into basket
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.95, cy - s * 0.55);
+    ctx.lineTo(cx - s * 0.65, cy - s * 0.55);
+    ctx.lineTo(cx - s * 0.45, cy + s * 0.15);
+    ctx.lineTo(cx + s * 0.65, cy + s * 0.15);
+    ctx.stroke();
+    // basket
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.55, cy - s * 0.20);
+    ctx.lineTo(cx + s * 0.80, cy - s * 0.20);
+    ctx.lineTo(cx + s * 0.60, cy + s * 0.20);
+    ctx.lineTo(cx - s * 0.40, cy + s * 0.20);
+    ctx.closePath();
+    ctx.stroke();
+    // wheels
+    const wr = Math.max(2, s * 0.16);
+    ctx.beginPath(); ctx.arc(cx - s * 0.25, cy + s * 0.55, wr, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + s * 0.50, cy + s * 0.55, wr, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
 }
 
 function roundedRect(x, y, w, h, r) {
@@ -5078,28 +6162,37 @@ function drawMenu() {
   ctx.fillStyle = 'rgba(255,213,74,0.65)';
   ctx.fillText('▲ TAP CAR TO OPEN GARAGE', W/2, 264);
 
-  // two rows of equal-height buttons
-  const gap = 8, bh = 42;
+  const gap = 8;
   const rowW = W - 28, rowX = 14;
 
-  // bottom row: PLAY | SHOP | MODE ▶  (3 equal buttons)
-  const bw3 = Math.floor((rowW - gap * 2) / 3);
-  const by = H - 52;
+  // bottom: SHOP (small) | PLAY (huge, center) | MODE (small) — all share the same bottom edge
+  const sideW = 118, sideH = 64;
+  const playH = 76;
+  const playBottomY = H - 10;
+  const sideY = playBottomY - sideH;          // small buttons sit at bottom
+  const playY = playBottomY - playH;          // big button extends much higher
+  const playX = rowX + sideW + gap;
+  const playW = rowW - sideW * 2 - gap * 2;
 
-  // top row: GARAGE | ✦ QUEST  (2 equal buttons)
-  const bw2 = Math.floor((rowW - gap) / 2);
-  const topY = by - bh - gap;
+  // small GARAGE + QUEST in the top-right, under the coin/gem stack
+  const topBtnW = 70, topBtnH = 22;
+  const topBtnY = 74;
+  const questX  = W - 14 - topBtnW;
+  const garageX = questX - gap - topBtnW;
 
   menuButtons = [
-    { label: 'PLAY',    x: rowX,                  y: by,   w: bw3, h: bh, action: startGame },
-    { label: 'SHOP',    x: rowX + (bw3+gap),       y: by,   w: bw3, h: bh, action: () => { state = STATE.GEM_SHOP; shopResult = null; } },
-    { label: 'MODE ▶', sub: MODES[modeIdx],  x: rowX + (bw3+gap)*2, y: by, w: bw3, h: bh, action: cycleMode },
-    { label: 'GARAGE',  sub: car.name,  x: rowX,            y: topY, w: bw2, h: bh, action: () => { state = STATE.GARAGE; garageTab = 'cars'; garageCarScroll = Math.max(0, carIdx - 2); } },
-    { label: '✦ QUEST',                x: rowX + bw2 + gap, y: topY, w: bw2, h: bh, action: () => state = STATE.MISSIONS },
+    { icon: 'home',     x: rowX,                            y: sideY, w: sideW, h: sideH, action: () => { state = STATE.GARAGE; garageTab = 'cars'; garageCarScroll = Math.max(0, carIdx - 2); } },
+    { label: 'PLAY',    x: playX,                           y: playY, w: playW, h: playH, fontSize: 38, action: startGame },
+    { label: 'MODE ▶', sub: MODES[modeIdx], x: rowX + rowW - sideW, y: sideY, w: sideW, h: sideH, action: cycleMode },
+    { icon: 'cart', x: garageX, y: topBtnY, w: topBtnW, h: topBtnH, action: () => { state = STATE.GEM_SHOP; shopResult = null; } },
+    { label: '✦ QUEST', x: questX,  y: topBtnY, w: topBtnW, h: topBtnH, fontSize: 10, action: () => state = STATE.MISSIONS },
+    // gear icon to the right of the "HEAD ON" title
+    { icon: 'gear', x: 130, y: 38, w: 36, h: 36, action: () => { state = STATE.SETTINGS; } },
   ];
 
-  // records row — sits above the top button row
-  const ry = topY - 34;
+  // records row — sits just above the PLAY button
+  const bw2 = Math.floor((rowW - gap) / 2);
+  const ry = playY - 34;
   ctx.fillStyle = 'rgba(0,0,0,0.40)';
   roundedRect(rowX, ry, bw2, 26, 6); ctx.fill();
   roundedRect(rowX + bw2 + gap, ry, bw2, 26, 6); ctx.fill();
@@ -5352,9 +6445,12 @@ function drawGarage() {
     // slot picker modal
     if (garageSlotPicker !== null) {
       const items = upgradeInventory[garageSlotPicker] || [];
-      const pickerH = Math.min(H - panY - panH - 10, 36 + Math.max(1, items.length) * 44 + 10);
+      const ROW_H = 56;
+      // pickerH is capped by the space ABOVE the slot panel (panY), not below.
+      const _pickerMaxH = panY - 90;
+      const pickerH = Math.min(_pickerMaxH, 40 + Math.max(1, items.length) * ROW_H + 12);
       const pickerY = panY - pickerH - 6;
-      ctx.fillStyle = 'rgba(0,0,10,0.97)';
+      ctx.fillStyle = '#000308';
       ctx.beginPath(); ctx.roundRect(14, pickerY, W-28, pickerH, 8); ctx.fill();
       ctx.strokeStyle = '#ff44dd'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.roundRect(14, pickerY, W-28, pickerH, 8); ctx.stroke();
@@ -5372,36 +6468,42 @@ function drawGarage() {
         ctx.textAlign='center'; ctx.fillStyle='#555'; ctx.font='11px system-ui';
         ctx.fillText('No '+garageSlotPicker+' upgrades in inventory — open chests in the Shop!', W/2, pickerY+pickerH/2+4);
       } else {
+        const ROW_GAP = 4;
+        const rowH = ROW_H - ROW_GAP;
         items.forEach((item, idx) => {
-          const iy = pickerY + 28 + idx * 44;
+          const iy = pickerY + 32 + idx * ROW_H;
           const equippedOn = findEquippedCar(garageSlotPicker, idx);
           const onThisCar = equippedOn === garageCarSelected;
           const onOther = equippedOn !== null && !onThisCar;
           const tc = TIER_COLORS[item.tier];
           const bonusPct = Math.round(UPGRADE_BONUS[item.tier] * 100);
-          ctx.fillStyle = onThisCar ? 'rgba(255,68,221,0.12)' : 'rgba(255,255,255,0.04)';
-          ctx.beginPath(); ctx.roundRect(20, iy, W-40, 38, 5); ctx.fill();
-          ctx.strokeStyle = onThisCar ? '#ff44dd' : 'rgba(255,255,255,0.08)'; ctx.lineWidth=1;
-          ctx.beginPath(); ctx.roundRect(20, iy, W-40, 38, 5); ctx.stroke();
-          ctx.textAlign='left'; ctx.fillStyle=tc; ctx.font='bold 11px system-ui';
-          ctx.fillText(TIER_NAMES[item.tier] + ' ' + garageSlotPicker.toUpperCase(), 28, iy+14);
-          ctx.fillStyle='#888'; ctx.font='9px system-ui';
-          ctx.fillText('+'+bonusPct+'% '+typeLabel, 28, iy+27);
+          // fully opaque row body
+          ctx.fillStyle = onThisCar ? '#3a0a30' : '#1a1326';
+          ctx.beginPath(); ctx.roundRect(20, iy, W-40, rowH, 6); ctx.fill();
+          ctx.strokeStyle = onThisCar ? '#ff44dd' : '#553366'; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.roundRect(20, iy, W-40, rowH, 6); ctx.stroke();
+          ctx.textAlign='left'; ctx.fillStyle=tc; ctx.font='bold 13px system-ui';
+          ctx.fillText(TIER_NAMES[item.tier] + ' ' + garageSlotPicker.toUpperCase(), 30, iy + 20);
+          ctx.fillStyle='#bbb'; ctx.font='11px system-ui';
+          ctx.fillText('+' + bonusPct + '% ' + typeLabel, 30, iy + 38);
           if (onOther) {
             const otherName = (CARS[equippedOn]||{}).name || 'another car';
-            ctx.fillStyle='#ff9944'; ctx.font='9px system-ui'; ctx.textAlign='right';
-            ctx.fillText('on '+otherName, W-120, iy+14);
+            ctx.fillStyle='#ff9944'; ctx.font='bold 10px system-ui'; ctx.textAlign='right';
+            ctx.fillText('on ' + otherName, W - 130, iy + 20);
           }
-          const btnW=90, btnH=24, btnX=W-40-btnW, btnY=iy+7;
+          const btnW = 100, btnH = 32, btnX = W - 30 - btnW, btnY = iy + (rowH - btnH) / 2;
           const btnLabel = onThisCar ? 'UNEQUIP' : onOther ? 'MOVE HERE' : 'EQUIP';
-          const btnColor = onThisCar ? 'rgba(255,68,68,0.8)' : onOther ? 'rgba(255,153,68,0.85)' : 'rgba(68,255,136,0.85)';
-          ctx.fillStyle=btnColor; ctx.beginPath(); ctx.roundRect(btnX,btnY,btnW,btnH,4); ctx.fill();
-          ctx.textAlign='center'; ctx.fillStyle='#000'; ctx.font='bold 9px system-ui';
-          ctx.fillText(btnLabel, btnX+btnW/2, btnY+btnH/2+3);
-          garageButtons.push({ x:btnX, y:btnY, w:btnW, h:btnH, disabled:false, action:()=>{
+          const btnColor = onThisCar ? '#ff4444' : onOther ? '#ff9944' : '#44dd66';
+          ctx.fillStyle = btnColor;
+          ctx.beginPath(); ctx.roundRect(btnX, btnY, btnW, btnH, 5); ctx.fill();
+          ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.font = 'bold 11px system-ui';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(btnLabel, btnX + btnW / 2, btnY + btnH / 2);
+          ctx.textBaseline = 'alphabetic';
+          garageButtons.push({ x: btnX, y: btnY, w: btnW, h: btnH, disabled: false, action: () => {
             if (onThisCar) unequipItem(garageCarSelected, garageSlotPicker);
             else equipItem(garageCarSelected, garageSlotPicker, idx);
-            garageSlotPicker=null;
+            garageSlotPicker = null;
           }});
         });
       }

@@ -635,6 +635,10 @@ let freeMapRaceRival = null;     // { mesh } rival car at the start (visual)
 let freeMapRaceObstacles = [];   // [{ x, z, r }] bounceable obstacles in race mode
 let freeMapRaceEntryPad = null;  // { x, z } pad the player triggered to enter the race
 let raceMapSelectShown = false;  // true while the pre-race map-select overlay is up
+// Master toggle for the racing feature. Flip to true to re-enable; for now
+// the race buildings still render but stepping on a pad does nothing.
+const RACE_ENABLED = false;
+let raceLockedMsgUntil = 0; // timestamp until which to show the "coming soon" tooltip
 const RACE_LAPS_TO_WIN = 3;
 const RACE_MAPS = [
   { id: 'green_grove', name: 'GREEN GROVE', theme: 'grass',  ready: true,
@@ -3246,13 +3250,19 @@ function updateArena(dt) {
 
     // Race-square trigger: touching a blue pad pops up the map-select screen.
     // The actual race map is built once the player confirms the selection.
+    // Currently gated behind RACE_ENABLED — feature is paused; pads show a
+    // "coming soon" tooltip instead of starting a race.
     if (!raceMapSelectShown && !raceResultsShown) {
       for (const _sq of freeMapRaceSquares) {
         if (Math.abs(arenaPlayer.x - _sq.x) < _sq.half && Math.abs(arenaPlayer.z - _sq.z) < _sq.half) {
-          raceMapSelectShown = true;
-          raceMapSelectIdx = 0;
-          freeMapRaceEntryPad = { x: _sq.x, z: _sq.z };
-          arenaPlayer.vx = 0; arenaPlayer.vz = 0;
+          if (RACE_ENABLED) {
+            raceMapSelectShown = true;
+            raceMapSelectIdx = 0;
+            freeMapRaceEntryPad = { x: _sq.x, z: _sq.z };
+            arenaPlayer.vx = 0; arenaPlayer.vz = 0;
+          } else {
+            raceLockedMsgUntil = performance.now() + 1500;
+          }
           break;
         }
       }
@@ -4835,12 +4845,25 @@ function drawIntro() {
   const T_SLIDE = 1100;      // HEAD + ON slide in
   const T_BANG = 350;        // explosion at impact
   const T_CAP_IN = 700;      // GAMES rises in
-  const T_HOLD = 1000;       // hold the full scene
-  const T_CAP_OUT = 900;     // GAMES slowly fades
-  const T_FADE = 500;        // screen fades to black, then transition
-  const T_END = T_SLIDE + T_BANG + T_CAP_IN + T_HOLD + T_CAP_OUT + T_FADE;
+  const T_HOLD = 2200;       // hold the full scene — extended so you can soak it in
+  const T_CAP_OUT = 1200;    // GAMES slowly fades
+  const T_FADE = 700;        // crossfade INTO the next screen
+  const T_CAP_OUT_DONE_TOTAL = T_SLIDE + T_BANG + T_CAP_IN + T_HOLD + T_CAP_OUT;
+  const T_END = T_CAP_OUT_DONE_TOTAL + T_FADE;
+
+  // During the final fade phase, render whichever screen comes next behind
+  // the intro and then draw the intro on top with decreasing alpha so the
+  // two crossfade smoothly.
+  let layerAlpha = 1;
+  if (t > T_CAP_OUT_DONE_TOTAL) {
+    layerAlpha = Math.max(0, 1 - (t - T_CAP_OUT_DONE_TOTAL) / T_FADE);
+    if (!device) drawDeviceSelect();
+    else if (!localStorage.getItem('headon_tutorial_shown')) drawHelp();
+    else drawMenu();
+  }
 
   ctx.save();
+  ctx.globalAlpha = layerAlpha;
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, W, H);
 
@@ -5025,14 +5048,7 @@ function drawIntro() {
   for (let sy = 0; sy < H; sy += 3) ctx.fillRect(0, sy, W, 1);
   ctx.globalAlpha = 1;
 
-  // Final fade-to-black before handing off to the next screen.
-  if (t > T_CAP_OUT_DONE) {
-    const fade = Math.min(1, (t - T_CAP_OUT_DONE) / T_FADE);
-    ctx.globalAlpha = fade;
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, W, H);
-    ctx.globalAlpha = 1;
-  }
+  // (Final transition is handled by the crossfade layerAlpha at the top.)
 
   ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
   ctx.restore();
@@ -5643,6 +5659,26 @@ function drawFreeMapHud() {
   // Pre-race map select & post-race results overlays
   if (raceMapSelectShown) drawMapSelect();
   if (raceResultsShown && raceResultsData) drawRaceResults();
+
+  // "Coming soon" tooltip when the player steps on a race pad while the
+  // feature is paused.
+  const _rlNow = performance.now();
+  if (_rlNow < raceLockedMsgUntil) {
+    const fade = Math.min(1, (raceLockedMsgUntil - _rlNow) / 400);
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.beginPath(); ctx.roundRect(W/2 - 130, H/2 - 30, 260, 60, 8); ctx.fill();
+    ctx.strokeStyle = '#00f0ff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(W/2 - 130, H/2 - 30, 260, 60, 8); ctx.stroke();
+    ctx.fillStyle = '#00f0ff'; ctx.font = 'bold 16px system-ui';
+    ctx.fillText('RACING COMING SOON', W/2, H/2 - 4);
+    ctx.fillStyle = '#aaa'; ctx.font = '11px system-ui';
+    ctx.fillText('this feature is still under construction', W/2, H/2 + 16);
+    ctx.textAlign = 'left';
+    ctx.restore();
+  }
 }
 
 // Race map select — arrows to switch between available maps. New themes

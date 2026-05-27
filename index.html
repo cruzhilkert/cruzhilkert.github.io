@@ -202,23 +202,23 @@ let bestClassic = +localStorage.getItem('headon_best_classic') || +localStorage.
 let bestHeadOn  = +localStorage.getItem('headon_best_headon')  || 0;
 
 // ─── Classic monthly leaderboard ─────────────────────────────────────────
-// Static field of fake opponents so the player has someone to chase. If
-// the player's monthly best beats the #1 fake entry at the end of the
-// month, they receive a 50,000 coin + 50 gem prize when the new month
-// rolls over.
-const CLASSIC_LEADERBOARD = [
-  { name: 'BlitzKing',       score: 18420 },
-  { name: 'noBrakesNoFear',  score: 16780 },
-  { name: 'CrashQueen',      score: 14550 },
-  { name: 'asphalt_4_real',  score: 13290 },
-  { name: 'driftslayer',     score: 11440 },
-  { name: 'velocityV1ber',   score:  9870 },
-  { name: 'thePotato',       score:  8120 },
-  { name: 'speed_demon99',   score:  6800 },
-  { name: 'apex_pred4tor',   score:  5400 },
-  { name: 'turbotina',       score:  4100 },
+// Bots fill the leaderboard only when there aren't enough real players.
+// Their scores are intentionally low and achievable — beating the top
+// bot (≈2500) at month-end pays out 50,000 coins + 50 gems.
+// (No real backend yet, so "real players" === just the local player.)
+const CLASSIC_BOT_LEADERBOARD = [
+  { name: 'lane_changer',    score: 2480 },
+  { name: 'turbotina',       score: 1980 },
+  { name: 'thePotato',       score: 1640 },
+  { name: 'velocityV1ber',   score: 1320 },
+  { name: 'driftslayer',     score: 1050 },
+  { name: 'noBrakesNoFear',  score:  820 },
+  { name: 'roadrash',        score:  640 },
+  { name: 'CrashQueen',      score:  490 },
+  { name: 'speed_demon99',   score:  370 },
+  { name: 'asphalt_4_real',  score:  250 },
 ];
-const CLASSIC_LB_TOP_SCORE = CLASSIC_LEADERBOARD[0].score;
+const CLASSIC_LB_TOP_SCORE = CLASSIC_BOT_LEADERBOARD[0].score;
 function _currentMonthKey() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
@@ -250,8 +250,13 @@ function updateClassicMonthlyBest(score) {
   }
 }
 function getClassicLeaderboardRanked() {
-  const playerEntry = { name: 'YOU', score: classicMonthlyBest, isPlayer: true };
-  return [...CLASSIC_LEADERBOARD, playerEntry].sort((a, b) => b.score - a.score);
+  // Without a backend the "real player" pool is just YOU. If/when the
+  // pool fills out to 10+ real players the bots get hidden — for now
+  // the bots fill the bottom positions so the board isn't empty.
+  const realPlayers = [{ name: 'YOU', score: classicMonthlyBest, isPlayer: true }];
+  const needed = Math.max(0, 10 - realPlayers.length);
+  const bots = CLASSIC_BOT_LEADERBOARD.slice(0, needed);
+  return [...realPlayers, ...bots].sort((a, b) => b.score - a.score);
 }
 function getBest() { return MODES[modeIdx] === 'HEAD ON' ? bestHeadOn : bestClassic; }
 function saveBest(v) {

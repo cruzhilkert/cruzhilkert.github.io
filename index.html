@@ -254,9 +254,15 @@ function getClassicLeaderboardRanked() {
 }
 function getBest() { return MODES[modeIdx] === 'HEAD ON' ? bestHeadOn : bestClassic; }
 function saveBest(v) {
-  if (MODES[modeIdx] === 'HEAD ON') { bestHeadOn  = v; localStorage.setItem('headon_best_headon',  v); }
-  else                               { bestClassic = v; localStorage.setItem('headon_best_classic', v); }
+  // Always update the monthly best for classic, even if it doesn't beat
+  // the all-time best (you can have a great month-best but still under
+  // your lifetime PB).
   if (MODES[modeIdx] !== 'HEAD ON') updateClassicMonthlyBest(v);
+  if (MODES[modeIdx] === 'HEAD ON') {
+    if (v > bestHeadOn) { bestHeadOn = v; localStorage.setItem('headon_best_headon', v); }
+  } else {
+    if (v > bestClassic) { bestClassic = v; localStorage.setItem('headon_best_classic', v); }
+  }
 }
 let owned;
 try { owned = JSON.parse(localStorage.getItem('headon_owned')) || ['paint_stock','trail_default']; } catch(e){ owned=['paint_stock','trail_default']; }
@@ -285,7 +291,7 @@ function getFireColor() { const cols = ['#ffee00','#ffdd00','#ffaa00','#ff7700',
 let _trailT = 0; // global trail time for color cycling
 
 // ===== runtime state =====
-const STATE = { MENU: 'menu', HELP: 'help', PLAYING: 'playing', DEAD: 'dead', ARENA: 'arena', GARAGE: 'garage', ARENA_SELECT: 'arena_select', GEM_SHOP: 'gem_shop', MISSIONS: 'missions', MISSIONS_GARAGE: 'missions_garage', LEVEL: 'level', CHAMPIONSHIP: 'championship', SETTINGS: 'settings', DEVICE_SELECT: 'device_select', INTRO: 'intro' };
+const STATE = { MENU: 'menu', HELP: 'help', PLAYING: 'playing', DEAD: 'dead', ARENA: 'arena', GARAGE: 'garage', ARENA_SELECT: 'arena_select', GEM_SHOP: 'gem_shop', MISSIONS: 'missions', MISSIONS_GARAGE: 'missions_garage', LEVEL: 'level', CHAMPIONSHIP: 'championship', SETTINGS: 'settings', DEVICE_SELECT: 'device_select', INTRO: 'intro', MOBILE_EDIT: 'mobile_edit' };
 let device = localStorage.getItem('headon_device') || null; // 'computer' | 'mobile' | null
 // Intro animation plays first every launch and ALWAYS hands off to the
 // device-select screen so the player can confirm/switch each session.
@@ -433,6 +439,14 @@ let crashAutoTimer = 0;  // ms until auto-restart after crash
 
 let menuButtons = [];
 let settingsButtons = [];
+// ─── Mobile button position editor (lives inside the Settings page) ───
+let mobileBtnOffsets = {};
+try { mobileBtnOffsets = JSON.parse(localStorage.getItem('headon_mobile_btn_offsets')) || {}; }
+catch (e) { mobileBtnOffsets = {}; }
+function getMobileOffset(name) { return mobileBtnOffsets[name] || { dx: 0, dy: 0 }; }
+function saveMobileOffsets() { localStorage.setItem('headon_mobile_btn_offsets', JSON.stringify(mobileBtnOffsets)); }
+let mobileEditMode = false;        // toggled on/off in Settings via a button
+let mobileEditDrag = null;         // { name, startMx, startMy, startOffset } while dragging
 let playerName = (localStorage.getItem('headon_username') || 'PLAYER').slice(0, 14);
 let raceWins = +localStorage.getItem('headon_race_wins') || 0;
 const RANK_TIERS = ['BRONZE', 'SILVER', 'GOLD', 'PRO', 'GOD'];
@@ -724,6 +738,7 @@ let freeMapLastShowPad = null; // the specific pad we were on last frame, or nul
 let freeMapMiniGamePads = []; // { x, z, half, gameId } — pads that open a mini-game when stood on
 let miniGameActive = null;   // null | 'flappydunk' | 'placeholder'
 let _fdState = null;         // Flappy Dunk state object (null when game not active)
+let _gdwState = null;        // Geometry Dash Wave state object (null when game not active)
 let freeMapRaceCountdown = 0; // ms elapsed while standing on a race square
 let freeMapInRace = false;    // true while on the race track map
 let freeMapRaceRoad = null;   // { outer, inner, spawn, ramp, finish } race-track data
@@ -2714,8 +2729,22 @@ function _mobilePtToCanvas(e) {
   return [(e.clientX - r.left) * (W / r.width), (e.clientY - r.top) * (H / r.height)];
 }
 canvas3d.addEventListener('pointerdown', e => {
-  if (device !== 'mobile' || (state !== STATE.ARENA && state !== STATE.PLAYING)) return;
   const [cx, cy] = _mobilePtToCanvas(e);
+  // Settings → "edit mobile buttons" mode: drag a touch button to move it.
+  if (state === STATE.SETTINGS && mobileEditMode && mobileBtnLayout) {
+    for (const name of Object.keys(mobileBtnLayout)) {
+      const btn = mobileBtnLayout[name];
+      if (Math.hypot(cx - btn.cx, cy - btn.cy) < btn.r) {
+        mobileEditDrag = {
+          name, startMx: cx, startMy: cy,
+          startOffset: { ...getMobileOffset(name) },
+        };
+        e.preventDefault && e.preventDefault();
+        return;
+      }
+    }
+  }
+  if (device !== 'mobile' || (state !== STATE.ARENA && state !== STATE.PLAYING)) return;
   const b = _mobileHitTestBtn(cx, cy);
   if (b) {
     if (b.tap) {
@@ -2729,8 +2758,17 @@ canvas3d.addEventListener('pointerdown', e => {
   }
 });
 canvas3d.addEventListener('pointermove', e => {
-  if (!_mobileActive.has(e.pointerId)) return;
   const [cx, cy] = _mobilePtToCanvas(e);
+  if (mobileEditDrag) {
+    const dx = cx - mobileEditDrag.startMx;
+    const dy = cy - mobileEditDrag.startMy;
+    mobileBtnOffsets[mobileEditDrag.name] = {
+      dx: mobileEditDrag.startOffset.dx + dx,
+      dy: mobileEditDrag.startOffset.dy + dy,
+    };
+    return;
+  }
+  if (!_mobileActive.has(e.pointerId)) return;
   const newKey = _mobileHitTest(cx, cy);
   const oldKey = _mobileActive.get(e.pointerId);
   if (newKey !== oldKey) {
@@ -2741,6 +2779,11 @@ canvas3d.addEventListener('pointermove', e => {
   }
 });
 function _mobileRelease(e) {
+  if (mobileEditDrag) {
+    saveMobileOffsets();
+    mobileEditDrag = null;
+    return;
+  }
   const k = _mobileActive.get(e.pointerId);
   if (k) keys[k] = false;
   _mobileActive.delete(e.pointerId);
@@ -4610,7 +4653,7 @@ function updateArena(dt) {
     arenaElimOrder.push('player');
     arenaPlacement = totalCars - arenaElimOrder.indexOf('player');
     state = STATE.DEAD;
-    if (score > getBest()) { saveBest(Math.floor(score)); }
+    saveBest(Math.floor(score));
     const e = calcArenaEarnings(arenaPlacement);
     earnings = {
       distanceKm:0, distanceCoins:0, speedingSec:gameTime,
@@ -4637,7 +4680,7 @@ function killArenaPlayer(totalCars) {
   arenaPlacement = (totalCars || (arenaBots.length + 1)) - arenaElimOrder.indexOf('player');
   state = STATE.DEAD;
   addShake(0.4, 600); playCrashSound(); crashes = 1;
-  if (score > getBest()) { saveBest(Math.floor(score)); }
+  saveBest(Math.floor(score));
   // calcArenaEarnings lives inside updateArena's scope; recompute placement-based stub here
   const placeBase = [80, 25, 10, 4][arenaPlacement - 1] || 4;
   const LVL_MULS = [1.0, 1.3, 1.6, 2.0, 2.5, 2.4, 2.3, 2.2, 2.1, 2.0];
@@ -4681,7 +4724,7 @@ function spawnEnemy(opts={}) {
   scene.add(m);
   enemies.push({
     mesh: m, worldX: LANE_X[lane], worldZ: DRAW_DIST + (opts.zOffset || 0),
-    kind: type.kind, color
+    kind: type.kind, color,
   });
 }
 function spawnPulse(count, truck) {
@@ -4745,7 +4788,7 @@ function takeDamage(e) {
     state = STATE.DEAD;
     addShake(0.6, 900);
     crashAutoTimer = 3000;
-    if (score > getBest()) { saveBest(Math.floor(score)); }
+    saveBest(Math.floor(score));
     earnings = computeEarnings();
     lastEarned = earnings.total;
     if (lastEarned > 0) setCoins(coins + lastEarned);
@@ -5126,9 +5169,13 @@ function update(dt) {
       spawnPulse(w.count, w.truck);
       spawnTimer = w.interval / Math.max(0.6, speed / 22);
     } else {
-      const classicCount = Math.min(5, 1 + Math.floor(gameTime / 30));
+      // Cap at LANE_COUNT-1 so a full lateral wall never forms — there is
+      // always at least one lane the player can slip into. Spawn rate is
+      // also dialled down by 30% from the difficulty base so traffic feels
+      // a bit thinner overall.
+      const classicCount = Math.min(LANE_COUNT - 1, 1 + Math.floor(gameTime / 30));
       spawnPulse(classicCount, false);
-      spawnTimer = d.spawnBase / Math.max(0.6, speed / 22) + Math.random()*250;
+      spawnTimer = (d.spawnBase * 1.3) / Math.max(0.6, speed / 22) + Math.random()*250;
     }
   }
 
@@ -5198,15 +5245,14 @@ function update(dt) {
   }
 
   score += dts * 18 * d.scoreMul;
-  // Classic mode: same top speed regardless of car choice. Speed ramps with
-  // score linearly up to d.maxSpeed (the "natural" cap), then keeps creeping
-  // upward forever at 25% the rate, so a long survival run progressively
-  // gets faster and faster without ever capping out.
+  // Classic speed: starts at 22 m/s (~50 mph) and climbs by ~0.45 m/s
+  // (1 mph) every second, scaled by the chosen car's topMul so faster
+  // cars are actually faster in Classic. The ramp keeps going forever —
+  // the longer you survive, the faster everything moves.
   {
-    const _softCap = d.maxSpeed * bodyMul;
-    const _raw = d.startSpeed + score * 0.08;
-    const _excess = Math.max(0, _raw - _softCap);
-    speed = Math.min(_raw, _softCap) + _excess * 0.25 + speedBoost;
+    const _carFactor = 0.65 + effTop(carIdx) * 0.35;     // CRUISER ≈ 0.93, F1 ≈ 1.51
+    const _baseMs = (22 + score * 0.025) * bodyMul;      // 22 m/s start + 0.45 m/s/sec ramp
+    speed = _baseMs * _carFactor + speedBoost;
   }
 
   // speed floor — HARD forces you to stay above 60 km/h (~16.7 m/s)
@@ -5226,7 +5272,7 @@ function update(dt) {
           state = STATE.DEAD;
           addShake(0.6, 900); playCrashSound();
           crashAutoTimer = 3000;
-          if (score > getBest()) { saveBest(Math.floor(score)); }
+          saveBest(Math.floor(score));
           earnings = computeEarnings();
           lastEarned = earnings.total;
           if (lastEarned > 0) setCoins(coins + lastEarned);
@@ -5714,15 +5760,20 @@ function drawMobileControls() {
   ctx.save();
   const r = Math.min(W, H) * 0.072;                 // shrunk so 4 pads + 2 action buttons fit
   const margin = 14;
-  const lx = margin + r, ly = H - margin - r;       // left  arrow center
-  const rx = lx + r * 2 + 12, ry = ly;              // right arrow center
-  const gx = W - margin - r, gy = H - margin - r;   // gas (right of pair)
-  const bx = gx - r * 2 - 12, by = gy;              // brake (left of pair)
+  // Apply user-saved offsets (set via the mobile button-position editor
+  // in Settings). If nothing has been customised, dx/dy are both 0.
+  const _ofL = getMobileOffset('left'),  _ofR = getMobileOffset('right');
+  const _ofB = getMobileOffset('brake'), _ofG = getMobileOffset('gas');
+  const _ofJ = getMobileOffset('jump'),  _ofF = getMobileOffset('fire');
+  const lx = margin + r + _ofL.dx,                  ly = H - margin - r + _ofL.dy;
+  const rx = lx + r * 2 + 12 + _ofR.dx,             ry = ly + _ofR.dy;
+  const gx = W - margin - r + _ofG.dx,              gy = H - margin - r + _ofG.dy;
+  const bx = gx - r * 2 - 12 + _ofB.dx,             by = gy + _ofB.dy;
   // Action buttons — smaller, stacked above brake/gas so the right thumb
   // can reach them without crowding the steering side.
   const ar = r * 0.72;
-  const jx = bx, jy = by - r - ar - 6;              // jump above brake
-  const fx = gx, fy = gy - r - ar - 6;              // fire above gas
+  const jx = bx + _ofJ.dx, jy = by - r - ar - 6 + _ofJ.dy;
+  const fx = gx + _ofF.dx, fy = gy - r - ar - 6 + _ofF.dy;
   const showFire = rocketCharges > 0;
   // store hit-targets for the pointer handler
   mobileBtnLayout = {
@@ -5854,6 +5905,57 @@ function drawSettings() {
     localStorage.setItem('headon_sound_on', soundOn ? '1' : '0');
     applyMasterVolume();
   }});
+
+  // MOBILE TOUCH LAYOUT row — clicking puts the touch buttons onto the
+  // settings page so the player can drag them into their preferred
+  // position. Clicking again locks them in.
+  ctx.fillStyle = '#bbb'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+  ctx.fillText('MOBILE TOUCH LAYOUT', 40, 310);
+  const _mbX = 40, _mbY = 320, _mbW = (W - 80) - 100, _mbH = 40;
+  const _mbHov = mouse.x >= _mbX && mouse.x <= _mbX + _mbW && mouse.y >= _mbY && mouse.y <= _mbY + _mbH;
+  ctx.fillStyle = mobileEditMode ? 'rgba(52,255,158,0.25)'
+                : _mbHov          ? 'rgba(20,40,55,0.95)'
+                                  : 'rgba(20,20,30,0.75)';
+  roundedRect(_mbX, _mbY, _mbW, _mbH, 5); ctx.fill();
+  ctx.strokeStyle = mobileEditMode ? '#34ff9e' : '#00f0ff'; ctx.lineWidth = 1.5;
+  roundedRect(_mbX, _mbY, _mbW, _mbH, 5); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 14px system-ui';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(mobileEditMode ? '✓  DONE — DRAG TO REPOSITION' : '🎮  EDIT BUTTON POSITIONS',
+               _mbX + _mbW / 2, _mbY + _mbH / 2);
+  ctx.textBaseline = 'alphabetic';
+  settingsButtons.push({ x: _mbX, y: _mbY, w: _mbW, h: _mbH, action: () => {
+    mobileEditMode = !mobileEditMode;
+    if (!mobileEditMode) saveMobileOffsets();
+  }});
+  // RESET — wipes all offsets back to defaults
+  const _rsX = _mbX + _mbW + 10, _rsW = 90;
+  const _rsHov = mouse.x >= _rsX && mouse.x <= _rsX + _rsW && mouse.y >= _mbY && mouse.y <= _mbY + _mbH;
+  ctx.fillStyle = _rsHov ? 'rgba(60,20,30,0.95)' : 'rgba(40,15,20,0.85)';
+  roundedRect(_rsX, _mbY, _rsW, _mbH, 5); ctx.fill();
+  ctx.strokeStyle = '#ff44dd'; ctx.lineWidth = 1.5;
+  roundedRect(_rsX, _mbY, _rsW, _mbH, 5); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 13px system-ui';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('RESET', _rsX + _rsW / 2, _mbY + _mbH / 2);
+  ctx.textBaseline = 'alphabetic';
+  settingsButtons.push({ x: _rsX, y: _mbY, w: _rsW, h: _mbH, action: () => {
+    mobileBtnOffsets = {}; saveMobileOffsets();
+  }});
+
+  // While in edit mode, draw the mobile control buttons on top of the
+  // settings page so the player can drag them. The actual buttons are
+  // rendered by drawMobileControls(), which reads getMobileOffset() so
+  // any drags here are reflected immediately.
+  if (mobileEditMode) {
+    const _saveRC = rocketCharges; rocketCharges = 1; // force the fire button to appear too
+    drawMobileControls();
+    rocketCharges = _saveRC;
+    // hint text under the buttons
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#34ff9e'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('Drag each button to reposition.', W / 2, _mbY + _mbH + 28);
+  }
 
   // BACK button
   const _bbX = W / 2 - 60, _bbY = H - 70, _bbW = 120, _bbH = 40;
@@ -6902,9 +7004,9 @@ function drawMenuButton(b) {
   ctx.fillStyle = b.disabled ? 'rgba(40,40,50,0.55)'
                 : hovered    ? 'rgba(20,40,55,0.95)'
                              : 'rgba(10,14,28,0.85)';
-  // glow halo behind the fill on hover
+  // Neon glow halo — always on, brighter on hover.
   ctx.shadowColor = b.disabled ? 'transparent' : (hovered ? '#34ff9e' : '#00f0ff');
-  ctx.shadowBlur  = b.disabled ? 0 : (hovered ? 22 : 8);
+  ctx.shadowBlur  = b.disabled ? 0 : (hovered ? 28 : 16);
   roundedRect(b.x, b.y, b.w, b.h, 6);
   ctx.fill();
   ctx.shadowBlur = 0;
@@ -7015,25 +7117,13 @@ function roundedRect(x, y, w, h, r) {
 }
 
 function drawMenu() {
-  // subtle vignette
+  // Simple subtle vignette only — the user asked for no drawn background
+  // so the 3D spinning car preview is fully visible without obstruction.
   const grad = ctx.createRadialGradient(W/2, H/2, H/3, W/2, H/2, H);
   grad.addColorStop(0, 'rgba(0,0,0,0)');
   grad.addColorStop(1, 'rgba(0,0,0,0.55)');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
-
-  // stylized title top-left with neon glow
-  ctx.textAlign = 'left';
-  ctx.font = 'bold italic 38px system-ui';
-  // glow layers
-  ctx.fillStyle = 'rgba(255, 68, 221, 0.35)';
-  for (let i = 4; i > 0; i--) ctx.fillText('HEAD', 14 + i, 50 + i);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText('HEAD', 14, 50);
-  ctx.fillStyle = 'rgba(0, 240, 255, 0.45)';
-  for (let i = 4; i > 0; i--) ctx.fillText('ON', 14 + i, 88 + i);
-  ctx.fillStyle = '#ffd54a';
-  ctx.fillText('ON', 14, 88);
 
   // coin balance top-right
   ctx.textAlign = 'right';
@@ -7104,7 +7194,7 @@ function drawMenu() {
     { icon: 'cart', x: garageX, y: topBtnY, w: topBtnW, h: topBtnH, action: () => { state = STATE.GEM_SHOP; shopResult = null; } },
     { label: '✦ QUEST', x: questX,  y: topBtnY, w: topBtnW, h: topBtnH, fontSize: 10, action: () => state = STATE.MISSIONS },
     // gear icon to the right of the "HEAD ON" title
-    { icon: 'gear', x: 130, y: 38, w: 36, h: 36, action: () => { state = STATE.SETTINGS; } },
+    { icon: 'gear', x: 14, y: 14, w: 44, h: 44, action: () => { state = STATE.SETTINGS; } },
   ];
 
   // records row — sits just above the PLAY button (head-on record removed; mode is gone)

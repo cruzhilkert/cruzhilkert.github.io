@@ -199,10 +199,64 @@ let levelProgress = +localStorage.getItem('headon_level_progress') || 1; // high
 let levelRewardsClaimed = new Set(JSON.parse(localStorage.getItem('headon_level_rewards') || '[]'));
 let bestClassic = +localStorage.getItem('headon_best_classic') || +localStorage.getItem('headon_best') || 0;
 let bestHeadOn  = +localStorage.getItem('headon_best_headon')  || 0;
+
+// ─── Classic monthly leaderboard ─────────────────────────────────────────
+// Static field of fake opponents so the player has someone to chase. If
+// the player's monthly best beats the #1 fake entry at the end of the
+// month, they receive a 50,000 coin + 50 gem prize when the new month
+// rolls over.
+const CLASSIC_LEADERBOARD = [
+  { name: 'BlitzKing',       score: 18420 },
+  { name: 'noBrakesNoFear',  score: 16780 },
+  { name: 'CrashQueen',      score: 14550 },
+  { name: 'asphalt_4_real',  score: 13290 },
+  { name: 'driftslayer',     score: 11440 },
+  { name: 'velocityV1ber',   score:  9870 },
+  { name: 'thePotato',       score:  8120 },
+  { name: 'speed_demon99',   score:  6800 },
+  { name: 'apex_pred4tor',   score:  5400 },
+  { name: 'turbotina',       score:  4100 },
+];
+const CLASSIC_LB_TOP_SCORE = CLASSIC_LEADERBOARD[0].score;
+function _currentMonthKey() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+let classicMonthlyBest = +localStorage.getItem('headon_classic_month_best') || 0;
+let classicMonthlyKey  = localStorage.getItem('headon_classic_month_key')  || _currentMonthKey();
+let monthlyRewardShownUntil = 0;
+let monthlyRewardWonLast = false;   // for the popup wording
+(function _checkMonthlyRollover() {
+  const cur = _currentMonthKey();
+  if (classicMonthlyKey !== cur) {
+    // New month: if the previous month's best beat the top fake entry,
+    // pay out 50,000 coins + 50 gems immediately.
+    if (classicMonthlyBest > CLASSIC_LB_TOP_SCORE) {
+      setCoins(coins + 50000);
+      gems += 50; localStorage.setItem('headon_gems', gems);
+      monthlyRewardWonLast = true;
+      monthlyRewardShownUntil = performance.now() + 8000;
+    }
+    classicMonthlyKey = cur; classicMonthlyBest = 0;
+    localStorage.setItem('headon_classic_month_key',  cur);
+    localStorage.setItem('headon_classic_month_best', '0');
+  }
+})();
+function updateClassicMonthlyBest(score) {
+  if (score > classicMonthlyBest) {
+    classicMonthlyBest = score;
+    localStorage.setItem('headon_classic_month_best', String(score));
+  }
+}
+function getClassicLeaderboardRanked() {
+  const playerEntry = { name: 'YOU', score: classicMonthlyBest, isPlayer: true };
+  return [...CLASSIC_LEADERBOARD, playerEntry].sort((a, b) => b.score - a.score);
+}
 function getBest() { return MODES[modeIdx] === 'HEAD ON' ? bestHeadOn : bestClassic; }
 function saveBest(v) {
   if (MODES[modeIdx] === 'HEAD ON') { bestHeadOn  = v; localStorage.setItem('headon_best_headon',  v); }
   else                               { bestClassic = v; localStorage.setItem('headon_best_classic', v); }
+  if (MODES[modeIdx] !== 'HEAD ON') updateClassicMonthlyBest(v);
 }
 let owned;
 try { owned = JSON.parse(localStorage.getItem('headon_owned')) || ['paint_stock','trail_default']; } catch(e){ owned=['paint_stock','trail_default']; }
@@ -1145,8 +1199,9 @@ function buildCityMap() {
   addShowOffBuilding( 160,  32);
   addShowOffBuilding(-160, -32);
   addShowOffBuilding(  32, 224);
-  addMiniGameBuilding(-32, -32, 'flappydunk', 'MINI GAMES');
-  addMiniGameBuilding( 32, -32, 'gdwave',     'MINI GAMES');
+  addMiniGameBuilding(-64, -32, 'flappydunk', 'MINI GAMES');
+  addMiniGameBuilding(  0, -32, 'gdwave',     'MINI GAMES');
+  addMiniGameBuilding( 64, -32, 'gdwave',     'MINI GAMES');
 
   // ===== map border (circular abyss) =====
   // A dark circular void surrounds the city — driving toward the edge feels like
@@ -1292,6 +1347,13 @@ function updateFreeMapTraffic(dt) {
         n.x += Math.sin(n.heading) * n.speed * 0.4 * dts;
         n.z += Math.cos(n.heading) * n.speed * 0.4 * dts;
         n.heading += (Math.random() - 0.5) * 0.6 * dts;
+      }
+      // Clamp the chase NPCs to the city border so they can't wander off
+      // the playable map. Player follows the same border via freeMapBorder.
+      if (freeMapBorder) {
+        const _rN = freeMapBorder.radius - 4;
+        const _dN = Math.hypot(n.x, n.z);
+        if (_dN > _rN) { n.x = (n.x / _dN) * _rN; n.z = (n.z / _dN) * _rN; }
       }
     }
 
@@ -3758,18 +3820,24 @@ function updateArena(dt) {
   }
   _trailT += dts;
 
-  // free map: player bumps NPC → +1 star
+  // free map: player rams NPC. NPCs now take 3 ram hits before dying so
+  // the player can't just tap-spam the city to mass-kill traffic. Each
+  // ram still costs the player some HP, so it's a real tradeoff.
   if (freeMap && freeMapStarCooldown <= 0) {
     const _pspd = Math.hypot(arenaPlayer.vx, arenaPlayer.vz);
     if (_pspd > 3) {
       for (const _fn of freeMapNPCs) {
         if (!_fn.alive || _fn.type !== 'npc') continue;
         if (Math.hypot(arenaPlayer.x - _fn.x, arenaPlayer.z - _fn.z) < 2.5) {
-          _fn.alive = false;
+          if (_fn.ramHp == null) _fn.ramHp = 3;
+          _fn.ramHp -= 1;
           spawnExplosion3D(_fn.x, 0.5, _fn.z);
-          freeMapStars = Math.min(5, freeMapStars + 1);
-          freeMapStarCooldown = 2500;
+          freeMapStarCooldown = 1200;
           freeMapTakeDamage(20);
+          if (_fn.ramHp <= 0) {
+            _fn.alive = false;
+            freeMapStars = Math.min(5, freeMapStars + 1);
+          }
           break;
         }
       }
@@ -4442,17 +4510,39 @@ function updateArena(dt) {
       if (ri >= arenaRockets.length) continue; // rocket already removed
     }
 
-    // hit bots — pass through, apply knockback
-    for (const bot of arenaBots) {
-      if (bot.state !== 'alive') continue;
-      if (r.firedBy === bot.id) continue;
-      if (Math.hypot(r.x - bot.x, r.z - bot.z) < 1.6) {
-        const nx = (bot.x - r.x) / Math.max(0.01, Math.hypot(bot.x - r.x, bot.z - r.z));
-        const nz = (bot.z - r.z) / Math.max(0.01, Math.hypot(bot.x - r.x, bot.z - r.z));
-        bot.vx += nx * 18 + r.vx * 0.25;
-        bot.vz += nz * 18 + r.vz * 0.25;
-        bot.vy = 6;
-        playCrashSound();
+    // hit bots — player-fired rockets EXPLODE and kill the hit bot plus
+    // anything nearby (championship/zone weapon you paid for it to be strong).
+    // Bot-fired rockets retain the legacy knockback behavior.
+    {
+      let _hitBot = null;
+      for (const bot of arenaBots) {
+        if (bot.state !== 'alive' || r.firedBy === bot.id) continue;
+        if (Math.hypot(r.x - bot.x, r.z - bot.z) < 1.6) { _hitBot = bot; break; }
+      }
+      if (_hitBot) {
+        if (r.firedBy === 'player') {
+          spawnExplosion3D(r.x, r.y, r.z);
+          playCrashSound();
+          const _splashR = battleRoyale ? 5.5 : 4.0;
+          for (const bot of arenaBots) {
+            if (bot.state !== 'alive') continue;
+            if (Math.hypot(r.x - bot.x, r.z - bot.z) < _splashR) {
+              bot.state = 'dead';
+              if (!arenaElimOrder.includes(bot.id)) arenaElimOrder.push(bot.id);
+              if (bot.mesh) bot.mesh.visible = false;
+            }
+          }
+          if (r.mesh) arenaGroup.remove(r.mesh);
+          arenaRockets.splice(ri, 1);
+          continue;
+        } else {
+          const nx = (_hitBot.x - r.x) / Math.max(0.01, Math.hypot(_hitBot.x - r.x, _hitBot.z - r.z));
+          const nz = (_hitBot.z - r.z) / Math.max(0.01, Math.hypot(_hitBot.x - r.x, _hitBot.z - r.z));
+          _hitBot.vx += nx * 18 + r.vx * 0.25;
+          _hitBot.vz += nz * 18 + r.vz * 0.25;
+          _hitBot.vy = 6;
+          playCrashSound();
+        }
       }
     }
     // hit player — kill in arena, knockback in free-map (skip self-hit)
@@ -4862,10 +4952,14 @@ function update(dt) {
   const engineMul = 1 - dmg.engine * 0.6;
 
   // smooth steer (camera looks +Z so screen-right = world -X)
+  // sqrt(effSteer) compresses the range — top-tier cars used to be 3-4x
+  // more twitchy than starter cars, making the F1 unplayably sensitive on
+  // light taps. Square-rooting brings the high-end down to about 1.7x.
   const dir = ((keys['arrowleft']||keys['a']) ? 1 : 0) - ((keys['arrowright']||keys['d']) ? 1 : 0);
-  const maxVx = 14 * effSteer(carIdx) * tiresMul; // m/s
+  const _steerScale = Math.sqrt(effSteer(carIdx));
+  const maxVx = 13 * _steerScale * tiresMul; // m/s
   const tVx = dir * maxVx;
-  const resp = 9 * effSteer(carIdx) * tiresMul;
+  const resp = 8 * _steerScale * tiresMul;
   player.vx += (tVx - player.vx) * Math.min(1, dts * resp);
   player.worldX += player.vx * dts;
   const limit = ROAD_HALF - 1.0;
@@ -5104,8 +5198,16 @@ function update(dt) {
   }
 
   score += dts * 18 * d.scoreMul;
-  // classic mode: same top speed regardless of car choice
-  speed = Math.min(d.maxSpeed * bodyMul, d.startSpeed + score * 0.08) + speedBoost;
+  // Classic mode: same top speed regardless of car choice. Speed ramps with
+  // score linearly up to d.maxSpeed (the "natural" cap), then keeps creeping
+  // upward forever at 25% the rate, so a long survival run progressively
+  // gets faster and faster without ever capping out.
+  {
+    const _softCap = d.maxSpeed * bodyMul;
+    const _raw = d.startSpeed + score * 0.08;
+    const _excess = Math.max(0, _raw - _softCap);
+    speed = Math.min(_raw, _softCap) + _excess * 0.25 + speedBoost;
+  }
 
   // speed floor — HARD forces you to stay above 60 km/h (~16.7 m/s)
   // (only in HEAD ON where braking is possible, so the rule has teeth)
@@ -5293,6 +5395,25 @@ function drawHud2D() {
   // Mobile on-screen touch controls — render whenever the player is actively
   // driving on mobile (Classic, Arena, Free Map, race track all share keys[]).
   if (device === 'mobile' && (state === STATE.ARENA || state === STATE.PLAYING)) drawMobileControls();
+  // Monthly-reward popup: drawn on top of everything for a few seconds
+  // after a new month starts with a 1st-place finish.
+  if (monthlyRewardWonLast && performance.now() < monthlyRewardShownUntil) {
+    const panW = 360, panH = 130, panX = W / 2 - panW / 2, panY = 60;
+    ctx.fillStyle = 'rgba(8, 12, 28, 0.95)';
+    ctx.beginPath(); ctx.roundRect(panX, panY, panW, panH, 10); ctx.fill();
+    ctx.strokeStyle = '#ffd54a'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(panX, panY, panW, panH, 10); ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 22px system-ui';
+    ctx.fillText('🏆 1st PLACE LAST MONTH! 🏆', W / 2, panY + 36);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 16px system-ui';
+    ctx.fillText('Reward claimed:', W / 2, panY + 66);
+    ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 20px system-ui';
+    ctx.fillText('● 50,000   ◆ 50', W / 2, panY + 96);
+    ctx.fillStyle = '#888'; ctx.font = '11px system-ui';
+    ctx.fillText('Closing automatically…', W / 2, panY + 118);
+    ctx.textAlign = 'left';
+  }
 }
 
 // HEAD ON intro — HEAD slides in from the LEFT at the top row, ON slides
@@ -8029,6 +8150,60 @@ function drawCrash() {
   ctx.fillStyle = '#fff'; ctx.font = '14px system-ui';
   ctx.fillText('Space · click to return to menu', W/2, lineY + 16);
   ctx.textAlign = 'left';
+
+  drawClassicLeaderboardPanel();
+}
+
+function drawClassicLeaderboardPanel() {
+  if (MODES[modeIdx] === 'HEAD ON') return;   // only show for CLASSIC
+  // Insert player at current monthly best vs the fake field, sort, pick a
+  // 4-entry window centered on the player so they always see their position
+  // and 1-2 names above/below.
+  const ranked = getClassicLeaderboardRanked();
+  const myIdx = ranked.findIndex(r => r.isPlayer);
+  const start = Math.max(0, Math.min(ranked.length - 4, myIdx - 1));
+  const window = ranked.slice(start, start + 4);
+
+  const panW = 230, panH = 130, panX = W - panW - 14, panY = 14;
+  ctx.fillStyle = 'rgba(8, 12, 28, 0.92)';
+  ctx.beginPath(); ctx.roundRect(panX, panY, panW, panH, 8); ctx.fill();
+  ctx.strokeStyle = '#ffd54a'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.roundRect(panX, panY, panW, panH, 8); ctx.stroke();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 11px system-ui';
+  ctx.fillText('🏆 MONTHLY LEADERBOARD', panX + panW / 2, panY + 16);
+  ctx.fillStyle = '#888'; ctx.font = '9px system-ui';
+  ctx.fillText(classicMonthlyKey, panX + panW / 2, panY + 28);
+
+  ctx.textAlign = 'left';
+  let ly = panY + 44;
+  for (let i = 0; i < window.length; i++) {
+    const r = window[i];
+    const pos = start + i + 1;
+    const isYou = r.isPlayer;
+    ctx.fillStyle = isYou ? '#22ddff' : (pos === 1 ? '#ffd54a' : '#bbb');
+    ctx.font = isYou ? 'bold 12px system-ui' : '11px system-ui';
+    const posStr = (pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : '#' + pos);
+    ctx.fillText(posStr, panX + 10, ly + 2);
+    ctx.fillText(r.name, panX + 38, ly + 2);
+    ctx.textAlign = 'right';
+    ctx.fillText(String(r.score), panX + panW - 12, ly + 2);
+    ctx.textAlign = 'left';
+    ly += 18;
+  }
+
+  // hint about the monthly prize
+  if (myIdx === 0) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#22ff88'; ctx.font = 'bold 10px system-ui';
+    ctx.fillText("👑 1st place this month — keep it up!", panX + panW / 2, panY + panH - 10);
+  } else {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#888'; ctx.font = '9px system-ui';
+    ctx.fillText('1st place at month-end → ●50,000 + ◆50', panX + panW / 2, panY + panH - 10);
+  }
+  ctx.textAlign = 'left';
 }
 
 function drawArenaCrash() {
@@ -8192,11 +8367,11 @@ function loop(now) {
 // Mini-Game: FLAPPY DUNK (2D, local hot-seat for 2 players)
 // ═══════════════════════════════════════════════════════════════════════
 const _fdCanvas = document.createElement('canvas');
-_fdCanvas.width = 540; _fdCanvas.height = 900;
+_fdCanvas.width = 880; _fdCanvas.height = 540;
 Object.assign(_fdCanvas.style, {
   position: 'fixed', top: '50%', left: '50%',
   transform: 'translate(-50%, -50%)',
-  maxHeight: '95vh', maxWidth: '95vw',
+  maxHeight: '92vh', maxWidth: '95vw',
   zIndex: '500', display: 'none',
   background: '#0a1428',
   border: '4px solid #ff8822',
@@ -8213,15 +8388,31 @@ Object.assign(_fdBackdrop.style, {
 });
 document.body.appendChild(_fdBackdrop);
 
-const FD_W = 540, FD_H = 900;
-const FD_GRAVITY = 1100;          // gentler fall
-const FD_TAP_VY = -460;           // upward kick on tap (slightly less so it's easier to control)
-const FD_BALL_R = 24;
-const FD_BALL_X = 150;            // ball stays at this fixed X
+// Close button (X) rendered as an HTML element so it's always clickable
+// regardless of which game is currently drawn on the canvas.
+const _fdCloseBtn = document.createElement('button');
+_fdCloseBtn.textContent = '✕';
+Object.assign(_fdCloseBtn.style, {
+  position: 'fixed', top: 'calc(50% - 260px)', left: 'calc(50% + 400px)',
+  width: '36px', height: '36px',
+  background: '#ff4422', color: '#fff',
+  border: '2px solid #ffffff', borderRadius: '50%',
+  font: 'bold 18px sans-serif', cursor: 'pointer',
+  zIndex: '501', display: 'none',
+  padding: '0', lineHeight: '32px',
+});
+_fdCloseBtn.addEventListener('click', () => stopMiniGame());
+document.body.appendChild(_fdCloseBtn);
+
+const FD_W = 880, FD_H = 540;
+const FD_GRAVITY = 950;           // gentler fall (landscape canvas → easier)
+const FD_TAP_VY = -390;           // upward kick on tap
+const FD_BALL_R = 22;
+const FD_BALL_X = 180;            // ball stays at this fixed X
 const FD_SCROLL = 160;            // px/s — hoops scroll left at this speed
 const FD_HOOP_W = 14;             // thickness of hoop edges
-const FD_HOOP_GAP = 230;          // vertical gap in the hoop (was 170, now more forgiving)
-const FD_HOOP_SPACING = 380;      // distance between hoops
+const FD_HOOP_GAP = 200;          // vertical gap in the hoop
+const FD_HOOP_SPACING = 400;      // distance between hoops
 const _fdRAF = { id: 0 };
 
 function _fdSpawnHoop(x) {
@@ -8243,6 +8434,7 @@ function startFlappyDunk() {
   miniGameActive = 'flappydunk';
   _fdCanvas.style.display = 'block';
   _fdBackdrop.style.display = 'block';
+  _fdCloseBtn.style.display = 'block';
   _fdState = {
     mode: 'menu',
     player: 1,
@@ -8265,6 +8457,7 @@ function startPlaceholderMiniGame() {
   miniGameActive = 'placeholder';
   _fdCanvas.style.display = 'block';
   _fdBackdrop.style.display = 'block';
+  _fdCloseBtn.style.display = 'block';
   _fdCtx.fillStyle = '#0a1428';
   _fdCtx.fillRect(0, 0, FD_W, FD_H);
   _fdCtx.textAlign = 'center';
@@ -8283,9 +8476,14 @@ function stopMiniGame() {
   _gdwState = null;
   _fdCanvas.style.display = 'none';
   _fdBackdrop.style.display = 'none';
+  _fdCloseBtn.style.display = 'none';
   if (_fdRAF.id)  { cancelAnimationFrame(_fdRAF.id);  _fdRAF.id  = 0; }
   if (_gdwRAF.id) { cancelAnimationFrame(_gdwRAF.id); _gdwRAF.id = 0; }
-  arenaPlayer.z -= 4;   // push player off the pad so they don't re-trigger
+  // Move the player clearly outside whichever mini-game pad they're on
+  // so the pad detector doesn't immediately fire again next frame.
+  const _onPad = freeMapMiniGamePads.find(p =>
+    Math.abs(arenaPlayer.x - p.x) < p.half && Math.abs(arenaPlayer.z - p.z) < p.half);
+  if (_onPad) { arenaPlayer.z = _onPad.z - _onPad.half - 3; }
 }
 
 function fdOnKey(k) {
@@ -8395,41 +8593,37 @@ function _fdDraw() {
 
   if (s.mode === 'menu') {
     c.textAlign = 'center';
-    c.fillStyle = '#ff8822'; c.font = 'bold 64px sans-serif';
-    c.fillText('FLAPPY', FD_W / 2, 200);
-    c.fillText('DUNK',   FD_W / 2, 280);
-    c.fillStyle = '#ffffff'; c.font = 'bold 28px sans-serif';
-    c.fillText('Local Hot-Seat', FD_W / 2, 360);
-    c.fillStyle = '#ccccdd'; c.font = '20px sans-serif';
-    c.fillText('Player 1 plays until they crash.',  FD_W / 2, 430);
-    c.fillText('Then Player 2 has a go.',           FD_W / 2, 460);
-    c.fillText('Best score wins.',                  FD_W / 2, 490);
+    c.fillStyle = '#ff8822'; c.font = 'bold 56px sans-serif';
+    c.fillText('FLAPPY DUNK', FD_W / 2, 90);
+    c.fillStyle = '#ffffff'; c.font = 'bold 24px sans-serif';
+    c.fillText('Local Hot-Seat', FD_W / 2, 150);
+    c.fillStyle = '#ccccdd'; c.font = '18px sans-serif';
+    c.fillText('Player 1 plays until they crash.',  FD_W / 2, 200);
+    c.fillText('Then Player 2 has a go. Best score wins.', FD_W / 2, 224);
     c.fillStyle = '#22ff88'; c.font = 'bold 22px sans-serif';
-    c.fillText('SPACE = flap up', FD_W / 2, 560);
-    c.fillText('Fly through every hoop.', FD_W / 2, 595);
+    c.fillText('SPACE = flap up.   Fly through every hoop.', FD_W / 2, 280);
     c.fillStyle = '#aabbcc'; c.font = '18px sans-serif';
-    c.fillText('Best: ' + s.bestEver, FD_W / 2, 680);
+    c.fillText('Best: ' + s.bestEver, FD_W / 2, 340);
     c.fillStyle = '#ff8822'; c.font = 'bold 24px sans-serif';
     if (Math.floor(performance.now() / 500) % 2 === 0)
-      c.fillText('PRESS SPACE / ENTER', FD_W / 2, 780);
+      c.fillText('PRESS SPACE / ENTER', FD_W / 2, 420);
     c.fillStyle = '#666'; c.font = '14px sans-serif';
-    c.fillText('ESC to leave', FD_W / 2, 850);
+    c.fillText('ESC or × to leave', FD_W / 2, 490);
     return;
   }
 
   if (s.mode === 'ready') {
     c.textAlign = 'center';
     c.fillStyle = s.player === 1 ? '#22aaff' : '#ff5588';
-    c.font = 'bold 56px sans-serif';
-    c.fillText('PLAYER ' + s.player, FD_W / 2, 320);
-    c.fillStyle = '#ffffff'; c.font = 'bold 28px sans-serif';
-    c.fillText('Get ready!', FD_W / 2, 400);
-    c.fillStyle = '#aabbcc'; c.font = '20px sans-serif';
-    c.fillText('SPACE = flap up', FD_W / 2, 460);
-    c.fillText('One mistake and the round ends.', FD_W / 2, 490);
+    c.font = 'bold 52px sans-serif';
+    c.fillText('PLAYER ' + s.player, FD_W / 2, 180);
+    c.fillStyle = '#ffffff'; c.font = 'bold 26px sans-serif';
+    c.fillText('Get ready!', FD_W / 2, 240);
+    c.fillStyle = '#aabbcc'; c.font = '18px sans-serif';
+    c.fillText('SPACE = flap up.  One mistake ends the round.', FD_W / 2, 290);
     c.fillStyle = '#ff8822'; c.font = 'bold 22px sans-serif';
     if (Math.floor(performance.now() / 500) % 2 === 0)
-      c.fillText('PRESS SPACE / ENTER', FD_W / 2, 600);
+      c.fillText('PRESS SPACE / ENTER', FD_W / 2, 380);
     return;
   }
 
@@ -8512,38 +8706,38 @@ function _fdDraw() {
   }
 
   if (s.mode === 'roundover') {
-    c.fillStyle = 'rgba(10, 20, 40, 0.85)'; c.fillRect(0, 280, FD_W, 360);
+    c.fillStyle = 'rgba(10, 20, 40, 0.85)'; c.fillRect(0, 140, FD_W, 280);
     c.textAlign = 'center';
     c.fillStyle = s.player === 1 ? '#22aaff' : '#ff5588';
-    c.font = 'bold 48px sans-serif';
-    c.fillText('P' + s.player + ' SCORED', FD_W / 2, 360);
-    c.fillStyle = '#ffffff'; c.font = 'bold 72px sans-serif';
-    c.fillText(String(s.score), FD_W / 2, 460);
-    c.fillStyle = '#ff8822'; c.font = 'bold 22px sans-serif';
+    c.font = 'bold 44px sans-serif';
+    c.fillText('P' + s.player + ' SCORED', FD_W / 2, 210);
+    c.fillStyle = '#ffffff'; c.font = 'bold 64px sans-serif';
+    c.fillText(String(s.score), FD_W / 2, 290);
+    c.fillStyle = '#ff8822'; c.font = 'bold 20px sans-serif';
     if (Math.floor(performance.now() / 500) % 2 === 0) {
-      if (s.player === 1) c.fillText('SPACE → PLAYER 2 TURN', FD_W / 2, 560);
-      else                c.fillText('SPACE → SEE RESULTS',    FD_W / 2, 560);
+      if (s.player === 1) c.fillText('SPACE → PLAYER 2 TURN', FD_W / 2, 370);
+      else                c.fillText('SPACE → SEE RESULTS',    FD_W / 2, 370);
     }
   }
 
   if (s.mode === 'gameover') {
     c.fillStyle = 'rgba(10, 20, 40, 0.92)'; c.fillRect(0, 0, FD_W, FD_H);
     c.textAlign = 'center';
-    c.fillStyle = '#ff8822'; c.font = 'bold 56px sans-serif';
-    c.fillText('RESULTS', FD_W / 2, 200);
-    c.fillStyle = '#22aaff'; c.font = 'bold 36px sans-serif';
-    c.fillText('Player 1: ' + s.scores[0], FD_W / 2, 320);
+    c.fillStyle = '#ff8822'; c.font = 'bold 48px sans-serif';
+    c.fillText('RESULTS', FD_W / 2, 100);
+    c.fillStyle = '#22aaff'; c.font = 'bold 30px sans-serif';
+    c.fillText('Player 1: ' + s.scores[0], FD_W / 2, 180);
     c.fillStyle = '#ff5588';
-    c.fillText('Player 2: ' + s.scores[1], FD_W / 2, 380);
-    c.fillStyle = '#ffffff'; c.font = 'bold 48px sans-serif';
-    if (s.scores[0] > s.scores[1])      c.fillText('PLAYER 1 WINS!', FD_W / 2, 500);
-    else if (s.scores[1] > s.scores[0]) c.fillText('PLAYER 2 WINS!', FD_W / 2, 500);
-    else                                 c.fillText("IT'S A TIE!",     FD_W / 2, 500);
-    c.fillStyle = '#ff8822'; c.font = 'bold 22px sans-serif';
+    c.fillText('Player 2: ' + s.scores[1], FD_W / 2, 220);
+    c.fillStyle = '#ffffff'; c.font = 'bold 40px sans-serif';
+    if (s.scores[0] > s.scores[1])      c.fillText('PLAYER 1 WINS!', FD_W / 2, 320);
+    else if (s.scores[1] > s.scores[0]) c.fillText('PLAYER 2 WINS!', FD_W / 2, 320);
+    else                                 c.fillText("IT'S A TIE!",     FD_W / 2, 320);
+    c.fillStyle = '#ff8822'; c.font = 'bold 20px sans-serif';
     if (Math.floor(performance.now() / 500) % 2 === 0)
-      c.fillText('SPACE → REMATCH', FD_W / 2, 620);
+      c.fillText('SPACE → REMATCH', FD_W / 2, 400);
     c.fillStyle = '#666'; c.font = '14px sans-serif';
-    c.fillText('ESC to leave', FD_W / 2, 700);
+    c.fillText('ESC or × to leave', FD_W / 2, 470);
   }
 }
 
@@ -8580,6 +8774,7 @@ function startGeometryDashWave() {
   miniGameActive = 'gdwave';
   _fdCanvas.style.display = 'block';
   _fdBackdrop.style.display = 'block';
+  _fdCloseBtn.style.display = 'block';
   _gdwState = {
     mode: 'menu',
     player: 1,
@@ -8696,35 +8891,33 @@ function _gdwDraw() {
 
   if (s.mode === 'menu') {
     c.textAlign = 'center';
-    c.fillStyle = '#22ddff'; c.font = 'bold 54px sans-serif';
-    c.fillText('GEO DASH', FD_W / 2, 200);
-    c.fillText('WAVE',     FD_W / 2, 270);
-    c.fillStyle = '#ffffff'; c.font = 'bold 26px sans-serif';
-    c.fillText('Local Hot-Seat', FD_W / 2, 360);
-    c.fillStyle = '#aaccdd'; c.font = '20px sans-serif';
-    c.fillText('HOLD SPACE = climb', FD_W / 2, 430);
-    c.fillText('RELEASE   = dive',   FD_W / 2, 460);
-    c.fillText('Squeeze through every gap.', FD_W / 2, 490);
+    c.fillStyle = '#22ddff'; c.font = 'bold 56px sans-serif';
+    c.fillText('GEO DASH WAVE', FD_W / 2, 100);
+    c.fillStyle = '#ffffff'; c.font = 'bold 24px sans-serif';
+    c.fillText('Local Hot-Seat', FD_W / 2, 160);
+    c.fillStyle = '#aaccdd'; c.font = '18px sans-serif';
+    c.fillText('HOLD SPACE → climb   ·   RELEASE → dive', FD_W / 2, 220);
+    c.fillText('Squeeze through every gap.', FD_W / 2, 250);
     c.fillStyle = '#aabbcc'; c.font = '18px sans-serif';
-    c.fillText('Best: ' + s.bestEver, FD_W / 2, 580);
+    c.fillText('Best: ' + s.bestEver, FD_W / 2, 320);
     c.fillStyle = '#22ddff'; c.font = 'bold 24px sans-serif';
     if (Math.floor(performance.now() / 500) % 2 === 0)
-      c.fillText('PRESS SPACE / ENTER', FD_W / 2, 720);
+      c.fillText('PRESS SPACE / ENTER', FD_W / 2, 400);
     c.fillStyle = '#666'; c.font = '14px sans-serif';
-    c.fillText('ESC to leave', FD_W / 2, 850);
+    c.fillText('ESC or × to leave', FD_W / 2, 480);
     return;
   }
 
   if (s.mode === 'ready') {
     c.textAlign = 'center';
     c.fillStyle = s.player === 1 ? '#22aaff' : '#ff5588';
-    c.font = 'bold 56px sans-serif';
-    c.fillText('PLAYER ' + s.player, FD_W / 2, 320);
+    c.font = 'bold 52px sans-serif';
+    c.fillText('PLAYER ' + s.player, FD_W / 2, 180);
     c.fillStyle = '#aaccdd'; c.font = '20px sans-serif';
-    c.fillText('Hold SPACE to wave up.', FD_W / 2, 410);
+    c.fillText('Hold SPACE to wave up.', FD_W / 2, 260);
     c.fillStyle = '#22ddff'; c.font = 'bold 22px sans-serif';
     if (Math.floor(performance.now() / 500) % 2 === 0)
-      c.fillText('PRESS SPACE / ENTER', FD_W / 2, 540);
+      c.fillText('PRESS SPACE / ENTER', FD_W / 2, 360);
     return;
   }
 
@@ -8789,38 +8982,38 @@ function _gdwDraw() {
   }
 
   if (s.mode === 'roundover') {
-    c.fillStyle = 'rgba(0, 20, 40, 0.85)'; c.fillRect(0, 280, FD_W, 360);
+    c.fillStyle = 'rgba(0, 20, 40, 0.85)'; c.fillRect(0, 140, FD_W, 280);
     c.textAlign = 'center';
     c.fillStyle = s.player === 1 ? '#22aaff' : '#ff5588';
-    c.font = 'bold 48px sans-serif';
-    c.fillText('P' + s.player + ' SCORED', FD_W / 2, 360);
-    c.fillStyle = '#ffffff'; c.font = 'bold 72px sans-serif';
-    c.fillText(String(s.score), FD_W / 2, 460);
-    c.fillStyle = '#22ddff'; c.font = 'bold 22px sans-serif';
+    c.font = 'bold 44px sans-serif';
+    c.fillText('P' + s.player + ' SCORED', FD_W / 2, 210);
+    c.fillStyle = '#ffffff'; c.font = 'bold 64px sans-serif';
+    c.fillText(String(s.score), FD_W / 2, 290);
+    c.fillStyle = '#22ddff'; c.font = 'bold 20px sans-serif';
     if (Math.floor(performance.now() / 500) % 2 === 0) {
-      if (s.player === 1) c.fillText('SPACE → PLAYER 2 TURN', FD_W / 2, 560);
-      else                c.fillText('SPACE → SEE RESULTS',    FD_W / 2, 560);
+      if (s.player === 1) c.fillText('SPACE → PLAYER 2 TURN', FD_W / 2, 370);
+      else                c.fillText('SPACE → SEE RESULTS',    FD_W / 2, 370);
     }
   }
 
   if (s.mode === 'gameover') {
     c.fillStyle = 'rgba(0, 20, 40, 0.92)'; c.fillRect(0, 0, FD_W, FD_H);
     c.textAlign = 'center';
-    c.fillStyle = '#22ddff'; c.font = 'bold 56px sans-serif';
-    c.fillText('RESULTS', FD_W / 2, 200);
-    c.fillStyle = '#22aaff'; c.font = 'bold 36px sans-serif';
-    c.fillText('Player 1: ' + s.scores[0], FD_W / 2, 320);
+    c.fillStyle = '#22ddff'; c.font = 'bold 48px sans-serif';
+    c.fillText('RESULTS', FD_W / 2, 100);
+    c.fillStyle = '#22aaff'; c.font = 'bold 30px sans-serif';
+    c.fillText('Player 1: ' + s.scores[0], FD_W / 2, 180);
     c.fillStyle = '#ff5588';
-    c.fillText('Player 2: ' + s.scores[1], FD_W / 2, 380);
-    c.fillStyle = '#ffffff'; c.font = 'bold 48px sans-serif';
-    if (s.scores[0] > s.scores[1])      c.fillText('PLAYER 1 WINS!', FD_W / 2, 500);
-    else if (s.scores[1] > s.scores[0]) c.fillText('PLAYER 2 WINS!', FD_W / 2, 500);
-    else                                 c.fillText("IT'S A TIE!",     FD_W / 2, 500);
+    c.fillText('Player 2: ' + s.scores[1], FD_W / 2, 220);
+    c.fillStyle = '#ffffff'; c.font = 'bold 40px sans-serif';
+    if (s.scores[0] > s.scores[1])      c.fillText('PLAYER 1 WINS!', FD_W / 2, 320);
+    else if (s.scores[1] > s.scores[0]) c.fillText('PLAYER 2 WINS!', FD_W / 2, 320);
+    else                                 c.fillText("IT'S A TIE!",     FD_W / 2, 320);
     c.fillStyle = '#22ddff'; c.font = 'bold 22px sans-serif';
     if (Math.floor(performance.now() / 500) % 2 === 0)
-      c.fillText('SPACE → REMATCH', FD_W / 2, 620);
+      c.fillText('SPACE → REMATCH', FD_W / 2, 400);
     c.fillStyle = '#666'; c.font = '14px sans-serif';
-    c.fillText('ESC to leave', FD_W / 2, 700);
+    c.fillText('ESC or × to leave', FD_W / 2, 470);
   }
 }
 

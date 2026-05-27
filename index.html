@@ -104,6 +104,7 @@ const SHOP_PAINTS = [
   { id: 'paint_violet',  name: 'VIOLET',   color: 0x8e44ad, cost: 750,  special: null },
   { id: 'paint_snow',    name: 'SNOW',     color: 0xecf0f1, cost: 500,  special: null },
   { id: 'paint_inferno', name: 'INFERNO',  color: 0xe67e22, cost: 750,  special: 'inferno' },
+  { id: 'paint_neon',    name: 'NEON',     color: 0x00ffff, cost: 1000, special: 'neon' },
   { id: 'paint_rainbow', name: 'RAINBOW',  color: 0xff0000, cost: 4000, special: 'rainbow' },
   { id: 'paint_obsidian',     name: 'OBSIDIAN',      color: 0x1a0030, cost: 2500, special: 'obsidian'     },
   { id: 'paint_moneyforever', name: 'MONEY FOREVER', color: 0x1b5e20, cost: 3000, special: 'moneyforever' },
@@ -2490,6 +2491,24 @@ function rebuildPlayerCar() {
   playerCarGroup = buildCar({ kind: CARS[carIdx].kind || 'sedan', color: getPlayerBodyColor(), accent: CARS[carIdx].accent, isPlayer: true });
   if (equippedPaint === 'paint_obsidian') addObsidianSpikes(playerCarGroup);
   if (equippedPaint === 'paint_moneyforever') addMoneyForeverBills(playerCarGroup);
+  // NEON paint: make every body material emissive so the car visibly glows,
+  // plus add a coloured point-light parented to the car for the bloom feel.
+  if (equippedPaint === 'paint_neon') {
+    let _col = getPlayerBodyColor();
+    if (typeof _col !== 'number') _col = 0x00ffff;
+    playerCarGroup.traverse(obj => {
+      const m = obj.material;
+      if (!m || !m.color) return;
+      if (m.emissive && typeof m.color.getHex === 'function') {
+        const hex = m.color.getHex();
+        // Only glow the body-coloured parts, not glass / tires / dark trim.
+        if (hex === _col) { m.emissive.setHex(_col); m.emissiveIntensity = 0.9; }
+      }
+    });
+    const _neonGlow = new THREE.PointLight(_col, 1.4, 7);
+    _neonGlow.position.set(0, 0.6, 0);
+    playerCarGroup.add(_neonGlow);
+  }
   playerCarGroup.position.set(0, 0, 0);
   scene.add(playerCarGroup);
 }
@@ -5245,15 +5264,10 @@ function update(dt) {
   }
 
   score += dts * 18 * d.scoreMul;
-  // Classic speed: starts at 22 m/s (~50 mph) and climbs by ~0.45 m/s
-  // (1 mph) every second, scaled by the chosen car's topMul so faster
-  // cars are actually faster in Classic. The ramp keeps going forever —
-  // the longer you survive, the faster everything moves.
-  {
-    const _carFactor = 0.65 + effTop(carIdx) * 0.35;     // CRUISER ≈ 0.93, F1 ≈ 1.51
-    const _baseMs = (22 + score * 0.025) * bodyMul;      // 22 m/s start + 0.45 m/s/sec ramp
-    speed = _baseMs * _carFactor + speedBoost;
-  }
+  // Classic speed: every car starts at the same speed (about 16 m/s, ~36
+  // mph) and climbs at the same rate (~0.32 m/s per second). Cars no
+  // longer differ in classic — they all start the same and ramp the same.
+  speed = (16 + score * 0.018) * bodyMul + speedBoost;
 
   // speed floor — HARD forces you to stay above 60 km/h (~16.7 m/s)
   // (only in HEAD ON where braking is possible, so the rule has teeth)
@@ -5344,7 +5358,14 @@ function syncScene() {
   }
 
   if (inIndoor) {
-    if (!inGarage) ambient.intensity = 0.45;
+    if (!inGarage) {
+      ambient.intensity = 0.45;
+      // Menu / showroom states: dark backdrop so the car stands out.
+      // Setting this on scene.background means the dark colour sits
+      // BEHIND the 3D car, not over it.
+      scene.background = new THREE.Color(0x060812);
+      if (scene.fog) { scene.fog.color.set(0x060812); scene.fog.near = 25; scene.fog.far = 80; }
+    }
     if (playerCarGroup) {
       playerCarGroup.position.set(0, 0.18, 1);
       playerCarGroup.rotation.set(0, menuBlink * 0.0008, 0);

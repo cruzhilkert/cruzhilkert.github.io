@@ -3132,6 +3132,17 @@ canvas3d.addEventListener('mousemove', e => {
   canvas3d.style.cursor = hovering ? 'pointer' : 'default';
 });
 canvas3d.addEventListener('wheel', e => {
+  // Inline leaderboard scroll: only when hovering the panel
+  const _lbR = canvas3d.getBoundingClientRect();
+  const _mx = (e.clientX - _lbR.left) * (W / _lbR.width);
+  const _my = (e.clientY - _lbR.top)  * (H / _lbR.height);
+  const _showInline = state === STATE.MENU
+    || (freeMap && state === STATE.ARENA && !raceMapSelectShown && !miniGameActive);
+  if (_showInline && _mx >= 14 && _mx <= 214 && _my >= 68 && _my <= 318 && !freeMap) {
+    e.preventDefault();
+    inlineLBScroll = Math.max(0, inlineLBScroll + (e.deltaY > 0 ? 1 : -1));
+    return;
+  }
   if (state === STATE.GARAGE && garageTab === 'cars') {
     e.preventDefault();
     garageCarScroll = Math.max(0, Math.min(CARS.filter(c=>!c.missionOnly).length - 6, garageCarScroll + (e.deltaY > 0 ? 1 : -1)));
@@ -3159,6 +3170,20 @@ canvas3d.addEventListener('click', __safe('canvas-click', e => {
   const r = canvas3d.getBoundingClientRect();
   const x = (e.clientX - r.left) * (W / r.width);
   const y = (e.clientY - r.top)  * (H / r.height);
+  // Award detail popover swallows the next click (just dismisses).
+  if (inlineLBAwardOpen) { inlineLBAwardOpen = false; return; }
+  // Inline leaderboard panel — click the AWARD button to open the popover.
+  const _showInline = state === STATE.MENU
+    || (freeMap && state === STATE.ARENA && !raceMapSelectShown && !miniGameActive);
+  if (_showInline) {
+    const lx = 14, ly = 68, lw = 200;
+    if (monthlyRewardWonLast || performance.now() < monthlyRewardShownUntil) {
+      const abX = lx + 10, abY = ly + 22, abW = lw - 20, abH = 22;
+      if (x >= abX && x <= abX + abW && y >= abY && y <= abY + abH) {
+        inlineLBAwardOpen = true; return;
+      }
+    }
+  }
   // Leaderboard modal swallows clicks: close button or outside-panel taps.
   if (leaderboardModalShown) {
     const panX = 20, panY = 50, panW = W - 40, panH = H - 100;
@@ -5834,8 +5859,14 @@ function drawHud2D() {
   // Mobile on-screen touch controls — render whenever the player is actively
   // driving on mobile (Classic, Arena, Free Map, race track all share keys[]).
   if (device === 'mobile' && (state === STATE.ARENA || state === STATE.PLAYING)) drawMobileControls();
-  // Leaderboard quick-view modal — opened from the 🏆 button on the menu.
-  // Picks which board(s) to show based on what the player is doing right now.
+  // Inline leaderboard panel — permanently visible in the menu and free
+  // map, hidden in arena / playing / death screens. Context-aware: shows
+  // CLASSIC in menu, mini-games when driving in free map.
+  const _showInlineLB = state === STATE.MENU
+    || (freeMap && state === STATE.ARENA && !raceMapSelectShown && !miniGameActive);
+  if (_showInlineLB) drawInlineLeaderboard();
+  if (inlineLBAwardOpen) drawAwardPopover();
+  // Old modal kept around as a legacy fallback (no longer activated).
   if (leaderboardModalShown) drawLeaderboardModal();
   // Monthly-reward popup: drawn on top of everything for a few seconds
   // after a new month starts with a 1st-place finish.
@@ -7606,9 +7637,6 @@ function drawMenu() {
     { label: '✦ QUEST', x: questX,  y: topBtnY, w: topBtnW, h: topBtnH, fontSize: 10, action: () => state = STATE.MISSIONS },
     // gear icon to the right of the "HEAD ON" title
     { icon: 'gear', x: 14, y: 14, w: 44, h: 44, action: () => { state = STATE.SETTINGS; } },
-    // 🏆 leaderboard quick-view, sits under the gear
-    { label: '🏆', x: 14, y: 64, w: 44, h: 44, fontSize: 20,
-      action: () => { leaderboardModalShown = true; } },
   ];
 
   // records row — sits just above the PLAY button (head-on record removed; mode is gone)
@@ -8712,6 +8740,145 @@ function drawCrash() {
   ctx.textAlign = 'left';
 
   drawClassicLeaderboardPanel();
+}
+
+// ─── Inline leaderboard panel (top-left under the settings gear) ─────────
+// Always visible in menu + free-map. Switches between classic / mini-games
+// based on what the player is doing.
+function _msUntilNextMonth() {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return Math.max(0, next - now);
+}
+function _formatCountdown(ms) {
+  const days  = Math.floor(ms / 86400000);
+  const hours = Math.floor((ms % 86400000) / 3600000);
+  if (days  > 0) return days + 'd ' + hours + 'h';
+  const mins = Math.floor((ms % 3600000) / 60000);
+  if (hours > 0) return hours + 'h ' + mins + 'm';
+  return mins + 'm';
+}
+// Award name + emoji rotates each month so it feels themed.
+const _AWARD_THEMES = [
+  { name: 'TROPHY OF SPEED',    emoji: '🏆' }, { name: 'NEON CROWN',         emoji: '👑' },
+  { name: 'GOLD RIM',           emoji: '🏅' }, { name: 'PHANTOM CUP',        emoji: '🥇' },
+  { name: 'COMET MEDAL',        emoji: '☄️' }, { name: 'INFERNO RIBBON',    emoji: '🔥' },
+  { name: 'BLAZE STAR',         emoji: '⭐' }, { name: 'STORM TROPHY',       emoji: '⚡' },
+  { name: 'LIGHTNING CHAIN',    emoji: '⛓️' }, { name: 'SAPPHIRE BADGE',    emoji: '💎' },
+  { name: 'NIGHT RACER PLATE',  emoji: '🌙' }, { name: 'FROSTBITE GOBLET',   emoji: '❄️' },
+];
+function _currentAwardTheme() { return _AWARD_THEMES[new Date().getMonth() % _AWARD_THEMES.length]; }
+let inlineLBScroll = 0;     // scroll offset (rows) for the inline panel
+let inlineLBAwardOpen = false;   // award detail popover open
+
+function drawInlineLeaderboard() {
+  const x = 14, y = 68, w = 200, h = 250;
+  // Hover / click hit info
+  const onPanel = mouse.x >= x && mouse.x <= x + w && mouse.y >= y && mouse.y <= y + h;
+
+  // Panel background
+  ctx.fillStyle = 'rgba(8, 12, 28, 0.85)';
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill();
+  ctx.strokeStyle = '#ffd54a'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.stroke();
+
+  // Header — title + countdown OR award button.
+  const isFM = freeMap;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 12px system-ui';
+  ctx.fillText(isFM ? 'MINI GAMES' : 'CLASSIC', x + w / 2, y + 16);
+
+  // Countdown OR award button
+  const cdMs = _msUntilNextMonth();
+  if (monthlyRewardWonLast || performance.now() < monthlyRewardShownUntil) {
+    // Award button
+    const aw = _currentAwardTheme();
+    const abX = x + 10, abY = y + 22, abW = w - 20, abH = 22;
+    const abHov = mouse.x >= abX && mouse.x <= abX + abW && mouse.y >= abY && mouse.y <= abY + abH;
+    ctx.fillStyle = abHov ? 'rgba(255,215,0,0.6)' : 'rgba(255,215,0,0.35)';
+    ctx.beginPath(); ctx.roundRect(abX, abY, abW, abH, 4); ctx.fill();
+    ctx.strokeStyle = '#ffd54a'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(abX, abY, abW, abH, 4); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 11px system-ui';
+    ctx.fillText(aw.emoji + ' AWARD  —  CLICK', x + w / 2, abY + 14);
+  } else {
+    ctx.fillStyle = '#999'; ctx.font = '10px system-ui';
+    ctx.fillText('Blank until next month', x + w / 2, y + 32);
+    ctx.fillStyle = '#888'; ctx.font = '9px system-ui';
+    ctx.fillText(_formatCountdown(cdMs), x + w / 2, y + 44);
+  }
+
+  // Rows. Scrollable list of leaderboard entries.
+  let entries;
+  if (isFM) {
+    // Two halves: top = FD, bottom = GDW
+    const fd  = getMiniLeaderboardRanked('flappydunk').slice(0, 4);
+    const gdw = getMiniLeaderboardRanked('gdwave').slice(0, 4);
+    ctx.fillStyle = '#ff8822'; ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('FLAPPY DUNK', x + 10, y + 64);
+    _drawInlineRows(x + 10, y + 76, w - 20, fd, '#ff8822');
+    ctx.fillStyle = '#22ddff'; ctx.font = 'bold 10px system-ui';
+    ctx.fillText('GEO DASH WAVE', x + 10, y + 156);
+    _drawInlineRows(x + 10, y + 168, w - 20, gdw, '#22ddff');
+    return;
+  }
+  entries = getClassicLeaderboardRanked();
+  // Scrollable window of 8 rows.
+  const maxScroll = Math.max(0, entries.length - 8);
+  inlineLBScroll = Math.max(0, Math.min(maxScroll, inlineLBScroll));
+  const view = entries.slice(inlineLBScroll, inlineLBScroll + 8);
+  _drawInlineRows(x + 10, y + 60, w - 20, view, '#ffd54a', inlineLBScroll);
+  // Scroll arrows (visual hints; mousewheel handled in wheel listener)
+  if (inlineLBScroll > 0) {
+    ctx.fillStyle = '#ffd54a'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('▲', x + w / 2, y + 56);
+  }
+  if (inlineLBScroll < maxScroll) {
+    ctx.fillStyle = '#ffd54a'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('▼', x + w / 2, y + h - 6);
+  }
+}
+function _drawInlineRows(x, y, w, list, color, startIdx) {
+  ctx.textAlign = 'left';
+  let ly = y;
+  for (let i = 0; i < list.length; i++) {
+    const r = list[i];
+    const pos = (startIdx || 0) + i + 1;
+    const isYou = r.isPlayer;
+    ctx.fillStyle = isYou ? '#22ddff' : (pos === 1 ? color : '#aaa');
+    ctx.font = isYou ? 'bold 10px system-ui' : '10px system-ui';
+    const tag = pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : '#' + pos;
+    ctx.fillText(tag, x, ly + 9);
+    ctx.fillText((r.name || '').slice(0, 11), x + 30, ly + 9);
+    ctx.textAlign = 'right';
+    ctx.fillText(String(r.score), x + w, ly + 9);
+    ctx.textAlign = 'left';
+    ly += 14;
+  }
+}
+
+// Award detail popover — opened by clicking the AWARD button on the panel.
+function drawAwardPopover() {
+  if (!inlineLBAwardOpen) return;
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, W, H);
+  const panW = 280, panH = 220, panX = W / 2 - panW / 2, panY = H / 2 - panH / 2;
+  ctx.fillStyle = 'rgba(20,12,40,0.97)';
+  ctx.beginPath(); ctx.roundRect(panX, panY, panW, panH, 12); ctx.fill();
+  ctx.strokeStyle = '#ffd54a'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(panX, panY, panW, panH, 12); ctx.stroke();
+  const aw = _currentAwardTheme();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 60px system-ui';
+  ctx.fillText(aw.emoji, W / 2, panY + 80);
+  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 18px system-ui';
+  ctx.fillText(aw.name, W / 2, panY + 120);
+  ctx.fillStyle = '#fff'; ctx.font = '14px system-ui';
+  ctx.fillText('● 50,000    ◆ 50', W / 2, panY + 150);
+  ctx.fillStyle = '#aabbcc'; ctx.font = '11px system-ui';
+  ctx.fillText('1st place classic, this month', W / 2, panY + 175);
+  ctx.fillStyle = '#888'; ctx.font = '10px system-ui';
+  ctx.fillText('Tap anywhere to dismiss', W / 2, panY + panH - 14);
 }
 
 function drawLeaderboardModal() {

@@ -3138,7 +3138,8 @@ canvas3d.addEventListener('wheel', e => {
   const _my = (e.clientY - _lbR.top)  * (H / _lbR.height);
   const _showInline = state === STATE.MENU
     || (freeMap && state === STATE.ARENA && !raceMapSelectShown && !miniGameActive);
-  if (_showInline && _mx >= 14 && _mx <= 214 && _my >= 68 && _my <= 318 && !freeMap) {
+  const _isFM = freeMap || MODES[modeIdx] === 'FREE MAP';
+  if (_showInline && _mx >= 14 && _mx <= 172 && _my >= 68 && _my <= 280 && !_isFM) {
     e.preventDefault();
     inlineLBScroll = Math.max(0, inlineLBScroll + (e.deltaY > 0 ? 1 : -1));
     return;
@@ -8723,7 +8724,10 @@ let inlineLBScroll = 0;     // scroll offset (rows) for the inline panel
 let inlineLBAwardOpen = false;   // award detail popover open
 
 function drawInlineLeaderboard() {
-  const x = 14, y = 68, w = 158, h = 270;
+  // Context-aware: in Free Map (either menu mode selection OR actively
+  // driving) → show the two mini-game boards. Otherwise → Classic only.
+  const isFM = freeMap || MODES[modeIdx] === 'FREE MAP';
+  const x = 14, y = 68, w = 158, h = isFM ? 200 : 180;
   // Hover / click hit info
   const onPanel = mouse.x >= x && mouse.x <= x + w && mouse.y >= y && mouse.y <= y + h;
 
@@ -8752,38 +8756,37 @@ function drawInlineLeaderboard() {
     ctx.fillText('next month in ' + _formatCountdown(cdMs), x + w / 2, y + 16);
   }
 
-  // ── Top half: CLASSIC leaderboard (scrollable) ──
+  if (isFM) {
+    // FREE MAP: stack Flappy Dunk + Geo Dash Wave (top-4 each).
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ff8822'; ctx.font = 'bold 10px system-ui';
+    ctx.fillText('FLAPPY DUNK', x + 6, y + 38);
+    _drawInlineRows(x + 6, y + 46, w - 12, getMiniLeaderboardRanked('flappydunk').slice(0, 4), '#ff8822');
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x + 6, y + 110); ctx.lineTo(x + w - 6, y + 110); ctx.stroke();
+    ctx.fillStyle = '#22ddff'; ctx.font = 'bold 10px system-ui';
+    ctx.fillText('GEO DASH WAVE', x + 6, y + 124);
+    _drawInlineRows(x + 6, y + 132, w - 12, getMiniLeaderboardRanked('gdwave').slice(0, 4), '#22ddff');
+    return;
+  }
+
+  // CLASSIC: scrollable single board.
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 9px system-ui';
-  ctx.fillText('CLASSIC', x + 6, y + 36);
-  const classicY = y + 44;
-  const classicH = 110;     // ~5 rows visible
+  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 10px system-ui';
+  ctx.fillText('CLASSIC', x + 6, y + 38);
   const classic = getClassicLeaderboardRanked();
-  const maxScroll = Math.max(0, classic.length - 5);
+  const maxScroll = Math.max(0, classic.length - 11);
   inlineLBScroll = Math.max(0, Math.min(maxScroll, inlineLBScroll));
-  const classicView = classic.slice(inlineLBScroll, inlineLBScroll + 5);
-  _drawInlineRows(x + 6, classicY, w - 12, classicView, '#ffd54a', inlineLBScroll);
+  const classicView = classic.slice(inlineLBScroll, inlineLBScroll + 11);
+  _drawInlineRows(x + 6, y + 46, w - 12, classicView, '#ffd54a', inlineLBScroll);
   if (inlineLBScroll > 0) {
     ctx.fillStyle = '#ffd54a'; ctx.font = '8px system-ui'; ctx.textAlign = 'right';
-    ctx.fillText('▲', x + w - 6, y + 36);
+    ctx.fillText('▲', x + w - 6, y + 38);
   }
   if (inlineLBScroll < maxScroll) {
     ctx.fillStyle = '#ffd54a'; ctx.font = '8px system-ui'; ctx.textAlign = 'right';
-    ctx.fillText('▼', x + w - 6, classicY + classicH - 6);
+    ctx.fillText('▼', x + w - 6, y + h - 6);
   }
-
-  // ── Divider ──
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(x + 6, y + 152); ctx.lineTo(x + w - 6, y + 152); ctx.stroke();
-
-  // ── Bottom half: Flappy Dunk (top 3) + Geo Dash Wave (top 3) ──
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#ff8822'; ctx.font = 'bold 9px system-ui';
-  ctx.fillText('FLAPPY DUNK', x + 6, y + 165);
-  _drawInlineRows(x + 6, y + 172, w - 12, getMiniLeaderboardRanked('flappydunk').slice(0, 3), '#ff8822');
-  ctx.fillStyle = '#22ddff'; ctx.font = 'bold 9px system-ui';
-  ctx.fillText('GEO DASH WAVE', x + 6, y + 220);
-  _drawInlineRows(x + 6, y + 227, w - 12, getMiniLeaderboardRanked('gdwave').slice(0, 3), '#22ddff');
 }
 function _drawInlineRows(x, y, w, list, color, startIdx) {
   ctx.textAlign = 'left';

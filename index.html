@@ -3139,7 +3139,7 @@ canvas3d.addEventListener('wheel', e => {
   const _showInline = state === STATE.MENU
     || (freeMap && state === STATE.ARENA && !raceMapSelectShown && !miniGameActive);
   const _isFM = freeMap || MODES[modeIdx] === 'FREE MAP';
-  if (_showInline && _mx >= 14 && _mx <= 172 && _my >= 68 && _my <= 280 && !_isFM) {
+  if (state === STATE.MENU && _mx >= 4 && _mx <= 132 && _my >= 4 && _my <= 174 && !_isFM) {
     e.preventDefault();
     inlineLBScroll = Math.max(0, inlineLBScroll + (e.deltaY > 0 ? 1 : -1));
     return;
@@ -3174,12 +3174,10 @@ canvas3d.addEventListener('click', __safe('canvas-click', e => {
   // Award detail popover swallows the next click (just dismisses).
   if (inlineLBAwardOpen) { inlineLBAwardOpen = false; return; }
   // Inline leaderboard panel — click the AWARD button to open the popover.
-  const _showInline = state === STATE.MENU
-    || (freeMap && state === STATE.ARENA && !raceMapSelectShown && !miniGameActive);
-  if (_showInline) {
-    const lx = 14, ly = 68, lw = 200;
+  if (state === STATE.MENU) {
+    const lx = 4, ly = 4, lw = 128;
     if (monthlyRewardWonLast || performance.now() < monthlyRewardShownUntil) {
-      const abX = lx + 10, abY = ly + 22, abW = lw - 20, abH = 22;
+      const abX = lx + 6, abY = ly + 6, abW = lw - 12, abH = 20;
       if (x >= abX && x <= abX + abW && y >= abY && y <= abY + abH) {
         inlineLBAwardOpen = true; return;
       }
@@ -5811,12 +5809,10 @@ function drawHud2D() {
   // Mobile on-screen touch controls — render whenever the player is actively
   // driving on mobile (Classic, Arena, Free Map, race track all share keys[]).
   if (device === 'mobile' && (state === STATE.ARENA || state === STATE.PLAYING)) drawMobileControls();
-  // Inline leaderboard panel — permanently visible in the menu and free
-  // map, hidden in arena / playing / death screens. Context-aware: shows
-  // CLASSIC in menu, mini-games when driving in free map.
-  const _showInlineLB = state === STATE.MENU
-    || (freeMap && state === STATE.ARENA && !raceMapSelectShown && !miniGameActive);
-  if (_showInlineLB) drawInlineLeaderboard();
+  // Inline leaderboard panel — only visible on the main menu. Hides
+  // automatically when the player enters any kind of gameplay (free map,
+  // classic, arena, mini-game, etc.).
+  if (state === STATE.MENU) drawInlineLeaderboard();
   if (inlineLBAwardOpen) drawAwardPopover();
   // Old modal kept around as a legacy fallback (no longer activated).
   if (leaderboardModalShown) drawLeaderboardModal();
@@ -7587,8 +7583,8 @@ function drawMenu() {
     { label: 'MODE ▶', sub: MODES[modeIdx], x: rowX + rowW - sideW, y: sideY, w: sideW, h: sideH, action: cycleMode },
     { icon: 'cart', x: garageX, y: topBtnY, w: topBtnW, h: topBtnH, action: () => { state = STATE.GEM_SHOP; shopResult = null; } },
     { label: '✦ QUEST', x: questX,  y: topBtnY, w: topBtnW, h: topBtnH, fontSize: 10, action: () => state = STATE.MISSIONS },
-    // gear icon to the right of the "HEAD ON" title
-    { icon: 'gear', x: 14, y: 14, w: 44, h: 44, action: () => { state = STATE.SETTINGS; } },
+    // gear icon — sits to the right of the leaderboard panel in the top-left.
+    { icon: 'gear', x: 138, y: 6, w: 38, h: 38, action: () => { state = STATE.SETTINGS; } },
   ];
 
   // records row — sits just above the PLAY button (head-on record removed; mode is gone)
@@ -8727,7 +8723,7 @@ function drawInlineLeaderboard() {
   // Context-aware: in Free Map (either menu mode selection OR actively
   // driving) → show the two mini-game boards. Otherwise → Classic only.
   const isFM = freeMap || MODES[modeIdx] === 'FREE MAP';
-  const x = 14, y = 68, w = 158, h = isFM ? 200 : 180;
+  const x = 4, y = 4, w = 128, h = isFM ? 170 : 156;
   // Hover / click hit info
   const onPanel = mouse.x >= x && mouse.x <= x + w && mouse.y >= y && mouse.y <= y + h;
 

@@ -340,6 +340,151 @@ async function submitClassicScoreLive(score) {
 // already has live data ready.
 if (FIREBASE_READY) _initFirebase();
 
+// ─── Mini-game leaderboards (Flappy Dunk + Geo Dash Wave) ────────────────
+// Each mini-game gets its own monthly best, bot fillers, and (if Firebase
+// is configured) a live Firebase subscription. Calling submitMiniScore()
+// publishes a new monthly best; getMiniLeaderboardRanked() returns the
+// merged ranked list for rendering on the game-over screen.
+const MINI_BOTS = {
+  flappydunk: [
+    { name: 'hoopGod_99',  score: 18 }, { name: 'splashKid',    score: 14 },
+    { name: 'rim_rocker',  score: 11 }, { name: 'noChain',      score:  9 },
+    { name: 'baller_bri',  score:  7 }, { name: 'BlitzKing',    score:  6 },
+    { name: 'roadrash',    score:  5 }, { name: 'CrashQueen',   score:  4 },
+    { name: 'speed_d99',   score:  3 }, { name: 'apex_pred',    score:  2 },
+  ],
+  gdwave: [
+    { name: 'waveMaster',  score: 280 }, { name: 'neon_glider', score: 220 },
+    { name: 'tightGap',    score: 180 }, { name: 'spike_jumper',score: 145 },
+    { name: 'gravity_pls', score: 120 }, { name: 'cube_kid',    score:  95 },
+    { name: 'rim_rocker',  score:  72 }, { name: 'lane_changer',score:  55 },
+    { name: 'BlitzKing',   score:  40 }, { name: 'turbotina',   score:  25 },
+  ],
+};
+const MINI_KEYS = {
+  flappydunk: { lifetime: 'fd_best',  monthly: 'fd_month_best',  monthKey: 'fd_month_key',  fbPath: 'flappyDunkLeaderboard' },
+  gdwave:     { lifetime: 'gdw_best', monthly: 'gdw_month_best', monthKey: 'gdw_month_key', fbPath: 'gdwaveLeaderboard' },
+};
+const miniState = {
+  flappydunk: { monthBest: +localStorage.getItem('fd_month_best') || 0,  live: [] },
+  gdwave:     { monthBest: +localStorage.getItem('gdw_month_best') || 0, live: [] },
+};
+// Roll over monthly bests on new month
+(function _miniMonthlyRollover() {
+  const cur = _currentMonthKey();
+  for (const g of Object.keys(MINI_KEYS)) {
+    const k = MINI_KEYS[g];
+    const stored = localStorage.getItem(k.monthKey);
+    if (stored !== cur) {
+      miniState[g].monthBest = 0;
+      localStorage.setItem(k.monthly, '0');
+      localStorage.setItem(k.monthKey, cur);
+    }
+  }
+})();
+function _subscribeMiniFirebase(game) {
+  if (!_fbDb || !_fbHelpers) return;
+  const k = MINI_KEYS[game];
+  const monthKey = _currentMonthKey();
+  const q = _fbHelpers.query(
+    _fbHelpers.ref(_fbDb, k.fbPath + '/' + monthKey),
+    _fbHelpers.orderByChild('score'),
+    _fbHelpers.limitToLast(20)
+  );
+  _fbHelpers.onValue(q, snap => {
+    const entries = [];
+    snap.forEach(c => { const v = c.val(); if (v) entries.push(v); });
+    entries.sort((a, b) => b.score - a.score);
+    miniState[game].live = entries;
+  });
+}
+async function submitMiniScore(game, score) {
+  // Always update local monthly best
+  const k = MINI_KEYS[game];
+  if (score > miniState[game].monthBest) {
+    miniState[game].monthBest = score;
+    localStorage.setItem(k.monthly, String(score));
+    localStorage.setItem(k.monthKey, _currentMonthKey());
+  } else {
+    return;   // no improvement → no submission
+  }
+  if (!FIREBASE_READY) return;
+  await _initFirebase();
+  if (!_fbDb || !_fbHelpers) return;
+  if (!miniState[game]._subscribed) {
+    _subscribeMiniFirebase(game);
+    miniState[game]._subscribed = true;
+  }
+  try {
+    const monthKey = _currentMonthKey();
+    const uid = _playerUid();
+    const path = k.fbPath + '/' + monthKey + '/' + uid;
+    const ref = _fbHelpers.ref(_fbDb, path);
+    const snap = await _fbHelpers.get(ref);
+    const prev = snap.val();
+    if (!prev || score > (prev.score || 0)) {
+      await _fbHelpers.set(ref, { name: (playerName || 'Player').slice(0, 20), score, ts: Date.now() });
+    }
+  } catch (e) {
+    console.warn('[firebase] mini submit failed', e);
+  }
+}
+function getMiniLeaderboardRanked(game) {
+  const me = { name: 'YOU', score: miniState[game].monthBest, isPlayer: true };
+  if (FIREBASE_READY && miniState[game].live.length > 0) {
+    const others = miniState[game].live
+      .filter(e => e.name !== 'YOU')
+      .map(e => ({ name: e.name, score: e.score, isLive: true }));
+    const combined = [me, ...others];
+    if (combined.length < 10) combined.push(...MINI_BOTS[game].slice(0, 10 - combined.length));
+    return combined.sort((a, b) => b.score - a.score);
+  }
+  return [me, ...MINI_BOTS[game].slice(0, 9)].sort((a, b) => b.score - a.score);
+}
+// Subscribe Firebase listeners (no-op if Firebase isn't ready yet — the
+// _initFirebase promise will resolve them after init completes).
+if (FIREBASE_READY) {
+  _initFirebase().then(() => {
+    for (const g of Object.keys(MINI_KEYS)) {
+      if (!miniState[g]._subscribed) {
+        _subscribeMiniFirebase(g);
+        miniState[g]._subscribed = true;
+      }
+    }
+  });
+}
+// Small reusable panel for drawing a mini-game leaderboard on a canvas.
+function drawMiniLeaderboardOnCanvas(c, x, y, w, h, game) {
+  const ranked = getMiniLeaderboardRanked(game);
+  const myIdx = ranked.findIndex(r => r.isPlayer);
+  const start = Math.max(0, Math.min(ranked.length - 6, myIdx - 2));
+  const window = ranked.slice(start, start + 6);
+  c.fillStyle = 'rgba(8, 12, 28, 0.92)';
+  c.fillRect(x, y, w, h);
+  c.strokeStyle = game === 'flappydunk' ? '#ffd54a' : '#22ddff'; c.lineWidth = 2;
+  c.strokeRect(x, y, w, h);
+  c.textAlign = 'center';
+  c.fillStyle = game === 'flappydunk' ? '#ffd54a' : '#22ddff';
+  c.font = 'bold 14px sans-serif';
+  c.fillText('🏆 LEADERBOARD', x + w / 2, y + 22);
+  c.textAlign = 'left';
+  let ly = y + 44;
+  for (let i = 0; i < window.length; i++) {
+    const r = window[i];
+    const pos = start + i + 1;
+    const isYou = r.isPlayer;
+    c.fillStyle = isYou ? '#22ddff' : (pos === 1 ? '#ffd54a' : '#bbb');
+    c.font = isYou ? 'bold 13px sans-serif' : '12px sans-serif';
+    const tag = (pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : '#' + pos);
+    c.fillText(tag, x + 10, ly + 2);
+    c.fillText(r.name, x + 46, ly + 2);
+    c.textAlign = 'right';
+    c.fillText(String(r.score), x + w - 12, ly + 2);
+    c.textAlign = 'left';
+    ly += 18;
+  }
+}
+
 function getClassicLeaderboardRanked() {
   // Use live entries if Firebase is set up AND there are real entries.
   // Otherwise fall back to the local YOU entry + bot fillers.
@@ -8795,6 +8940,7 @@ function _fdEndRound() {
     _fdState.bestEver = _fdState.score;
     localStorage.setItem('fd_best', _fdState.score);
   }
+  submitMiniScore('flappydunk', _fdState.score);
   _fdState.mode = 'roundover';
 }
 
@@ -8943,21 +9089,23 @@ function _fdDraw() {
   if (s.mode === 'gameover') {
     c.fillStyle = 'rgba(10, 20, 40, 0.92)'; c.fillRect(0, 0, FD_W, FD_H);
     c.textAlign = 'center';
-    c.fillStyle = '#ff8822'; c.font = 'bold 48px sans-serif';
-    c.fillText('RESULTS', FD_W / 2, 100);
-    c.fillStyle = '#22aaff'; c.font = 'bold 30px sans-serif';
-    c.fillText('Player 1: ' + s.scores[0], FD_W / 2, 180);
+    c.fillStyle = '#ff8822'; c.font = 'bold 42px sans-serif';
+    c.fillText('RESULTS', FD_W / 2, 70);
+    c.fillStyle = '#22aaff'; c.font = 'bold 26px sans-serif';
+    c.fillText('Player 1: ' + s.scores[0], FD_W / 2, 130);
     c.fillStyle = '#ff5588';
-    c.fillText('Player 2: ' + s.scores[1], FD_W / 2, 220);
-    c.fillStyle = '#ffffff'; c.font = 'bold 40px sans-serif';
-    if (s.scores[0] > s.scores[1])      c.fillText('PLAYER 1 WINS!', FD_W / 2, 320);
-    else if (s.scores[1] > s.scores[0]) c.fillText('PLAYER 2 WINS!', FD_W / 2, 320);
-    else                                 c.fillText("IT'S A TIE!",     FD_W / 2, 320);
-    c.fillStyle = '#ff8822'; c.font = 'bold 20px sans-serif';
+    c.fillText('Player 2: ' + s.scores[1], FD_W / 2, 160);
+    c.fillStyle = '#ffffff'; c.font = 'bold 32px sans-serif';
+    if (s.scores[0] > s.scores[1])      c.fillText('PLAYER 1 WINS!', FD_W / 2, 220);
+    else if (s.scores[1] > s.scores[0]) c.fillText('PLAYER 2 WINS!', FD_W / 2, 220);
+    else                                 c.fillText("IT'S A TIE!",     FD_W / 2, 220);
+    c.fillStyle = '#ff8822'; c.font = 'bold 18px sans-serif';
     if (Math.floor(performance.now() / 500) % 2 === 0)
-      c.fillText('SPACE → REMATCH', FD_W / 2, 400);
-    c.fillStyle = '#666'; c.font = '14px sans-serif';
-    c.fillText('ESC or × to leave', FD_W / 2, 470);
+      c.fillText('SPACE → REMATCH', FD_W / 2, 510);
+    c.fillStyle = '#666'; c.font = '12px sans-serif';
+    c.fillText('ESC or × to leave', FD_W / 2, 528);
+    // Leaderboard panel on the right
+    drawMiniLeaderboardOnCanvas(c, FD_W - 280, 250, 260, 200, 'flappydunk');
   }
 }
 
@@ -8984,9 +9132,11 @@ const GDW_FLOOR_PAD = 30;          // bottom HUD strip
 const _gdwRAF = { id: 0 };
 
 function _gdwSpawnObstacle(x, score) {
-  // Random gap somewhere on screen; gap shrinks slowly with score.
-  const gapH = Math.max(140, 230 - score * 1.4);
-  const top = 60 + Math.random() * (FD_H - GDW_FLOOR_PAD - 60 - gapH);
+  // Start WIDE OPEN (gap covers most of the screen) and shrink down fast
+  // so the run quickly tightens up. Floor of 64 px is brutal but still
+  // technically clearable with perfect timing.
+  const gapH = Math.max(64, 420 - score * 4);
+  const top = 50 + Math.random() * (FD_H - GDW_FLOOR_PAD - 50 - gapH);
   return { x, w: 56, gapTop: top, gapBot: top + gapH };
 }
 
@@ -9044,6 +9194,7 @@ function _gdwEndRound() {
   const s = _gdwState;
   s.scores[s.player - 1] = s.score;
   if (s.score > s.bestEver) { s.bestEver = s.score; localStorage.setItem('gdw_best', s.bestEver); }
+  submitMiniScore('gdwave', s.score);
   s.mode = 'roundover';
   s.flashUntil = performance.now() + 280;
 }
@@ -9219,21 +9370,22 @@ function _gdwDraw() {
   if (s.mode === 'gameover') {
     c.fillStyle = 'rgba(0, 20, 40, 0.92)'; c.fillRect(0, 0, FD_W, FD_H);
     c.textAlign = 'center';
-    c.fillStyle = '#22ddff'; c.font = 'bold 48px sans-serif';
-    c.fillText('RESULTS', FD_W / 2, 100);
-    c.fillStyle = '#22aaff'; c.font = 'bold 30px sans-serif';
-    c.fillText('Player 1: ' + s.scores[0], FD_W / 2, 180);
+    c.fillStyle = '#22ddff'; c.font = 'bold 42px sans-serif';
+    c.fillText('RESULTS', FD_W / 2, 70);
+    c.fillStyle = '#22aaff'; c.font = 'bold 26px sans-serif';
+    c.fillText('Player 1: ' + s.scores[0], FD_W / 2, 130);
     c.fillStyle = '#ff5588';
-    c.fillText('Player 2: ' + s.scores[1], FD_W / 2, 220);
-    c.fillStyle = '#ffffff'; c.font = 'bold 40px sans-serif';
-    if (s.scores[0] > s.scores[1])      c.fillText('PLAYER 1 WINS!', FD_W / 2, 320);
-    else if (s.scores[1] > s.scores[0]) c.fillText('PLAYER 2 WINS!', FD_W / 2, 320);
-    else                                 c.fillText("IT'S A TIE!",     FD_W / 2, 320);
-    c.fillStyle = '#22ddff'; c.font = 'bold 22px sans-serif';
+    c.fillText('Player 2: ' + s.scores[1], FD_W / 2, 160);
+    c.fillStyle = '#ffffff'; c.font = 'bold 32px sans-serif';
+    if (s.scores[0] > s.scores[1])      c.fillText('PLAYER 1 WINS!', FD_W / 2, 220);
+    else if (s.scores[1] > s.scores[0]) c.fillText('PLAYER 2 WINS!', FD_W / 2, 220);
+    else                                 c.fillText("IT'S A TIE!",     FD_W / 2, 220);
+    c.fillStyle = '#22ddff'; c.font = 'bold 18px sans-serif';
     if (Math.floor(performance.now() / 500) % 2 === 0)
-      c.fillText('SPACE → REMATCH', FD_W / 2, 400);
-    c.fillStyle = '#666'; c.font = '14px sans-serif';
-    c.fillText('ESC or × to leave', FD_W / 2, 470);
+      c.fillText('SPACE → REMATCH', FD_W / 2, 510);
+    c.fillStyle = '#666'; c.font = '12px sans-serif';
+    c.fillText('ESC or × to leave', FD_W / 2, 528);
+    drawMiniLeaderboardOnCanvas(c, FD_W - 280, 250, 260, 200, 'gdwave');
   }
 }
 

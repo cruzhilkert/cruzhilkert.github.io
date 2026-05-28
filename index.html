@@ -247,13 +247,117 @@ function updateClassicMonthlyBest(score) {
   if (score > classicMonthlyBest) {
     classicMonthlyBest = score;
     localStorage.setItem('headon_classic_month_best', String(score));
+    // Also publish to the live leaderboard (no-op if Firebase isn't set up).
+    submitClassicScoreLive(score);
   }
 }
+// ─── Live leaderboard via Firebase Realtime Database ─────────────────────
+// To enable the LIVE cross-player leaderboard:
+//   1. Go to https://console.firebase.google.com/ and create a project
+//      (free tier — call it whatever you like, eg. "headon-leaderboard").
+//   2. In the project, click "Build → Realtime Database" → Create database.
+//      Pick a region close to you, start in "Test mode" for now.
+//   3. In Project Settings (gear icon → Project Settings) → General →
+//      Your apps → click </> to register a web app. Skip the SDK paste.
+//      Copy the firebaseConfig object that appears (apiKey, authDomain, etc).
+//   4. Paste those values into FIREBASE_CONFIG below, replacing "FILL_ME_IN".
+//   5. Push. The leaderboard will be live for everyone visiting the site.
+// While FIREBASE_CONFIG is unconfigured, the leaderboard silently falls
+// back to bot entries (no errors, just no cross-player scores).
+const FIREBASE_CONFIG = {
+  apiKey:            "FILL_ME_IN",
+  authDomain:        "FILL_ME_IN",
+  databaseURL:       "FILL_ME_IN",
+  projectId:         "FILL_ME_IN",
+  storageBucket:     "FILL_ME_IN",
+  messagingSenderId: "FILL_ME_IN",
+  appId:             "FILL_ME_IN",
+};
+const FIREBASE_READY = FIREBASE_CONFIG.apiKey !== "FILL_ME_IN";
+let _fbDb = null, _fbHelpers = null, _fbInitPromise = null;
+let _liveLeaderboard = [];   // top entries from Firebase, refreshed live
+function _playerUid() {
+  let uid = localStorage.getItem('headon_uid');
+  if (!uid) {
+    uid = 'u_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+    localStorage.setItem('headon_uid', uid);
+  }
+  return uid;
+}
+async function _initFirebase() {
+  if (!FIREBASE_READY) return null;
+  if (_fbInitPromise) return _fbInitPromise;
+  _fbInitPromise = (async () => {
+    try {
+      const [appMod, dbMod] = await Promise.all([
+        import("https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"),
+        import("https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js"),
+      ]);
+      const app = appMod.initializeApp(FIREBASE_CONFIG);
+      _fbDb = dbMod.getDatabase(app);
+      _fbHelpers = dbMod;
+      // Subscribe to top 20 entries for the current month, ordered by score.
+      const monthKey = _currentMonthKey();
+      const q = dbMod.query(
+        dbMod.ref(_fbDb, 'classicLeaderboard/' + monthKey),
+        dbMod.orderByChild('score'),
+        dbMod.limitToLast(20)
+      );
+      dbMod.onValue(q, snap => {
+        const entries = [];
+        snap.forEach(c => { const v = c.val(); if (v) entries.push(v); });
+        entries.sort((a, b) => b.score - a.score);
+        _liveLeaderboard = entries;
+      });
+      return _fbDb;
+    } catch (e) {
+      console.warn('[firebase] init failed, falling back to bots', e);
+      return null;
+    }
+  })();
+  return _fbInitPromise;
+}
+async function submitClassicScoreLive(score) {
+  if (!FIREBASE_READY || !score) return;
+  await _initFirebase();
+  if (!_fbDb || !_fbHelpers) return;
+  const monthKey = _currentMonthKey();
+  const uid = _playerUid();
+  // Only overwrite if the new score is higher than what's stored for this UID.
+  try {
+    const path = 'classicLeaderboard/' + monthKey + '/' + uid;
+    const ref = _fbHelpers.ref(_fbDb, path);
+    const snap = await _fbHelpers.get(ref);
+    const prev = snap.val();
+    if (!prev || score > (prev.score || 0)) {
+      await _fbHelpers.set(ref, { name: (playerName || 'Player').slice(0, 20), score, ts: Date.now() });
+    }
+  } catch (e) {
+    console.warn('[firebase] submit failed', e);
+  }
+}
+// Kick the init off in the background so the first leaderboard render
+// already has live data ready.
+if (FIREBASE_READY) _initFirebase();
+
 function getClassicLeaderboardRanked() {
-  // Without a backend the "real player" pool is just YOU. If/when the
-  // pool fills out to 10+ real players the bots get hidden — for now
-  // the bots fill the bottom positions so the board isn't empty.
+  // Use live entries if Firebase is set up AND there are real entries.
+  // Otherwise fall back to the local YOU entry + bot fillers.
   const realPlayers = [{ name: 'YOU', score: classicMonthlyBest, isPlayer: true }];
+  const uid = _playerUid();
+  if (FIREBASE_READY && _liveLeaderboard.length > 0) {
+    // Strip our own entry (we'll add ourselves via realPlayers) and tag
+    // entries with isLive so the panel can style them differently.
+    const others = _liveLeaderboard
+      .filter(e => e.name !== 'YOU')
+      .map(e => ({ name: e.name, score: e.score, isLive: true }));
+    const combined = [...realPlayers, ...others];
+    if (combined.length < 10) {
+      const needed = 10 - combined.length;
+      combined.push(...CLASSIC_BOT_LEADERBOARD.slice(0, needed));
+    }
+    return combined.sort((a, b) => b.score - a.score);
+  }
   const needed = Math.max(0, 10 - realPlayers.length);
   const bots = CLASSIC_BOT_LEADERBOARD.slice(0, needed);
   return [...realPlayers, ...bots].sort((a, b) => b.score - a.score);

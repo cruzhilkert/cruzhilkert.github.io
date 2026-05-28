@@ -5056,7 +5056,7 @@ function takeDamage(e) {
   dmg.body   = Math.min(1, dmg.body   + per * noise());
   dmg.tires  = Math.min(1, dmg.tires  + per * noise());
   dmg.engine = Math.min(1, dmg.engine + per * noise());
-  speedBoost = Math.max(-5, speedBoost - 6);
+  speedBoost = Math.max(-2, speedBoost - 1);   // tiny slowdown on each crash
   if (dmg.body >= 0.99 && dmg.tires >= 0.99 && dmg.engine >= 0.99) {
     state = STATE.DEAD;
     addShake(0.6, 900);
@@ -8780,10 +8780,17 @@ const FD_HOOP_GAP = 200;          // vertical gap in the hoop
 const FD_HOOP_SPACING = 400;      // distance between hoops
 const _fdRAF = { id: 0 };
 
+// Deterministic RNG so duo matches generate identical hoops on both clients.
+function _fdMakePRNG(seed) {
+  let s = seed | 0;
+  return () => { s = (s * 1664525 + 1013904223) | 0; return ((s >>> 0) / 0x100000000); };
+}
+let _fdHoopRng = Math.random;   // overridden in duo mode for shared hoops
+
 function _fdSpawnHoop(x) {
   // Pick a random vertical center for the gap, keeping it on-screen.
   const margin = FD_HOOP_GAP / 2 + 60;
-  const gapY = margin + Math.random() * (FD_H - 2 * margin);
+  const gapY = margin + _fdHoopRng() * (FD_H - 2 * margin);
   return { x, gapY, passed: false };
 }
 
@@ -8801,20 +8808,23 @@ function startFlappyDunk() {
   _fdBackdrop.style.display = 'block';
   _fdCloseBtn.style.display = 'block';
   _fdState = {
-    mode: 'menu',
-    player: 1,
-    scores: [0, 0],
+    // mode_select → ready → playing → gameover (solo)
+    // mode_select → duo_lobby → duo_matched → playing → gameover (duo)
+    mode: 'mode_select',
+    gameMode: null,        // 'solo' | 'duo'
     bestEver: +localStorage.getItem('fd_best') || 0,
     by: FD_H / 2,
     bvy: 0,
-    wingFlap: 0,        // anim phase for wings
+    wingFlap: 0,
     hoops: _fdInitRound(),
     score: 0,
     lastTime: performance.now(),
     flashUntil: 0,
     flashColor: '#ffffff',
     dead: false,
+    duo: null,             // duo-match state object, see startFlappyDunkDuo
   };
+  _fdHoopRng = Math.random;
   _fdLoop();
 }
 
@@ -8853,43 +8863,68 @@ function stopMiniGame() {
 
 function fdOnKey(k) {
   if (!_fdState) return;
-  if (_fdState.mode === 'menu') {
-    if (k === ' ' || k === 'enter') { _fdState.mode = 'ready'; }
-  } else if (_fdState.mode === 'ready') {
-    if (k === ' ' || k === 'enter') {
-      _fdState.mode = 'playing';
-      _fdState.score = 0;
-      _fdState.by = FD_H / 2;
-      _fdState.bvy = FD_TAP_VY;       // first frame already flapped, so the
-      _fdState.wingFlap = 1;            // ball doesn't drop instantly
-      _fdState.hoops = _fdInitRound();
-      _fdState.dead = false;
-      _fdState.lastTime = performance.now();
+  const s = _fdState;
+  if (s.mode === 'mode_select') {
+    // 1 / s → SOLO,  2 / d → DUO
+    if (k === '1' || k === 's') { s.gameMode = 'solo'; s.mode = 'ready'; }
+    else if (k === '2' || k === 'd') {
+      if (!FIREBASE_READY) { s.duoMessage = 'Multiplayer needs Firebase set up.'; }
+      else { s.gameMode = 'duo'; startFlappyDunkDuoLobby(); }
     }
-  } else if (_fdState.mode === 'playing') {
-    if (k === ' ') {
-      _fdState.bvy = FD_TAP_VY;
-      _fdState.wingFlap = 1;
-    }
-  } else if (_fdState.mode === 'roundover') {
+  } else if (s.mode === 'ready') {
     if (k === ' ' || k === 'enter') {
-      if (_fdState.player === 1) { _fdState.player = 2; _fdState.mode = 'ready'; }
-      else                       { _fdState.mode = 'gameover'; }
+      s.mode = 'playing';
+      s.score = 0;
+      s.by = FD_H / 2;
+      s.bvy = FD_TAP_VY;
+      s.wingFlap = 1;
+      _fdHoopRng = s.gameMode === 'duo' && s.duo
+        ? _fdMakePRNG(s.duo.seed) : Math.random;
+      s.hoops = _fdInitRound();
+      s.dead = false;
+      s.lastTime = performance.now();
     }
-  } else if (_fdState.mode === 'gameover') {
+  } else if (s.mode === 'playing') {
+    if (k === ' ') { s.bvy = FD_TAP_VY; s.wingFlap = 1; }
+  } else if (s.mode === 'gameover') {
     if (k === ' ' || k === 'enter') {
-      _fdState.player = 1; _fdState.scores = [0, 0]; _fdState.mode = 'menu';
+      s.mode = 'mode_select'; s.gameMode = null;
+      if (s.duo) _fdLeaveDuoMatch();
     }
   }
 }
 
 function _fdUpdate(dts) {
-  if (_fdState.mode !== 'playing') return;
   const s = _fdState;
+  // Duo-matched countdown: 3 seconds, then auto-start play.
+  if (s.mode === 'duo_matched') {
+    const t = (performance.now() - (s.duo && s.duo.matchedAt || performance.now())) / 1000;
+    if (t > 2.8) {
+      s.mode = 'playing';
+      s.score = 0;
+      s.by = FD_H / 2;
+      s.bvy = FD_TAP_VY;
+      s.wingFlap = 1;
+      _fdHoopRng = _fdMakePRNG(s.duo.seed);
+      s.hoops = _fdInitRound();
+      s.dead = false;
+      s.lastTime = performance.now();
+    }
+    return;
+  }
+  if (s.mode !== 'playing') return;
   // physics
   s.bvy += FD_GRAVITY * dts;
   s.by  += s.bvy * dts;
   s.wingFlap = Math.max(0, s.wingFlap - dts * 4);
+  // Duo: broadcast self at 10Hz so the opponent sees us move + score live.
+  if (s.gameMode === 'duo' && s.duo && s.duo.matchId) {
+    s._bcTimer = (s._bcTimer || 0) + dts;
+    if (s._bcTimer >= 0.1) {
+      s._bcTimer = 0;
+      _fdDuoBroadcast({ score: s.score, by: s.by, alive: true });
+    }
+  }
 
   // scroll the hoops left
   // scroll speed scales gently with score so it gets harder (very gradual)
@@ -8935,13 +8970,111 @@ function _fdUpdate(dts) {
 }
 
 function _fdEndRound() {
-  _fdState.scores[_fdState.player - 1] = _fdState.score;
-  if (_fdState.score > _fdState.bestEver) {
-    _fdState.bestEver = _fdState.score;
-    localStorage.setItem('fd_best', _fdState.score);
+  const s = _fdState;
+  if (s.score > s.bestEver) {
+    s.bestEver = s.score;
+    localStorage.setItem('fd_best', s.score);
   }
-  submitMiniScore('flappydunk', _fdState.score);
-  _fdState.mode = 'roundover';
+  submitMiniScore('flappydunk', s.score);
+  s.dead = true;
+  // Solo: end of run. Duo: mark self dead but wait for opponent (or timeout)
+  // before showing results.
+  if (s.gameMode === 'duo' && s.duo) {
+    _fdDuoBroadcast({ score: s.score, by: s.by, alive: false });
+    if (s.duo.opponentAlive === false) s.mode = 'gameover';
+    else                                s.mode = 'duo_waiting';
+  } else {
+    s.mode = 'gameover';
+  }
+}
+
+// ─── Flappy Dunk duo (Firebase matchmaking + shared seed) ──────────────
+function startFlappyDunkDuoLobby() {
+  const s = _fdState;
+  s.mode = 'duo_lobby';
+  s.duo = {
+    matchId: null, mySide: null, otherSide: null, seed: 0,
+    opponentName: null, opponentScore: 0, opponentY: FD_H / 2, opponentAlive: true,
+    lobbyKey: null, matchListenerOff: null, lobbyListenerOff: null,
+    joinedAt: Date.now(),
+  };
+  _initFirebase().then(() => {
+    if (!_fbDb || !_fbHelpers) { s.mode = 'mode_select'; s.duoMessage = 'Firebase not ready.'; return; }
+    const fb = _fbHelpers, db = _fbDb;
+    const uid = _playerUid();
+    const lobbyRef = fb.ref(db, 'fdDuoLobby/' + uid);
+    fb.set(lobbyRef, { name: (playerName || 'Player').slice(0, 20), joinedAt: Date.now() }).catch(e => console.warn(e));
+    // Auto-remove ourselves on tab close.
+    if (fb.onDisconnect) fb.onDisconnect(lobbyRef).remove();
+    s.duo.lobbyKey = uid;
+    // Look for another lobby entry that isn't us. The smaller uid is the host.
+    const allRef = fb.ref(db, 'fdDuoLobby');
+    s.duo.lobbyListenerOff = fb.onValue(allRef, snap => {
+      if (s.mode !== 'duo_lobby') return;
+      const entries = [];
+      snap.forEach(c => { entries.push({ uid: c.key, ...c.val() }); });
+      const others = entries.filter(e => e.uid !== uid);
+      if (others.length === 0) return;
+      // pick the one that joined first
+      others.sort((a, b) => a.joinedAt - b.joinedAt);
+      const partner = others[0];
+      const a = uid < partner.uid ? uid : partner.uid;
+      const b = uid < partner.uid ? partner.uid : uid;
+      const matchId = a + '__' + b;
+      const mySide = (uid === a) ? 'A' : 'B';
+      const otherSide = mySide === 'A' ? 'B' : 'A';
+      const seed = _fdHashStr(matchId);
+      s.duo.matchId = matchId; s.duo.mySide = mySide; s.duo.otherSide = otherSide; s.duo.seed = seed;
+      s.duo.opponentName = partner.name;
+      // host writes the start signal (with the seed) for both to use
+      if (mySide === 'A') {
+        fb.set(fb.ref(db, 'fdDuoMatch/' + matchId + '/start'), { ts: Date.now(), seed }).catch(e => console.warn(e));
+      }
+      // listen for opponent updates
+      const oppRef = fb.ref(db, 'fdDuoMatch/' + matchId + '/' + otherSide);
+      s.duo.matchListenerOff = fb.onValue(oppRef, snap2 => {
+        const v = snap2.val(); if (!v) return;
+        s.duo.opponentScore  = v.score  || 0;
+        s.duo.opponentY      = v.by != null ? v.by : s.duo.opponentY;
+        s.duo.opponentAlive  = v.alive  !== false;
+        if (!s.duo.opponentAlive && s.mode === 'duo_waiting') s.mode = 'gameover';
+      });
+      // initialize our own match entry
+      fb.set(fb.ref(db, 'fdDuoMatch/' + matchId + '/' + mySide), { name: (playerName || 'Player').slice(0, 20), score: 0, by: FD_H / 2, alive: true, ts: Date.now() });
+      // remove our lobby entry — we're matched
+      fb.remove(lobbyRef);
+      // turn off the lobby listener
+      if (s.duo.lobbyListenerOff) { s.duo.lobbyListenerOff(); s.duo.lobbyListenerOff = null; }
+      s.mode = 'duo_matched';
+      s.duo.matchedAt = performance.now();
+    });
+  });
+}
+function _fdHashStr(str) {
+  let h = 2166136261 | 0;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h | 0;
+}
+function _fdDuoBroadcast(snapshot) {
+  if (!_fdState || !_fdState.duo || !_fbDb || !_fbHelpers) return;
+  const d = _fdState.duo;
+  if (!d.matchId || !d.mySide) return;
+  const payload = { name: (playerName || 'Player').slice(0, 20), ts: Date.now(), ...snapshot };
+  _fbHelpers.set(_fbHelpers.ref(_fbDb, 'fdDuoMatch/' + d.matchId + '/' + d.mySide), payload).catch(()=>{});
+}
+function _fdLeaveDuoMatch() {
+  const s = _fdState;
+  if (!s || !s.duo) return;
+  const d = s.duo;
+  if (d.lobbyListenerOff) { try { d.lobbyListenerOff(); } catch (_) {} }
+  if (d.matchListenerOff) { try { d.matchListenerOff(); } catch (_) {} }
+  if (d.lobbyKey && _fbDb && _fbHelpers) {
+    try { _fbHelpers.remove(_fbHelpers.ref(_fbDb, 'fdDuoLobby/' + d.lobbyKey)); } catch (_) {}
+  }
+  if (d.matchId && d.mySide && _fbDb && _fbHelpers) {
+    try { _fbHelpers.remove(_fbHelpers.ref(_fbDb, 'fdDuoMatch/' + d.matchId + '/' + d.mySide)); } catch (_) {}
+  }
+  s.duo = null;
 }
 
 function _fdDraw() {
@@ -8957,39 +9090,102 @@ function _fdDraw() {
   c.fillStyle = '#0a1428'; c.fillRect(0, FD_H - 30, FD_W, 30);
   c.fillStyle = '#ff8822'; c.fillRect(0, FD_H - 30, FD_W, 4);
 
-  if (s.mode === 'menu') {
+  if (s.mode === 'mode_select') {
     c.textAlign = 'center';
     c.fillStyle = '#ff8822'; c.font = 'bold 56px sans-serif';
     c.fillText('FLAPPY DUNK', FD_W / 2, 90);
-    c.fillStyle = '#ffffff'; c.font = 'bold 24px sans-serif';
-    c.fillText('Local Hot-Seat', FD_W / 2, 150);
-    c.fillStyle = '#ccccdd'; c.font = '18px sans-serif';
-    c.fillText('Player 1 plays until they crash.',  FD_W / 2, 200);
-    c.fillText('Then Player 2 has a go. Best score wins.', FD_W / 2, 224);
-    c.fillStyle = '#22ff88'; c.font = 'bold 22px sans-serif';
-    c.fillText('SPACE = flap up.   Fly through every hoop.', FD_W / 2, 280);
-    c.fillStyle = '#aabbcc'; c.font = '18px sans-serif';
-    c.fillText('Best: ' + s.bestEver, FD_W / 2, 340);
-    c.fillStyle = '#ff8822'; c.font = 'bold 24px sans-serif';
-    if (Math.floor(performance.now() / 500) % 2 === 0)
-      c.fillText('PRESS SPACE / ENTER', FD_W / 2, 420);
+    c.fillStyle = '#ffffff'; c.font = 'bold 20px sans-serif';
+    c.fillText('Choose a mode', FD_W / 2, 140);
+    // SOLO card
+    c.fillStyle = 'rgba(255,136,34,0.18)';
+    c.fillRect(FD_W / 2 - 280, 200, 240, 160);
+    c.strokeStyle = '#ff8822'; c.lineWidth = 3;
+    c.strokeRect(FD_W / 2 - 280, 200, 240, 160);
+    c.fillStyle = '#ff8822'; c.font = 'bold 36px sans-serif';
+    c.fillText('SOLO', FD_W / 2 - 160, 260);
+    c.fillStyle = '#fff'; c.font = '14px sans-serif';
+    c.fillText('Just you, one run.', FD_W / 2 - 160, 290);
+    c.fillText('Best: ' + s.bestEver, FD_W / 2 - 160, 310);
+    c.fillStyle = '#ffd54a'; c.font = 'bold 14px sans-serif';
+    c.fillText('Press 1 or S', FD_W / 2 - 160, 345);
+    // DUO card
+    const fbReady = FIREBASE_READY;
+    c.fillStyle = fbReady ? 'rgba(34,221,255,0.18)' : 'rgba(80,80,80,0.18)';
+    c.fillRect(FD_W / 2 + 40, 200, 240, 160);
+    c.strokeStyle = fbReady ? '#22ddff' : '#666'; c.lineWidth = 3;
+    c.strokeRect(FD_W / 2 + 40, 200, 240, 160);
+    c.fillStyle = fbReady ? '#22ddff' : '#888'; c.font = 'bold 36px sans-serif';
+    c.fillText('DUO', FD_W / 2 + 160, 260);
+    c.fillStyle = '#fff'; c.font = '14px sans-serif';
+    if (fbReady) {
+      c.fillText('Race a real opponent.', FD_W / 2 + 160, 290);
+      c.fillText('Their game appears flipped on top.', FD_W / 2 + 160, 310);
+      c.fillStyle = '#22ddff'; c.font = 'bold 14px sans-serif';
+      c.fillText('Press 2 or D', FD_W / 2 + 160, 345);
+    } else {
+      c.fillStyle = '#888'; c.font = '13px sans-serif';
+      c.fillText('Needs Firebase set up.', FD_W / 2 + 160, 295);
+      c.fillText('See FIREBASE_CONFIG in index.html', FD_W / 2 + 160, 315);
+    }
+    if (s.duoMessage) {
+      c.fillStyle = '#ff5588'; c.font = 'bold 14px sans-serif';
+      c.fillText(s.duoMessage, FD_W / 2, 400);
+    }
     c.fillStyle = '#666'; c.font = '14px sans-serif';
-    c.fillText('ESC or × to leave', FD_W / 2, 490);
+    c.fillText('ESC or × to leave', FD_W / 2, 510);
     return;
   }
 
   if (s.mode === 'ready') {
     c.textAlign = 'center';
-    c.fillStyle = s.player === 1 ? '#22aaff' : '#ff5588';
-    c.font = 'bold 52px sans-serif';
-    c.fillText('PLAYER ' + s.player, FD_W / 2, 180);
-    c.fillStyle = '#ffffff'; c.font = 'bold 26px sans-serif';
-    c.fillText('Get ready!', FD_W / 2, 240);
+    c.fillStyle = '#ff8822'; c.font = 'bold 56px sans-serif';
+    c.fillText('READY', FD_W / 2, 180);
     c.fillStyle = '#aabbcc'; c.font = '18px sans-serif';
-    c.fillText('SPACE = flap up.  One mistake ends the round.', FD_W / 2, 290);
+    c.fillText('SPACE = flap up.  One mistake ends the run.', FD_W / 2, 250);
     c.fillStyle = '#ff8822'; c.font = 'bold 22px sans-serif';
     if (Math.floor(performance.now() / 500) % 2 === 0)
-      c.fillText('PRESS SPACE / ENTER', FD_W / 2, 380);
+      c.fillText('PRESS SPACE / ENTER', FD_W / 2, 340);
+    return;
+  }
+
+  if (s.mode === 'duo_lobby') {
+    c.textAlign = 'center';
+    c.fillStyle = '#22ddff'; c.font = 'bold 48px sans-serif';
+    c.fillText('FINDING OPPONENT…', FD_W / 2, 200);
+    const dots = '.'.repeat(((performance.now() / 500) | 0) % 4);
+    c.fillStyle = '#aabbcc'; c.font = '20px sans-serif';
+    c.fillText('Waiting for another player' + dots, FD_W / 2, 260);
+    c.fillStyle = '#666'; c.font = '14px sans-serif';
+    c.fillText('Press ESC to leave the queue', FD_W / 2, 320);
+    return;
+  }
+
+  if (s.mode === 'duo_matched') {
+    c.textAlign = 'center';
+    c.fillStyle = '#22ddff'; c.font = 'bold 38px sans-serif';
+    c.fillText('OPPONENT FOUND', FD_W / 2, 160);
+    c.fillStyle = '#ffd54a'; c.font = 'bold 28px sans-serif';
+    c.fillText(s.duo && s.duo.opponentName ? s.duo.opponentName : 'Opponent', FD_W / 2, 210);
+    const t = Math.max(0, 3 - (performance.now() - (s.duo && s.duo.matchedAt || performance.now())) / 1000);
+    c.fillStyle = '#ffffff'; c.font = 'bold 84px sans-serif';
+    c.fillText(Math.ceil(t).toString(), FD_W / 2, 360);
+    c.fillStyle = '#666'; c.font = '14px sans-serif';
+    c.fillText('Get ready — game starts automatically', FD_W / 2, 430);
+    return;
+  }
+
+  if (s.mode === 'duo_waiting') {
+    c.textAlign = 'center';
+    c.fillStyle = '#ff5588'; c.font = 'bold 42px sans-serif';
+    c.fillText('YOU CRASHED', FD_W / 2, 180);
+    c.fillStyle = '#fff'; c.font = '22px sans-serif';
+    c.fillText('Waiting for opponent to finish…', FD_W / 2, 240);
+    c.fillStyle = '#22aaff'; c.font = 'bold 30px sans-serif';
+    c.fillText('You: ' + s.score, FD_W / 2, 320);
+    c.fillStyle = '#ff5588';
+    c.fillText('Opponent: ' + (s.duo ? s.duo.opponentScore : 0), FD_W / 2, 360);
+    c.fillStyle = '#666'; c.font = '14px sans-serif';
+    c.fillText('ESC to leave', FD_W / 2, 510);
     return;
   }
 
@@ -9071,37 +9267,34 @@ function _fdDraw() {
     c.fillRect(0, 0, FD_W, FD_H); c.globalAlpha = 1;
   }
 
-  if (s.mode === 'roundover') {
-    c.fillStyle = 'rgba(10, 20, 40, 0.85)'; c.fillRect(0, 140, FD_W, 280);
-    c.textAlign = 'center';
-    c.fillStyle = s.player === 1 ? '#22aaff' : '#ff5588';
-    c.font = 'bold 44px sans-serif';
-    c.fillText('P' + s.player + ' SCORED', FD_W / 2, 210);
-    c.fillStyle = '#ffffff'; c.font = 'bold 64px sans-serif';
-    c.fillText(String(s.score), FD_W / 2, 290);
-    c.fillStyle = '#ff8822'; c.font = 'bold 20px sans-serif';
-    if (Math.floor(performance.now() / 500) % 2 === 0) {
-      if (s.player === 1) c.fillText('SPACE → PLAYER 2 TURN', FD_W / 2, 370);
-      else                c.fillText('SPACE → SEE RESULTS',    FD_W / 2, 370);
-    }
-  }
-
   if (s.mode === 'gameover') {
     c.fillStyle = 'rgba(10, 20, 40, 0.92)'; c.fillRect(0, 0, FD_W, FD_H);
     c.textAlign = 'center';
     c.fillStyle = '#ff8822'; c.font = 'bold 42px sans-serif';
     c.fillText('RESULTS', FD_W / 2, 70);
-    c.fillStyle = '#22aaff'; c.font = 'bold 26px sans-serif';
-    c.fillText('Player 1: ' + s.scores[0], FD_W / 2, 130);
-    c.fillStyle = '#ff5588';
-    c.fillText('Player 2: ' + s.scores[1], FD_W / 2, 160);
-    c.fillStyle = '#ffffff'; c.font = 'bold 32px sans-serif';
-    if (s.scores[0] > s.scores[1])      c.fillText('PLAYER 1 WINS!', FD_W / 2, 220);
-    else if (s.scores[1] > s.scores[0]) c.fillText('PLAYER 2 WINS!', FD_W / 2, 220);
-    else                                 c.fillText("IT'S A TIE!",     FD_W / 2, 220);
+    if (s.gameMode === 'duo' && s.duo) {
+      const mine = s.score, theirs = s.duo.opponentScore;
+      c.fillStyle = '#22aaff'; c.font = 'bold 26px sans-serif';
+      c.fillText('YOU:  ' + mine, FD_W / 2, 130);
+      c.fillStyle = '#ff5588';
+      c.fillText((s.duo.opponentName || 'Opponent') + ':  ' + theirs, FD_W / 2, 160);
+      c.fillStyle = '#ffffff'; c.font = 'bold 32px sans-serif';
+      if (mine > theirs)      c.fillText('YOU WIN!',  FD_W / 2, 220);
+      else if (theirs > mine) c.fillText('YOU LOST',  FD_W / 2, 220);
+      else                     c.fillText("TIE!",      FD_W / 2, 220);
+    } else {
+      c.fillStyle = '#22aaff'; c.font = 'bold 28px sans-serif';
+      c.fillText('SCORE  ' + s.score, FD_W / 2, 130);
+      c.fillStyle = '#ffd54a'; c.font = 'bold 18px sans-serif';
+      c.fillText('Best: ' + s.bestEver, FD_W / 2, 160);
+      if (s.score > 0 && s.score === s.bestEver) {
+        c.fillStyle = '#22ff88'; c.font = 'bold 22px sans-serif';
+        c.fillText('NEW PERSONAL BEST!', FD_W / 2, 200);
+      }
+    }
     c.fillStyle = '#ff8822'; c.font = 'bold 18px sans-serif';
     if (Math.floor(performance.now() / 500) % 2 === 0)
-      c.fillText('SPACE → REMATCH', FD_W / 2, 510);
+      c.fillText('SPACE → MENU', FD_W / 2, 510);
     c.fillStyle = '#666'; c.font = '12px sans-serif';
     c.fillText('ESC or × to leave', FD_W / 2, 528);
     // Leaderboard panel on the right

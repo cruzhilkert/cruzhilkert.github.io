@@ -1084,7 +1084,7 @@ let mcBlockTimer = 0; // ms until next block spawn
 // plate under the player. Each match starts with 20 plates; once they
 // run out, no more spawn. Stepping onto a plate a SECOND time makes it
 // fall fast (so the trick is "land, leave, never come back").
-let mcPlatesLeft = 20;
+let mcPlatesLeft = 200;
 let mcPlates = []; // { mesh, x, z, stepped, falling, dropVy }
 
 function buildArena(radius = HEX_RADIUS) {
@@ -3952,9 +3952,9 @@ function startArena() {
   arenaElimOrder = []; arenaPlacement = null; skidMarks = []; icePatches = [];
   for (const mb of mcBlocks) { if (mb.mesh) arenaGroup.remove(mb.mesh); }
   mcBlocks = []; mcBlockTimer = 2000;
-  // Fresh 20 rescue plates per match.
+  // Fresh 200 rescue plates per match.
   for (const p of mcPlates) { if (p.mesh) arenaGroup.remove(p.mesh); }
-  mcPlates = []; mcPlatesLeft = 20;
+  mcPlates = []; mcPlatesLeft = 200;
   // battle royale collapse ring setup
   if (battleRoyale) {
     brCollapseRadius = Math.max(...arenaTiles.map(t => Math.hypot(t.x, t.z)));
@@ -4445,15 +4445,15 @@ function updateArena(dt) {
     //    there's no tile, then check if we're standing on an existing plate.
     let _onPlate = null;
     if (equippedPaint === 'paint_minecraft' && !arenaElimOrder.includes('player')) {
-      // Find any plate we're currently over (small XZ radius).
+      // Find any plate we're currently over (matches the new plate size).
       for (const p of mcPlates) {
         if (p.falling) continue;
         const dx = arenaPlayer.x - p.x, dz = arenaPlayer.z - p.z;
-        if (dx * dx + dz * dz < 1.5 * 1.5) { _onPlate = p; break; }
+        if (dx * dx + dz * dz < 2.1 * 2.1) { _onPlate = p; break; }
       }
       // No tile, no plate yet, falling — spawn a rescue plate.
       if (!onSolid && !_onPlate && mcPlatesLeft > 0 && arenaPlayer.vy < 0 && arenaPlayer.y < 0.5) {
-        const pGeo = new THREE.BoxGeometry(2.4, 0.35, 2.4);
+        const pGeo = new THREE.BoxGeometry(3.4, 0.5, 3.4);
         const pMats = [
           new THREE.MeshLambertMaterial({ color: 0x4a7a10 }),
           new THREE.MeshLambertMaterial({ color: 0x4a7a10 }),
@@ -4668,57 +4668,8 @@ function updateArena(dt) {
   for (const ip of icePatches) ip.life -= dt;
   if (icePatches.length > 300) icePatches = icePatches.filter(ip => ip.life > 0).slice(-280);
 
-  // ── Minecraft paint: spawn a block every 5s that knocks back bots ─────────
-  if (equippedPaint === 'paint_minecraft' && !arenaElimOrder.includes('player')) {
-    mcBlockTimer -= dt;
-    if (mcBlockTimer <= 0) {
-      mcBlockTimer = 2000;
-      // build a Minecraft-style grass block
-      const bGeo = new THREE.BoxGeometry(1.4, 1.4, 1.4);
-      const bMats = [
-        new THREE.MeshLambertMaterial({ color: 0x4a7a10 }), // +x side
-        new THREE.MeshLambertMaterial({ color: 0x4a7a10 }), // -x side
-        new THREE.MeshLambertMaterial({ color: 0x5d8a1b }), // +y top (grass)
-        new THREE.MeshLambertMaterial({ color: 0x6b4226 }), // -y bottom (dirt)
-        new THREE.MeshLambertMaterial({ color: 0x4a7a10 }), // +z side
-        new THREE.MeshLambertMaterial({ color: 0x4a7a10 }), // -z side
-      ];
-      const bMesh = new THREE.Mesh(bGeo, bMats);
-      bMesh.position.set(arenaPlayer.x, arenaPlayer.y + 1.5, arenaPlayer.z);
-      arenaGroup.add(bMesh);
-      mcBlocks.push({ mesh: bMesh, x: arenaPlayer.x, z: arenaPlayer.z, life: 3000 });
-      // knock back all alive bots within radius 5
-      for (const bot of arenaBots) {
-        if (bot.state !== 'alive') continue;
-        const dx = bot.x - arenaPlayer.x, dz = bot.z - arenaPlayer.z;
-        const dist = Math.hypot(dx, dz);
-        if (dist < 5 && dist > 0.1) {
-          const strength = (1 - dist / 5) * 22;
-          bot.vx += (dx / dist) * strength;
-          bot.vz += (dz / dist) * strength;
-          bot.vy  = 5;
-        }
-      }
-    }
-    // update block lifetimes + player collision
-    for (const mb of mcBlocks) {
-      mb.life -= dt;
-      if (mb.mesh) {
-        mb.mesh.position.y = Math.max(0.7, mb.mesh.position.y - dts * 2);
-        if (mb.life <= 0) { arenaGroup.remove(mb.mesh); mb.mesh = null; continue; }
-        // knock back player if they drive into the block
-        const pdx = arenaPlayer.x - mb.x, pdz = arenaPlayer.z - mb.z;
-        const pdist = Math.hypot(pdx, pdz);
-        if (pdist < 1.8 && pdist > 0.05) {
-          const pstr = (1 - pdist / 1.8) * 18;
-          arenaPlayer.vx += (pdx / pdist) * pstr;
-          arenaPlayer.vz += (pdz / pdist) * pstr;
-          arenaPlayer.vy = 4;
-        }
-      }
-    }
-    mcBlocks = mcBlocks.filter(mb => mb.life > 0);
-  }
+  // (Old "block spawns behind you every 2s" Minecraft effect removed — the
+  // paint now only offers the falling-rescue plates ability.)
 
   // ── nitro boost tick ──────────────────────────────────────────────────────
   if (nitroTime > 0) {
@@ -8772,7 +8723,7 @@ let inlineLBScroll = 0;     // scroll offset (rows) for the inline panel
 let inlineLBAwardOpen = false;   // award detail popover open
 
 function drawInlineLeaderboard() {
-  const x = 14, y = 68, w = 200, h = 250;
+  const x = 14, y = 68, w = 158, h = 270;
   // Hover / click hit info
   const onPanel = mouse.x >= x && mouse.x <= x + w && mouse.y >= y && mouse.y <= y + h;
 
@@ -8782,62 +8733,57 @@ function drawInlineLeaderboard() {
   ctx.strokeStyle = '#ffd54a'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.stroke();
 
-  // Header — title + countdown OR award button.
-  const isFM = freeMap;
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 12px system-ui';
-  ctx.fillText(isFM ? 'MINI GAMES' : 'CLASSIC', x + w / 2, y + 16);
-
-  // Countdown OR award button
+  // Header — countdown or award button.
   const cdMs = _msUntilNextMonth();
   if (monthlyRewardWonLast || performance.now() < monthlyRewardShownUntil) {
-    // Award button
     const aw = _currentAwardTheme();
-    const abX = x + 10, abY = y + 22, abW = w - 20, abH = 22;
+    const abX = x + 6, abY = y + 6, abW = w - 12, abH = 20;
     const abHov = mouse.x >= abX && mouse.x <= abX + abW && mouse.y >= abY && mouse.y <= abY + abH;
     ctx.fillStyle = abHov ? 'rgba(255,215,0,0.6)' : 'rgba(255,215,0,0.35)';
-    ctx.beginPath(); ctx.roundRect(abX, abY, abW, abH, 4); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(abX, abY, abW, abH, 3); ctx.fill();
     ctx.strokeStyle = '#ffd54a'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.roundRect(abX, abY, abW, abH, 4); ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 11px system-ui';
-    ctx.fillText(aw.emoji + ' AWARD  —  CLICK', x + w / 2, abY + 14);
+    ctx.beginPath(); ctx.roundRect(abX, abY, abW, abH, 3); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(aw.emoji + ' AWARD — TAP', x + w / 2, abY + 13);
   } else {
-    ctx.fillStyle = '#999'; ctx.font = '10px system-ui';
-    ctx.fillText('Blank until next month', x + w / 2, y + 32);
-    ctx.fillStyle = '#888'; ctx.font = '9px system-ui';
-    ctx.fillText(_formatCountdown(cdMs), x + w / 2, y + 44);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#888'; ctx.font = '8px system-ui';
+    ctx.fillText('next month in ' + _formatCountdown(cdMs), x + w / 2, y + 16);
   }
 
-  // Rows. Scrollable list of leaderboard entries.
-  let entries;
-  if (isFM) {
-    // Two halves: top = FD, bottom = GDW
-    const fd  = getMiniLeaderboardRanked('flappydunk').slice(0, 4);
-    const gdw = getMiniLeaderboardRanked('gdwave').slice(0, 4);
-    ctx.fillStyle = '#ff8822'; ctx.font = 'bold 10px system-ui';
-    ctx.textAlign = 'left';
-    ctx.fillText('FLAPPY DUNK', x + 10, y + 64);
-    _drawInlineRows(x + 10, y + 76, w - 20, fd, '#ff8822');
-    ctx.fillStyle = '#22ddff'; ctx.font = 'bold 10px system-ui';
-    ctx.fillText('GEO DASH WAVE', x + 10, y + 156);
-    _drawInlineRows(x + 10, y + 168, w - 20, gdw, '#22ddff');
-    return;
-  }
-  entries = getClassicLeaderboardRanked();
-  // Scrollable window of 8 rows.
-  const maxScroll = Math.max(0, entries.length - 8);
+  // ── Top half: CLASSIC leaderboard (scrollable) ──
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 9px system-ui';
+  ctx.fillText('CLASSIC', x + 6, y + 36);
+  const classicY = y + 44;
+  const classicH = 110;     // ~5 rows visible
+  const classic = getClassicLeaderboardRanked();
+  const maxScroll = Math.max(0, classic.length - 5);
   inlineLBScroll = Math.max(0, Math.min(maxScroll, inlineLBScroll));
-  const view = entries.slice(inlineLBScroll, inlineLBScroll + 8);
-  _drawInlineRows(x + 10, y + 60, w - 20, view, '#ffd54a', inlineLBScroll);
-  // Scroll arrows (visual hints; mousewheel handled in wheel listener)
+  const classicView = classic.slice(inlineLBScroll, inlineLBScroll + 5);
+  _drawInlineRows(x + 6, classicY, w - 12, classicView, '#ffd54a', inlineLBScroll);
   if (inlineLBScroll > 0) {
-    ctx.fillStyle = '#ffd54a'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
-    ctx.fillText('▲', x + w / 2, y + 56);
+    ctx.fillStyle = '#ffd54a'; ctx.font = '8px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('▲', x + w - 6, y + 36);
   }
   if (inlineLBScroll < maxScroll) {
-    ctx.fillStyle = '#ffd54a'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
-    ctx.fillText('▼', x + w / 2, y + h - 6);
+    ctx.fillStyle = '#ffd54a'; ctx.font = '8px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('▼', x + w - 6, classicY + classicH - 6);
   }
+
+  // ── Divider ──
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x + 6, y + 152); ctx.lineTo(x + w - 6, y + 152); ctx.stroke();
+
+  // ── Bottom half: Flappy Dunk (top 3) + Geo Dash Wave (top 3) ──
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ff8822'; ctx.font = 'bold 9px system-ui';
+  ctx.fillText('FLAPPY DUNK', x + 6, y + 165);
+  _drawInlineRows(x + 6, y + 172, w - 12, getMiniLeaderboardRanked('flappydunk').slice(0, 3), '#ff8822');
+  ctx.fillStyle = '#22ddff'; ctx.font = 'bold 9px system-ui';
+  ctx.fillText('GEO DASH WAVE', x + 6, y + 220);
+  _drawInlineRows(x + 6, y + 227, w - 12, getMiniLeaderboardRanked('gdwave').slice(0, 3), '#22ddff');
 }
 function _drawInlineRows(x, y, w, list, color, startIdx) {
   ctx.textAlign = 'left';
@@ -8847,14 +8793,14 @@ function _drawInlineRows(x, y, w, list, color, startIdx) {
     const pos = (startIdx || 0) + i + 1;
     const isYou = r.isPlayer;
     ctx.fillStyle = isYou ? '#22ddff' : (pos === 1 ? color : '#aaa');
-    ctx.font = isYou ? 'bold 10px system-ui' : '10px system-ui';
+    ctx.font = isYou ? 'bold 9px system-ui' : '9px system-ui';
     const tag = pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : '#' + pos;
-    ctx.fillText(tag, x, ly + 9);
-    ctx.fillText((r.name || '').slice(0, 11), x + 30, ly + 9);
+    ctx.fillText(tag, x, ly + 8);
+    ctx.fillText((r.name || '').slice(0, 8), x + 22, ly + 8);
     ctx.textAlign = 'right';
-    ctx.fillText(String(r.score), x + w, ly + 9);
+    ctx.fillText(String(r.score), x + w, ly + 8);
     ctx.textAlign = 'left';
-    ly += 14;
+    ly += 11;
   }
 }
 

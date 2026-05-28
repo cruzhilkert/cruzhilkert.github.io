@@ -694,6 +694,7 @@ let crashAutoTimer = 0;  // ms until auto-restart after crash
 
 let menuButtons = [];
 let settingsButtons = [];
+let leaderboardModalShown = false;   // toggled by the 🏆 button on the menu
 // ─── Mobile button position editor (lives inside the Settings page) ───
 let mobileBtnOffsets = {};
 try { mobileBtnOffsets = JSON.parse(localStorage.getItem('headon_mobile_btn_offsets')) || {}; }
@@ -1031,6 +1032,13 @@ let icePatches = []; // { wx, wy, wz, life, maxLife } — left by ice trail in a
 let arenaBombs = []; // { mesh, x, z, triggered } — championship final mines
 let mcBlocks  = []; // { mesh, x, z, life } — Minecraft paint blocks
 let mcBlockTimer = 0; // ms until next block spawn
+// ── Minecraft "rescue plate" ability ──────────────────────────────────
+// While on the Minecraft paint, falling off the arena spawns a tiny grass
+// plate under the player. Each match starts with 20 plates; once they
+// run out, no more spawn. Stepping onto a plate a SECOND time makes it
+// fall fast (so the trick is "land, leave, never come back").
+let mcPlatesLeft = 20;
+let mcPlates = []; // { mesh, x, z, stepped, falling, dropVy }
 
 function buildArena(radius = HEX_RADIUS) {
   for (const t of arenaTiles) arenaGroup.remove(t.mesh);
@@ -2879,6 +2887,7 @@ window.addEventListener('keydown', __safe('keydown', e => {
   if (state === STATE.MENU && (k === ' ' || k === 'enter')) {
     startGame();
   }
+  if (leaderboardModalShown && k === 'escape') { leaderboardModalShown = false; e.preventDefault && e.preventDefault(); return; }
   if (state === STATE.HELP && (k === ' ' || k === 'enter' || k === 'escape')) state = STATE.MENU;
   if (state === STATE.GARAGE && k === 'escape') state = STATE.MENU;
   if (state === STATE.DEAD) {
@@ -3103,6 +3112,15 @@ canvas3d.addEventListener('click', __safe('canvas-click', e => {
   const r = canvas3d.getBoundingClientRect();
   const x = (e.clientX - r.left) * (W / r.width);
   const y = (e.clientY - r.top)  * (H / r.height);
+  // Leaderboard modal swallows clicks: close button or outside-panel taps.
+  if (leaderboardModalShown) {
+    const panX = 20, panY = 50, panW = W - 40, panH = H - 100;
+    const cbX = panX + panW / 2 - 60, cbY = panY + panH - 50;
+    const onClose = x >= cbX && x <= cbX + 120 && y >= cbY && y <= cbY + 36;
+    const outside = x < panX || x > panX + panW || y < panY || y > panY + panH;
+    if (onClose || outside) leaderboardModalShown = false;
+    return;
+  }
   if (state === STATE.INTRO) {
     introParticles = []; introEmbers = [];
     introShock = null; introShock2 = null; introShock3 = null;
@@ -3862,6 +3880,9 @@ function startArena() {
   arenaElimOrder = []; arenaPlacement = null; skidMarks = []; icePatches = [];
   for (const mb of mcBlocks) { if (mb.mesh) arenaGroup.remove(mb.mesh); }
   mcBlocks = []; mcBlockTimer = 2000;
+  // Fresh 20 rescue plates per match.
+  for (const p of mcPlates) { if (p.mesh) arenaGroup.remove(p.mesh); }
+  mcPlates = []; mcPlatesLeft = 20;
   // battle royale collapse ring setup
   if (battleRoyale) {
     brCollapseRadius = Math.max(...arenaTiles.map(t => Math.hypot(t.x, t.z)));
@@ -4347,13 +4368,63 @@ function updateArena(dt) {
   } else {
     const tile = arenaTileAt(arenaPlayer.x, arenaPlayer.z);
     const onSolid = tile && (tile.state === 'alive' || tile.state === 'fading' || tile.state === 'rising');
-    const supportY = tile ? tile.mesh.position.y + 0.2 : -100;
-    if (onSolid && arenaPlayer.y <= supportY + 0.05 && arenaPlayer.vy <= 0) {
+    let supportY = tile ? tile.mesh.position.y + 0.2 : -100;
+    // ── Minecraft rescue plate: spawn one under us if we're falling and
+    //    there's no tile, then check if we're standing on an existing plate.
+    let _onPlate = null;
+    if (equippedPaint === 'paint_minecraft' && !arenaElimOrder.includes('player')) {
+      // Find any plate we're currently over (small XZ radius).
+      for (const p of mcPlates) {
+        if (p.falling) continue;
+        const dx = arenaPlayer.x - p.x, dz = arenaPlayer.z - p.z;
+        if (dx * dx + dz * dz < 1.5 * 1.5) { _onPlate = p; break; }
+      }
+      // No tile, no plate yet, falling — spawn a rescue plate.
+      if (!onSolid && !_onPlate && mcPlatesLeft > 0 && arenaPlayer.vy < 0 && arenaPlayer.y < 0.5) {
+        const pGeo = new THREE.BoxGeometry(2.4, 0.35, 2.4);
+        const pMats = [
+          new THREE.MeshLambertMaterial({ color: 0x4a7a10 }),
+          new THREE.MeshLambertMaterial({ color: 0x4a7a10 }),
+          new THREE.MeshLambertMaterial({ color: 0x5d8a1b }),
+          new THREE.MeshLambertMaterial({ color: 0x6b4226 }),
+          new THREE.MeshLambertMaterial({ color: 0x4a7a10 }),
+          new THREE.MeshLambertMaterial({ color: 0x4a7a10 }),
+        ];
+        const pMesh = new THREE.Mesh(pGeo, pMats);
+        pMesh.position.set(arenaPlayer.x, -0.2, arenaPlayer.z);
+        arenaGroup.add(pMesh);
+        const plate = { mesh: pMesh, x: arenaPlayer.x, z: arenaPlayer.z, stepped: false, falling: false, dropVy: 0 };
+        mcPlates.push(plate);
+        mcPlatesLeft -= 1;
+        _onPlate = plate;
+      }
+      if (_onPlate) supportY = Math.max(supportY, _onPlate.mesh.position.y + 0.2);
+    }
+    const effectiveOnSolid = onSolid || !!_onPlate;
+    if (effectiveOnSolid && arenaPlayer.y <= supportY + 0.05 && arenaPlayer.vy <= 0) {
       arenaPlayer.y = supportY; arenaPlayer.vy = 0; arenaPlayer.onGround = true;
+      // Stepping on a plate: first touch = mark stepped. Re-entering an
+      // already-stepped plate makes it fall fast.
+      if (_onPlate) {
+        if (!_onPlate.stepped) { _onPlate.stepped = true; }
+        else if (!_onPlate.falling) { _onPlate.falling = true; _onPlate.dropVy = -2; }
+      }
     } else {
       arenaPlayer.onGround = false;
       arenaPlayer.vy -= 18 * dts;
       arenaPlayer.y += arenaPlayer.vy * dts;
+    }
+    // Tick all plates: falling ones drop fast and get removed below the floor.
+    for (let i = mcPlates.length - 1; i >= 0; i--) {
+      const p = mcPlates[i];
+      if (p.falling) {
+        p.dropVy -= 40 * dts;   // sharp gravity
+        p.mesh.position.y += p.dropVy * dts;
+        if (p.mesh.position.y < -8) {
+          arenaGroup.remove(p.mesh);
+          mcPlates.splice(i, 1);
+        }
+      }
     }
     if (tile && tile.state === 'alive' && arenaPlayer.onGround) {
       if (equippedPaint === 'paint_obsidian' && !tile.infected) {
@@ -5716,6 +5787,9 @@ function drawHud2D() {
   // Mobile on-screen touch controls — render whenever the player is actively
   // driving on mobile (Classic, Arena, Free Map, race track all share keys[]).
   if (device === 'mobile' && (state === STATE.ARENA || state === STATE.PLAYING)) drawMobileControls();
+  // Leaderboard quick-view modal — opened from the 🏆 button on the menu.
+  // Picks which board(s) to show based on what the player is doing right now.
+  if (leaderboardModalShown) drawLeaderboardModal();
   // Monthly-reward popup: drawn on top of everything for a few seconds
   // after a new month starts with a 1st-place finish.
   if (monthlyRewardWonLast && performance.now() < monthlyRewardShownUntil) {
@@ -6861,6 +6935,21 @@ function drawRaceResults() {
 
 function drawArenaHud() {
   if (freeMap) { drawFreeMapHud(); return; }
+  // Minecraft rescue plate counter — only shown while the paint is equipped.
+  if (equippedPaint === 'paint_minecraft' && !arenaElimOrder.includes('player')) {
+    const pBoxW = 88, pBoxH = 28, pX = W - pBoxW - 10, pY = H - pBoxH - 10;
+    ctx.fillStyle = 'rgba(10, 30, 10, 0.85)';
+    ctx.beginPath(); ctx.roundRect(pX, pY, pBoxW, pBoxH, 5); ctx.fill();
+    ctx.strokeStyle = '#5d8a1b'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(pX, pY, pBoxW, pBoxH, 5); ctx.stroke();
+    // tiny grass-plate icon
+    ctx.fillStyle = '#5d8a1b'; ctx.fillRect(pX + 8,  pY + 10, 12, 4);
+    ctx.fillStyle = '#6b4226'; ctx.fillRect(pX + 8,  pY + 14, 12, 5);
+    ctx.fillStyle = mcPlatesLeft > 0 ? '#cfe8a0' : '#666';
+    ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('PLATES  ' + mcPlatesLeft, pX + 28, pY + pBoxH / 2);
+    ctx.textBaseline = 'alphabetic';
+  }
   // ice patches — drawn beneath skid marks
   const _iceT = menuBlink / 1000;
   for (const ip of icePatches) {
@@ -7470,6 +7559,9 @@ function drawMenu() {
     { label: '✦ QUEST', x: questX,  y: topBtnY, w: topBtnW, h: topBtnH, fontSize: 10, action: () => state = STATE.MISSIONS },
     // gear icon to the right of the "HEAD ON" title
     { icon: 'gear', x: 14, y: 14, w: 44, h: 44, action: () => { state = STATE.SETTINGS; } },
+    // 🏆 leaderboard quick-view, sits under the gear
+    { label: '🏆', x: 14, y: 64, w: 44, h: 44, fontSize: 20,
+      action: () => { leaderboardModalShown = true; } },
   ];
 
   // records row — sits just above the PLAY button (head-on record removed; mode is gone)
@@ -8517,6 +8609,96 @@ function drawCrash() {
   ctx.textAlign = 'left';
 
   drawClassicLeaderboardPanel();
+}
+
+function drawLeaderboardModal() {
+  // Dim background.
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+  ctx.fillRect(0, 0, W, H);
+  // Panel.
+  const panW = W - 40, panH = H - 100, panX = 20, panY = 50;
+  ctx.fillStyle = 'rgba(10, 12, 28, 0.96)';
+  roundedRect(panX, panY, panW, panH, 10); ctx.fill();
+  ctx.strokeStyle = '#ffd54a'; ctx.lineWidth = 2;
+  roundedRect(panX, panY, panW, panH, 10); ctx.stroke();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 22px system-ui';
+  ctx.fillText('🏆 LEADERBOARDS', panX + panW / 2, panY + 28);
+
+  // Pick context: in free map → mini-game boards; otherwise classic board.
+  const showMini = freeMap;
+  const cur = _currentMonthKey();
+  ctx.fillStyle = '#888'; ctx.font = '11px system-ui';
+  ctx.fillText(cur + (FIREBASE_READY ? '   •   LIVE' : '   •   (bots — Firebase off)'),
+               panX + panW / 2, panY + 46);
+
+  if (showMini) {
+    // Two columns: Flappy Dunk + Geo Dash Wave.
+    const colW = (panW - 60) / 2;
+    drawSimpleLBColumn(panX + 20, panY + 70, colW, 'FLAPPY DUNK', 'flappydunk', '#ff8822');
+    drawSimpleLBColumn(panX + 40 + colW, panY + 70, colW, 'GEO DASH WAVE', 'gdwave', '#22ddff');
+  } else {
+    // Single column: classic.
+    const ranked = getClassicLeaderboardRanked();
+    const myIdx = ranked.findIndex(r => r.isPlayer);
+    const start = Math.max(0, Math.min(ranked.length - 8, myIdx - 3));
+    const window = ranked.slice(start, start + 8);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 16px system-ui';
+    ctx.fillText('CLASSIC — Monthly', panX + panW / 2, panY + 76);
+    ctx.textAlign = 'left';
+    let ly = panY + 110;
+    for (let i = 0; i < window.length; i++) {
+      const r = window[i];
+      const pos = start + i + 1;
+      const isYou = r.isPlayer;
+      ctx.fillStyle = isYou ? '#22ddff' : (pos === 1 ? '#ffd54a' : '#bbb');
+      ctx.font = isYou ? 'bold 14px system-ui' : '13px system-ui';
+      const tag = (pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : '#' + pos);
+      ctx.fillText(tag, panX + 30, ly);
+      ctx.fillText(r.name, panX + 76, ly);
+      ctx.textAlign = 'right';
+      ctx.fillText(String(r.score), panX + panW - 30, ly);
+      ctx.textAlign = 'left';
+      ly += 22;
+    }
+  }
+
+  // Close button.
+  const cbX = panX + panW / 2 - 60, cbY = panY + panH - 50;
+  ctx.fillStyle = 'rgba(40, 20, 30, 0.9)';
+  roundedRect(cbX, cbY, 120, 36, 6); ctx.fill();
+  ctx.strokeStyle = '#ff44dd'; ctx.lineWidth = 2;
+  roundedRect(cbX, cbY, 120, 36, 6); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 14px system-ui';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('CLOSE', cbX + 60, cbY + 18);
+  ctx.textBaseline = 'alphabetic';
+}
+function drawSimpleLBColumn(x, y, w, title, game, accent) {
+  ctx.textAlign = 'center';
+  ctx.fillStyle = accent; ctx.font = 'bold 14px system-ui';
+  ctx.fillText(title, x + w / 2, y);
+  const ranked = getMiniLeaderboardRanked(game);
+  const myIdx = ranked.findIndex(r => r.isPlayer);
+  const start = Math.max(0, Math.min(ranked.length - 7, myIdx - 3));
+  const window = ranked.slice(start, start + 7);
+  ctx.textAlign = 'left';
+  let ly = y + 28;
+  for (let i = 0; i < window.length; i++) {
+    const r = window[i];
+    const pos = start + i + 1;
+    const isYou = r.isPlayer;
+    ctx.fillStyle = isYou ? '#22ddff' : (pos === 1 ? accent : '#bbb');
+    ctx.font = isYou ? 'bold 12px system-ui' : '11px system-ui';
+    const tag = (pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : '#' + pos);
+    ctx.fillText(tag, x + 8, ly);
+    ctx.fillText(r.name, x + 38, ly);
+    ctx.textAlign = 'right';
+    ctx.fillText(String(r.score), x + w - 8, ly);
+    ctx.textAlign = 'left';
+    ly += 18;
+  }
 }
 
 function drawClassicLeaderboardPanel() {

@@ -9253,10 +9253,6 @@ function _fdDraw() {
   c.restore();
 
   // HUD
-  c.textAlign = 'left';
-  c.fillStyle = s.player === 1 ? '#22aaff' : '#ff5588';
-  c.font = 'bold 22px sans-serif';
-  c.fillText('P' + s.player, 30, 40);
   c.textAlign = 'center';
   c.fillStyle = '#ffffff'; c.font = 'bold 44px sans-serif';
   c.fillText(String(s.score), FD_W / 2, 50);
@@ -9325,10 +9321,10 @@ const GDW_FLOOR_PAD = 30;          // bottom HUD strip
 const _gdwRAF = { id: 0 };
 
 function _gdwSpawnObstacle(x, score) {
-  // Start WIDE OPEN (gap covers most of the screen) and shrink down fast
-  // so the run quickly tightens up. Floor of 64 px is brutal but still
-  // technically clearable with perfect timing.
-  const gapH = Math.max(64, 420 - score * 4);
+  // Start WIDE OPEN (gap covers most of the screen) and shrink by a tiny
+  // sliver every three points. From 420 px down to a floor of 70 px over
+  // hundreds of scored gates — slow, gradual difficulty climb.
+  const gapH = Math.max(70, 420 - Math.floor(score / 3) * 2);
   const top = 50 + Math.random() * (FD_H - GDW_FLOOR_PAD - 50 - gapH);
   return { x, w: 56, gapTop: top, gapBot: top + gapH };
 }
@@ -9340,8 +9336,6 @@ function startGeometryDashWave() {
   _fdCloseBtn.style.display = 'block';
   _gdwState = {
     mode: 'menu',
-    player: 1,
-    scores: [0, 0],
     bestEver: +localStorage.getItem('gdw_best') || 0,
     py: FD_H / 2,
     trail: [],
@@ -9371,24 +9365,16 @@ function gdwOnKey(k) {
       s.score = 0;
       s.lastTime = performance.now();
     }
-  } else if (s.mode === 'roundover') {
-    if (k === ' ' || k === 'enter') {
-      if (s.player === 1) { s.player = 2; s.mode = 'ready'; }
-      else                { s.mode = 'gameover'; }
-    }
   } else if (s.mode === 'gameover') {
-    if (k === ' ' || k === 'enter') {
-      s.player = 1; s.scores = [0, 0]; s.mode = 'menu';
-    }
+    if (k === ' ' || k === 'enter') s.mode = 'menu';
   }
 }
 
 function _gdwEndRound() {
   const s = _gdwState;
-  s.scores[s.player - 1] = s.score;
   if (s.score > s.bestEver) { s.bestEver = s.score; localStorage.setItem('gdw_best', s.bestEver); }
   submitMiniScore('gdwave', s.score);
-  s.mode = 'roundover';
+  s.mode = 'gameover';
   s.flashUntil = performance.now() + 280;
 }
 
@@ -9457,11 +9443,9 @@ function _gdwDraw() {
     c.textAlign = 'center';
     c.fillStyle = '#22ddff'; c.font = 'bold 56px sans-serif';
     c.fillText('GEO DASH WAVE', FD_W / 2, 100);
-    c.fillStyle = '#ffffff'; c.font = 'bold 24px sans-serif';
-    c.fillText('Local Hot-Seat', FD_W / 2, 160);
     c.fillStyle = '#aaccdd'; c.font = '18px sans-serif';
-    c.fillText('HOLD SPACE → climb   ·   RELEASE → dive', FD_W / 2, 220);
-    c.fillText('Squeeze through every gap.', FD_W / 2, 250);
+    c.fillText('HOLD SPACE → climb   ·   RELEASE → dive', FD_W / 2, 200);
+    c.fillText('Squeeze through every gap.', FD_W / 2, 230);
     c.fillStyle = '#aabbcc'; c.font = '18px sans-serif';
     c.fillText('Best: ' + s.bestEver, FD_W / 2, 320);
     c.fillStyle = '#22ddff'; c.font = 'bold 24px sans-serif';
@@ -9474,9 +9458,8 @@ function _gdwDraw() {
 
   if (s.mode === 'ready') {
     c.textAlign = 'center';
-    c.fillStyle = s.player === 1 ? '#22aaff' : '#ff5588';
-    c.font = 'bold 52px sans-serif';
-    c.fillText('PLAYER ' + s.player, FD_W / 2, 180);
+    c.fillStyle = '#22ddff'; c.font = 'bold 56px sans-serif';
+    c.fillText('READY', FD_W / 2, 180);
     c.fillStyle = '#aaccdd'; c.font = '20px sans-serif';
     c.fillText('Hold SPACE to wave up.', FD_W / 2, 260);
     c.fillStyle = '#22ddff'; c.font = 'bold 22px sans-serif';
@@ -9531,10 +9514,6 @@ function _gdwDraw() {
   }
 
   // HUD
-  c.textAlign = 'left';
-  c.fillStyle = s.player === 1 ? '#22aaff' : '#ff5588';
-  c.font = 'bold 22px sans-serif';
-  c.fillText('P' + s.player, 30, 40);
   c.textAlign = 'center';
   c.fillStyle = '#ffffff'; c.font = 'bold 44px sans-serif';
   c.fillText(String(s.score), FD_W / 2, 50);
@@ -9545,37 +9524,22 @@ function _gdwDraw() {
     c.fillRect(0, 0, FD_W, FD_H); c.globalAlpha = 1;
   }
 
-  if (s.mode === 'roundover') {
-    c.fillStyle = 'rgba(0, 20, 40, 0.85)'; c.fillRect(0, 140, FD_W, 280);
-    c.textAlign = 'center';
-    c.fillStyle = s.player === 1 ? '#22aaff' : '#ff5588';
-    c.font = 'bold 44px sans-serif';
-    c.fillText('P' + s.player + ' SCORED', FD_W / 2, 210);
-    c.fillStyle = '#ffffff'; c.font = 'bold 64px sans-serif';
-    c.fillText(String(s.score), FD_W / 2, 290);
-    c.fillStyle = '#22ddff'; c.font = 'bold 20px sans-serif';
-    if (Math.floor(performance.now() / 500) % 2 === 0) {
-      if (s.player === 1) c.fillText('SPACE → PLAYER 2 TURN', FD_W / 2, 370);
-      else                c.fillText('SPACE → SEE RESULTS',    FD_W / 2, 370);
-    }
-  }
-
   if (s.mode === 'gameover') {
     c.fillStyle = 'rgba(0, 20, 40, 0.92)'; c.fillRect(0, 0, FD_W, FD_H);
     c.textAlign = 'center';
     c.fillStyle = '#22ddff'; c.font = 'bold 42px sans-serif';
     c.fillText('RESULTS', FD_W / 2, 70);
-    c.fillStyle = '#22aaff'; c.font = 'bold 26px sans-serif';
-    c.fillText('Player 1: ' + s.scores[0], FD_W / 2, 130);
-    c.fillStyle = '#ff5588';
-    c.fillText('Player 2: ' + s.scores[1], FD_W / 2, 160);
-    c.fillStyle = '#ffffff'; c.font = 'bold 32px sans-serif';
-    if (s.scores[0] > s.scores[1])      c.fillText('PLAYER 1 WINS!', FD_W / 2, 220);
-    else if (s.scores[1] > s.scores[0]) c.fillText('PLAYER 2 WINS!', FD_W / 2, 220);
-    else                                 c.fillText("IT'S A TIE!",     FD_W / 2, 220);
+    c.fillStyle = '#22aaff'; c.font = 'bold 28px sans-serif';
+    c.fillText('SCORE  ' + s.score, FD_W / 2, 130);
+    c.fillStyle = '#ffd54a'; c.font = 'bold 18px sans-serif';
+    c.fillText('Best: ' + s.bestEver, FD_W / 2, 160);
+    if (s.score > 0 && s.score === s.bestEver) {
+      c.fillStyle = '#22ff88'; c.font = 'bold 22px sans-serif';
+      c.fillText('NEW PERSONAL BEST!', FD_W / 2, 200);
+    }
     c.fillStyle = '#22ddff'; c.font = 'bold 18px sans-serif';
     if (Math.floor(performance.now() / 500) % 2 === 0)
-      c.fillText('SPACE → REMATCH', FD_W / 2, 510);
+      c.fillText('SPACE → MENU', FD_W / 2, 510);
     c.fillStyle = '#666'; c.font = '12px sans-serif';
     c.fillText('ESC or × to leave', FD_W / 2, 528);
     drawMiniLeaderboardOnCanvas(c, FD_W - 280, 250, 260, 200, 'gdwave');

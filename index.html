@@ -138,6 +138,37 @@
     background:linear-gradient(90deg,var(--cyan),var(--lime)); box-shadow:0 0 12px rgba(51,232,255,.7);
     animation:fill 1.6s ease forwards; }
   @keyframes fill{ from{ width:0; } to{ width:100%; } }
+
+  /* ===== arcade coin + settings ===== */
+  header .left{ display:flex; align-items:center; }
+  header .coins{ display:inline-flex; align-items:center; gap:6px; margin-left:14px; padding:6px 12px;
+    border-radius:999px; background:rgba(51,232,255,.12); border:1px solid rgba(51,232,255,.4);
+    color:var(--cyan); font-weight:800; letter-spacing:1px; font-size:15px;
+    box-shadow:0 0 14px rgba(51,232,255,.25); }
+  .iconbtn{ cursor:pointer; border:1px solid rgba(120,160,255,.3); background:rgba(120,160,255,.12);
+    color:#cfe; border-radius:999px; padding:8px 14px; font-size:13px; letter-spacing:1px; font-weight:700; }
+  .iconbtn:hover{ background:rgba(120,160,255,.22); }
+  #settings{ position:fixed; inset:0; z-index:20; display:none; align-items:center; justify-content:center;
+    background:rgba(3,2,10,.8); backdrop-filter:blur(6px); padding:20px; }
+  #settings.show{ display:flex; }
+  .panel{ width:min(420px,92vw); background:rgba(12,10,32,.96); border:1px solid rgba(120,160,255,.3);
+    border-radius:18px; padding:24px; box-shadow:0 0 50px rgba(80,40,160,.45); }
+  .panel h2{ margin:0 0 10px; letter-spacing:5px; font-size:22px;
+    background:linear-gradient(90deg,var(--cyan),var(--magenta)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 2px;
+    border-top:1px solid rgba(120,160,255,.15); }
+  .row .lab{ font-size:13px; letter-spacing:2px; color:#cfe; text-transform:uppercase; }
+  .toggle{ cursor:pointer; width:56px; height:30px; border-radius:999px; border:1px solid rgba(120,160,255,.35);
+    background:rgba(0,0,0,.4); position:relative; transition:background .2s; flex:none; }
+  .toggle.on{ background:linear-gradient(90deg,var(--cyan),var(--lime)); }
+  .toggle .knob{ position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%; background:#fff; transition:left .2s; }
+  .toggle.on .knob{ left:31px; }
+  .promo{ display:flex; gap:8px; }
+  .promo input{ flex:1; padding:11px 12px; border-radius:10px; border:2px solid rgba(51,232,255,.4);
+    background:rgba(0,0,0,.35); color:#fff; letter-spacing:2px; text-transform:uppercase; outline:none; font-size:15px; }
+  .promo input:focus{ border-color:var(--cyan); }
+  .msg{ font-size:12px; letter-spacing:1px; margin-top:10px; min-height:16px; }
+  .msg.ok{ color:var(--lime); } .msg.err{ color:#ff6b8a; }
 </style>
 </head>
 <body>
@@ -165,10 +196,13 @@
 <!-- HUB -->
 <div id="app" style="display:none;">
   <header>
-    <div class="logo">ARCADE</div>
+    <div class="left">
+      <div class="logo">ARCADE</div>
+      <span class="coins" id="coinDisp">◈ 0</span>
+    </div>
     <div class="who">
       <span class="pill" id="hello">Hi, PLAYER</span>
-      <a id="logout">change name</a>
+      <button class="iconbtn" id="settingsBtn">⚙ Settings</button>
     </div>
   </header>
   <main>
@@ -194,6 +228,24 @@
   </main>
 </div>
 
+<!-- SETTINGS -->
+<div id="settings">
+  <div class="panel">
+    <h2>SETTINGS</h2>
+    <div class="row"><span class="lab">Music</span><div class="toggle" id="musicToggle"><div class="knob"></div></div></div>
+    <div class="row"><span class="lab">Change Name</span><button class="iconbtn" id="changeName">Change</button></div>
+    <div class="row" style="flex-direction:column; align-items:stretch;">
+      <span class="lab" style="margin-bottom:8px;">Promo Code</span>
+      <div class="promo">
+        <input id="promoInput" maxlength="20" placeholder="ENTER CODE" autocomplete="off" spellcheck="false">
+        <button class="btn primary" id="promoBtn" style="padding:11px 16px; letter-spacing:2px;">Redeem</button>
+      </div>
+      <div class="msg" id="promoMsg"></div>
+    </div>
+    <button class="btn ghost" id="settingsClose" style="width:100%; margin-top:16px;">Close</button>
+  </div>
+</div>
+
 <script>
   const NAME_KEY = 'headon_username';
   const $ = s => document.querySelector(s);
@@ -216,12 +268,50 @@
   $('#play').addEventListener('click', () => enterHub(nameInput.value));
   $('#guest').addEventListener('click', () => enterHub('GUEST'));
   nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') enterHub(nameInput.value); });
-  $('#logout').addEventListener('click', () => {
+
+  // ===== Arcade coins + Settings (Music / Change Name / Promo Code) =====
+  const ARCADE_KEY = 'headon_arcade_coins', SOUND_KEY = 'headon_sound_on', PROMOS_KEY = 'headon_promos';
+  const PROMO_CODES = { HEADON000: { arcade: 1000 } };
+  const coinDisp = $('#coinDisp'), settings = $('#settings'), musicToggle = $('#musicToggle');
+
+  const getCoins = () => +localStorage.getItem(ARCADE_KEY) || 0;
+  const refreshCoins = () => { coinDisp.textContent = '◈ ' + getCoins(); };
+  refreshCoins();
+
+  const musicOn = () => localStorage.getItem(SOUND_KEY) !== '0';       // default ON, matches the game
+  const syncMusic = () => musicToggle.classList.toggle('on', musicOn());
+
+  $('#settingsBtn').addEventListener('click', () => { refreshCoins(); syncMusic(); $('#promoMsg').textContent = ''; settings.classList.add('show'); });
+  $('#settingsClose').addEventListener('click', () => settings.classList.remove('show'));
+  settings.addEventListener('click', e => { if (e.target === settings) settings.classList.remove('show'); });
+
+  musicToggle.addEventListener('click', () => { localStorage.setItem(SOUND_KEY, musicOn() ? '0' : '1'); syncMusic(); });
+
+  // Change Name → reopen the login screen (same rename flow as before)
+  $('#changeName').addEventListener('click', () => {
+    settings.classList.remove('show');
     app.style.display = 'none';
     login.style.display = 'flex';
     requestAnimationFrame(() => login.classList.remove('hide'));
     nameInput.focus(); nameInput.select();
   });
+
+  // Promo codes — one-time per device; grants Arcade Coins (shared with the game)
+  let redeemed = (() => { try { return JSON.parse(localStorage.getItem(PROMOS_KEY)) || []; } catch (e) { return []; } })();
+  $('#promoBtn').addEventListener('click', () => {
+    const msg = $('#promoMsg');
+    const code = ($('#promoInput').value || '').trim().toUpperCase().replace(/\s+/g, '');
+    if (!code) { msg.textContent = ''; return; }
+    const p = PROMO_CODES[code];
+    if (!p) { msg.textContent = 'Invalid code — check the spelling.'; msg.className = 'msg err'; return; }
+    if (redeemed.includes(code)) { msg.textContent = 'You already used that code.'; msg.className = 'msg err'; return; }
+    redeemed.push(code); localStorage.setItem(PROMOS_KEY, JSON.stringify(redeemed));
+    if (p.arcade) localStorage.setItem(ARCADE_KEY, getCoins() + p.arcade);
+    refreshCoins();
+    msg.textContent = 'Redeemed! +' + (p.arcade || 0) + ' Arcade Coins 🎉'; msg.className = 'msg ok';
+    $('#promoInput').value = '';
+  });
+  $('#promoInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#promoBtn').click(); });
 
   // launch a game: no spinner — the game's own HEAD ON intro animation is the
   // loading screen. A quick fade-to-black hands off smoothly into it.

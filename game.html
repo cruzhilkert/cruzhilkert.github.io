@@ -21,9 +21,20 @@
   #game3d { z-index: 1; }
   #hud { z-index: 2; pointer-events: none; }
   #title, #controls { display: none; }
+  /* Always-visible escape hatch back to the arcade home screen (works on mobile
+     too, where the ESC shortcut isn't available). Sits above both canvases. */
+  #homeBtn { position: fixed; top: 12px; left: 12px; z-index: 50; pointer-events: auto;
+    text-decoration: none; font: 800 13px/1 system-ui, sans-serif; letter-spacing: 2px;
+    color: #cfe; padding: 9px 14px; border-radius: 999px;
+    background: rgba(10,8,30,.62); border: 1px solid rgba(120,160,255,.4);
+    backdrop-filter: blur(6px); box-shadow: 0 4px 18px rgba(0,0,0,.45);
+    -webkit-tap-highlight-color: transparent; user-select: none; }
+  #homeBtn:hover { background: rgba(51,232,255,.22); border-color: #33e8ff; color: #fff; }
+  #homeBtn:active { transform: translateY(1px); }
 </style>
 </head>
 <body>
+<a id="homeBtn" href="index.html" title="Back to Arcade">← ARCADE</a>
 <div id="wrap">
   <h1 id="title">HEAD ON</h1>
   <div id="stage">
@@ -651,9 +662,12 @@ function setCoins(n){ coins = Math.max(0, n); localStorage.setItem('headon_coins
 function addGems(n){ gems = Math.max(0, gems + n); localStorage.setItem('headon_gems', gems); }
 function setArcadeCoins(n){ arcadeCoins = Math.max(0, Math.floor(n)); localStorage.setItem('headon_arcade_coins', arcadeCoins); }
 function addArcadeCoins(n){ setArcadeCoins(arcadeCoins + n); }
-// Arcade-coin price of something that costs `coinCost` in a mode's own coins.
-// ~1:12, rounded to a tidy multiple of 5, min 5. Premium but attainable.
-function arcadePrice(coinCost){ return Math.max(5, Math.round(coinCost / 12 / 5) * 5); }
+// Arcade Coins are PREMIUM, so they buy a lot: ~1 arcade coin = 50 mode coins,
+// rounded to a tidy multiple of 5 (min 5). So a 12,000-coin car ≈ 240 arcade.
+function arcadePrice(coinCost){ return Math.max(5, Math.round(coinCost / 50 / 5) * 5); }
+// PvP weapons/cosmetics are priced in KEYS (~1 key ≈ 100 coins), so convert
+// through that before pricing in arcade coins.
+function arcadePriceKeys(keyCost){ return arcadePrice((keyCost || 0) * 100); }
 // ── Promo codes ── one-time per device; grant arcade coins.
 const PROMO_CODES = { HEADON000: { arcade: 1000 } };
 let redeemedPromos = (() => { try { return JSON.parse(localStorage.getItem('headon_promos')) || []; } catch (e) { return []; } })();
@@ -1874,11 +1888,20 @@ function drawPvpWeaponDetail(id, px, py, pw) {
     ctx.strokeStyle = '#ffd54a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(bx, byA, bw, bh, 8); ctx.stroke();
     ctx.textAlign = 'center'; ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 12px system-ui'; ctx.fillText('★ LEGENDARY · Legendary Crate', midx, byA + 22);
   } else {
-    const aff = pvpKeys >= cost;
-    ctx.fillStyle = aff ? 'rgba(255,213,74,0.2)' : 'rgba(255,255,255,0.05)'; ctx.beginPath(); ctx.roundRect(bx, byA, bw, bh, 8); ctx.fill();
-    ctx.strokeStyle = aff ? '#ffd54a' : '#4a5266'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(bx, byA, bw, bh, 8); ctx.stroke();
-    ctx.textAlign = 'center'; ctx.fillStyle = aff ? '#ffd54a' : '#7a8190'; ctx.font = 'bold 14px system-ui'; ctx.fillText('🔒 UNLOCK  🔑 ' + cost, midx, byA + 22);
-    if (aff && !pvpUnlockAnim) pvpArmoryButtons.push({ x: bx, y: byA, w: bw, h: bh, action: () => { pvpUnlockAnim = { id, start: performance.now(), wx, wy }; } });
+    // UNLOCK with KEYS (left) or ARCADE COINS (right) — pick either.
+    const ac = arcadePriceKeys(cost), affK = pvpKeys >= cost, affA = arcadeCoins >= ac;
+    const halfW = (bw - 8) / 2, ax = bx + halfW + 8;
+    ctx.textAlign = 'center'; ctx.fillStyle = '#9aa'; ctx.font = 'bold 9px system-ui'; ctx.fillText('🔒 UNLOCK', midx, byA - 5);
+    // keys button (keeps the key-fly animation)
+    ctx.fillStyle = affK ? 'rgba(255,213,74,0.2)' : 'rgba(255,255,255,0.05)'; ctx.beginPath(); ctx.roundRect(bx, byA, halfW, bh, 8); ctx.fill();
+    ctx.strokeStyle = affK ? '#ffd54a' : '#4a5266'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(bx, byA, halfW, bh, 8); ctx.stroke();
+    ctx.fillStyle = affK ? '#ffd54a' : '#7a8190'; ctx.font = 'bold 14px system-ui'; ctx.fillText('🔑 ' + cost, bx + halfW / 2, byA + 22);
+    if (affK && !pvpUnlockAnim) pvpArmoryButtons.push({ x: bx, y: byA, w: halfW, h: bh, action: () => { pvpUnlockAnim = { id, start: performance.now(), wx, wy }; } });
+    // arcade-coin button (instant unlock)
+    ctx.fillStyle = affA ? 'rgba(51,232,255,0.2)' : 'rgba(255,255,255,0.05)'; ctx.beginPath(); ctx.roundRect(ax, byA, halfW, bh, 8); ctx.fill();
+    ctx.strokeStyle = affA ? '#33e8ff' : '#4a5266'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(ax, byA, halfW, bh, 8); ctx.stroke();
+    ctx.fillStyle = affA ? '#33e8ff' : '#7a8190'; ctx.font = 'bold 14px system-ui'; ctx.fillText('◈ ' + ac, ax + halfW / 2, byA + 22);
+    if (affA && !pvpUnlockAnim) pvpArmoryButtons.push({ x: ax, y: byA, w: halfW, h: bh, action: () => { setArcadeCoins(arcadeCoins - ac); pvpUnlocked.add(id); savePvpUnlocks(); } });
   }
   // key-fly unlock animation on this weapon
   if (pvpUnlockAnim && pvpUnlockAnim.id === id) {
@@ -12713,8 +12736,11 @@ function drawGarage() {
       }else if(isSecretLocked){
         garageBtn('LOCKED',bx2,by2,bw2,bh2,null,{disabled:true,small:true});
       }else{
-        const canAfford=coins>=paint.cost;
-        garageBtn('BUY',bx2,by2,bw2,bh2,canAfford?()=>{setCoins(coins-paint.cost);ownItem(paint.id);equipPaint(paint.id);}:null,{disabled:!canAfford,small:true});
+        // buy with coins (left) OR arcade coins (right)
+        const ac=arcadePrice(paint.cost), canC=coins>=paint.cost, canA=arcadeCoins>=ac;
+        const halfW=(bw2-4)/2;
+        garageBtn('●'+paint.cost,bx2,by2,halfW,bh2,canC?()=>{setCoins(coins-paint.cost);ownItem(paint.id);equipPaint(paint.id);}:null,{disabled:!canC,small:true});
+        garageBtn('◈'+ac,bx2+halfW+4,by2,halfW,bh2,canA?()=>{setArcadeCoins(arcadeCoins-ac);ownItem(paint.id);equipPaint(paint.id);}:null,{disabled:!canA,small:true});
       }
     });
     ctx.restore();

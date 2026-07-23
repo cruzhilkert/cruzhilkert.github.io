@@ -117,6 +117,10 @@
   .card:hover .play{ opacity:1; transform:translateY(0); }
   .card.car .glow{ background:radial-gradient(circle at 50% 35%, rgba(255,167,38,.55), transparent 60%); }
   .card.pvp .glow{ background:radial-gradient(circle at 50% 35%, rgba(51,255,136,.5), transparent 60%); }
+  .card.flight .glow{ background:radial-gradient(circle at 50% 35%, rgba(51,232,255,.55), transparent 60%); }
+  .card.tycoon .glow{ background:radial-gradient(circle at 50% 35%, rgba(168,85,255,.55), transparent 60%); }
+  .card.flight{ background:linear-gradient(160deg,#071b2e,#0a0820); }
+  .card.tycoon{ background:linear-gradient(160deg,#1a0b2e,#0a0820); }
   .card.soon{ cursor:default; filter:grayscale(.7) brightness(.6); }
   .card.soon:hover{ transform:none; box-shadow:none; }
   .card.soon .play{ display:none; }
@@ -220,6 +224,18 @@
         <div class="play">▶ Play</div>
         <div class="info"><h3>PVP</h3><p>1v1 arena shooter — pick a weapon, win the rounds.</p></div>
       </div>
+      <div class="card flight" data-url="flight.html" data-name="SKY STRIKE">
+        <div class="glow"></div>
+        <div class="art"><div class="emoji">✈️</div></div>
+        <div class="play">▶ Play</div>
+        <div class="info"><h3>SKY STRIKE</h3><p>Fly, hunt enemy jets, upgrade your fighter wave by wave.</p></div>
+      </div>
+      <div class="card tycoon" data-url="tycoon.html" data-name="STRENGTH">
+        <div class="glow"></div>
+        <div class="art"><div class="emoji">💪</div></div>
+        <div class="play">▶ Play</div>
+        <div class="info"><h3>STRENGTH</h3><p>Hit the 3D gym — train on the machines, get swole, unlock more.</p></div>
+      </div>
       <div class="card soon">
         <div class="art"><div class="emoji">➕</div></div>
         <div class="info"><h3>More soon</h3><p>New games are on the way.</p></div>
@@ -315,13 +331,17 @@
 
   // launch a game: no spinner — the game's own HEAD ON intro animation is the
   // loading screen. A quick fade-to-black hands off smoothly into it.
-  function launch(game, label){
+  function launch(href){
     document.body.style.transition = 'opacity .25s';
     document.body.style.opacity = '0';
-    setTimeout(() => { window.location.href = 'game.html?game=' + encodeURIComponent(game); }, 230);
+    setTimeout(() => { window.location.href = href; }, 230);
   }
   document.querySelectorAll('.card[data-game]').forEach(card => {
-    card.addEventListener('click', () => launch(card.dataset.game, card.dataset.name));
+    card.addEventListener('click', () => launch('game.html?game=' + encodeURIComponent(card.dataset.game)));
+  });
+  // Standalone games (their own HTML file in this directory)
+  document.querySelectorAll('.card[data-url]').forEach(card => {
+    card.addEventListener('click', () => launch(card.dataset.url));
   });
 
   // focus name on load for quick start

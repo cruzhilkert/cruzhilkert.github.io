@@ -1,0 +1,1568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>💪 IRON GYM — Strength Sim</title>
+<style>
+  :root{
+    --cyan:#33e8ff; --magenta:#ff3df0; --violet:#a855ff; --lime:#9bff5b;
+    --bg0:#05030f; --bg1:#0c0822;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; height:100%; width:100%;
+    background:var(--bg0); color:#eee;
+    font-family:'Segoe UI', system-ui, sans-serif; overflow:hidden;
+    user-select:none; -webkit-user-select:none; touch-action:none; }
+  #c3d{ position:fixed; inset:0; display:block; z-index:1; }
+
+  /* ---- Back-to-arcade escape hatch (always visible) ---- */
+  #homeBtn{ position:fixed; top:12px; left:12px; z-index:80; pointer-events:auto;
+    text-decoration:none; font:800 13px/1 'Segoe UI',system-ui,sans-serif; letter-spacing:2px;
+    color:#cfe; padding:9px 14px; border-radius:999px;
+    background:rgba(10,8,30,.62); border:1px solid rgba(120,160,255,.4);
+    backdrop-filter:blur(6px); box-shadow:0 4px 18px rgba(0,0,0,.45); }
+  #homeBtn:hover{ background:rgba(51,232,255,.22); border-color:var(--cyan); color:#fff; }
+  #homeBtn:active{ transform:translateY(1px); }
+
+  /* ---- HUD ---- */
+  #hud{ position:fixed; inset:0; z-index:10; pointer-events:none; }
+  .panel{ background:linear-gradient(160deg, rgba(20,14,45,.72), rgba(10,7,28,.72));
+    border:1px solid rgba(168,85,255,.35); border-radius:14px;
+    backdrop-filter:blur(8px); box-shadow:0 6px 26px rgba(0,0,0,.5); }
+
+  #statPanel{ position:fixed; top:12px; right:12px; z-index:20; width:236px; padding:12px 13px 13px; }
+  #levelRow{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px; }
+  #levelRow .lvlLabel{ font-size:10px; letter-spacing:2px; color:var(--violet); font-weight:800; }
+  #levelRow .lvlNum{ font-size:30px; font-weight:900; line-height:1;
+    color:#fff; text-shadow:0 0 14px var(--cyan); }
+  .stat{ margin:7px 0; }
+  .stat .top{ display:flex; justify-content:space-between; font-size:11px; letter-spacing:1px; margin-bottom:3px; }
+  .stat .top .n{ font-weight:800; color:#fff; }
+  .bar{ height:9px; border-radius:6px; background:rgba(255,255,255,.09); overflow:hidden; }
+  .bar > i{ display:block; height:100%; width:0%; border-radius:6px; transition:width .18s ease; }
+  .b-arm  > i{ background:linear-gradient(90deg,var(--magenta),#ff9df6); box-shadow:0 0 10px var(--magenta); }
+  .b-leg  > i{ background:linear-gradient(90deg,var(--cyan),#bff6ff);   box-shadow:0 0 10px var(--cyan); }
+  .b-spd  > i{ background:linear-gradient(90deg,var(--lime),#e4ffcf);   box-shadow:0 0 10px var(--lime); }
+  .b-stam > i{ background:linear-gradient(90deg,var(--violet),#d9b4ff); box-shadow:0 0 10px var(--violet); }
+  #coinRow{ margin-top:10px; display:flex; align-items:center; justify-content:space-between;
+    font-size:12px; letter-spacing:1px; }
+  #coinRow b{ color:var(--lime); font-size:16px; }
+  #rankTitle{ font-size:12px; letter-spacing:2px; font-weight:800; color:var(--lime);
+    margin:-4px 0 6px; text-shadow:0 0 8px rgba(155,255,91,.5); }
+  #hudBtns{ display:flex; gap:8px; margin-top:11px; }
+  .hudBtn{ flex:1; pointer-events:auto; cursor:pointer; font:800 11px/1 'Segoe UI'; letter-spacing:1px;
+    color:#cfe; padding:9px 6px; border-radius:9px; background:rgba(255,255,255,.05);
+    border:1px solid rgba(168,85,255,.5); }
+  .hudBtn:hover{ border-color:var(--cyan); color:#fff; }
+  .hudBtn:active{ transform:translateY(1px); }
+
+  /* ---- shop / menu overlay with tabs ---- */
+  #menuOverlay .card{ max-width:640px; width:92vw; max-height:86vh; padding:20px 18px 16px; display:flex; flex-direction:column; }
+  #menuTabs{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; justify-content:center; }
+  .tabBtn{ pointer-events:auto; cursor:pointer; font:800 12px/1 'Segoe UI'; letter-spacing:1px; text-transform:uppercase;
+    color:#bcd; padding:10px 15px; border-radius:10px; background:rgba(255,255,255,.04);
+    border:1px solid rgba(168,85,255,.4); }
+  .tabBtn.active{ color:#04121a; background:linear-gradient(90deg,var(--cyan),var(--lime)); border-color:transparent; }
+  #menuBody{ overflow-y:auto; text-align:left; padding-right:4px; }
+  .shopItem{ display:flex; align-items:center; gap:12px; padding:11px 12px; margin:7px 0; border-radius:12px;
+    background:rgba(255,255,255,.04); border:1px solid rgba(168,85,255,.25); }
+  .shopItem .info{ flex:1; }
+  .shopItem .nm{ font-weight:800; font-size:14px; color:#fff; letter-spacing:.5px; }
+  .shopItem .ds{ font-size:11.5px; color:#aeb8d8; margin-top:2px; }
+  .shopItem .lv{ font-size:10.5px; color:var(--cyan); margin-top:3px; letter-spacing:1px; }
+  .buyBtn{ pointer-events:auto; cursor:pointer; border:none; font:900 12px/1 'Segoe UI'; letter-spacing:1px;
+    color:#04121a; padding:11px 14px; border-radius:10px; min-width:92px; text-align:center;
+    background:linear-gradient(90deg,var(--lime),var(--cyan)); box-shadow:0 0 14px rgba(155,255,91,.4); }
+  .buyBtn.cant{ background:rgba(255,255,255,.08); color:#7a86a8; box-shadow:none; cursor:not-allowed; }
+  .buyBtn.maxed{ background:rgba(155,255,91,.15); color:var(--lime); box-shadow:none; cursor:default; }
+  .swatch{ width:34px; height:34px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,.5); }
+  .achRow{ display:flex; align-items:center; gap:10px; padding:9px 11px; margin:6px 0; border-radius:11px;
+    background:rgba(255,255,255,.04); border:1px solid rgba(168,85,255,.22); }
+  .achRow.done{ border-color:var(--lime); background:rgba(155,255,91,.08); }
+  .achRow .st{ font-size:20px; }
+  .achRow .info{ flex:1; }
+  .lbRow{ display:flex; justify-content:space-between; padding:8px 12px; margin:4px 0; border-radius:9px;
+    background:rgba(255,255,255,.04); font-size:13px; }
+  .lbRow.you{ border:1px solid var(--cyan); color:#fff; font-weight:800; background:rgba(51,232,255,.1); }
+  #menuReps{ text-align:center; font-size:13px; letter-spacing:1px; color:var(--lime); margin:2px 0 12px; font-weight:800; }
+
+  #greet{ position:fixed; top:12px; left:132px; z-index:20; font-size:12px; letter-spacing:2px;
+    font-weight:800; color:#cfe; padding:9px 13px; }
+
+  /* context prompt near a station */
+  #prompt{ position:fixed; left:50%; bottom:120px; transform:translateX(-50%); z-index:20;
+    padding:11px 20px; font-size:15px; font-weight:800; letter-spacing:1px; color:#fff;
+    text-align:center; max-width:82vw; display:none; }
+  #prompt .sub{ display:block; font-size:11px; font-weight:600; letter-spacing:.5px;
+    color:#bcd; margin-top:3px; }
+  #prompt.locked{ border-color:rgba(255,80,80,.5); }
+  #prompt.locked .sub{ color:#ff8f8f; }
+
+  /* mute button */
+  #muteBtn{ position:fixed; top:12px; right:256px; z-index:80; pointer-events:auto; cursor:pointer;
+    font:800 12px/1 'Segoe UI',system-ui,sans-serif; letter-spacing:1px; color:#cfe;
+    padding:9px 12px; border-radius:999px; background:rgba(10,8,30,.62);
+    border:1px solid rgba(120,160,255,.4); backdrop-filter:blur(6px); }
+  #muteBtn:hover{ border-color:var(--cyan); color:#fff; }
+
+  /* toast / unlock banner */
+  #toast{ position:fixed; left:50%; top:74px; transform:translateX(-50%) translateY(-18px);
+    z-index:40; padding:12px 22px; font-size:15px; font-weight:900; letter-spacing:1px;
+    color:#fff; border-radius:12px; opacity:0; pointer-events:none;
+    background:linear-gradient(160deg,rgba(30,18,60,.94),rgba(14,9,34,.94));
+    border:1px solid var(--lime); box-shadow:0 0 24px rgba(155,255,91,.5);
+    transition:opacity .3s ease, transform .3s ease; }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* buttons */
+  .neonBtn{ pointer-events:auto; cursor:pointer; border:none; outline:none;
+    font:900 15px/1 'Segoe UI',system-ui,sans-serif; letter-spacing:3px; text-transform:uppercase;
+    color:#04121a; padding:15px 30px; border-radius:12px;
+    background:linear-gradient(90deg,var(--cyan),var(--lime));
+    box-shadow:0 0 22px rgba(51,232,255,.55); }
+  .neonBtn:hover{ filter:brightness(1.12); }
+  .neonBtn:active{ transform:translateY(1px); }
+  .ghostBtn{ pointer-events:auto; cursor:pointer;
+    font:800 13px/1 'Segoe UI',system-ui,sans-serif; letter-spacing:2px; text-transform:uppercase;
+    color:#cfe; padding:12px 22px; border-radius:12px; background:rgba(255,255,255,.05);
+    border:1px solid rgba(168,85,255,.5); }
+  .ghostBtn:hover{ border-color:var(--cyan); color:#fff; }
+
+  /* overlays (start / pause / tutorial) */
+  .overlay{ position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
+    flex-direction:column; text-align:center;
+    background:radial-gradient(circle at 50% 35%, rgba(30,15,60,.82), rgba(5,3,15,.94)); }
+  .overlay .card{ max-width:560px; width:88vw; padding:32px 30px; }
+  .overlay h1{ margin:0 0 4px; font-size:clamp(30px,7vw,52px); font-weight:900; letter-spacing:3px;
+    background:linear-gradient(90deg,var(--cyan),var(--magenta),var(--lime));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    text-shadow:0 0 30px rgba(168,85,255,.3); }
+  .overlay h2{ margin:14px 0 4px; font-size:20px; letter-spacing:2px; color:var(--cyan); }
+  .overlay p{ color:#cdd6f5; line-height:1.55; font-size:14px; margin:8px 0; }
+  .overlay .hint{ color:#9fb; font-size:12.5px; letter-spacing:.5px; margin-top:14px;
+    background:rgba(255,255,255,.04); border-radius:10px; padding:12px 14px; }
+  .overlay .btnRow{ margin-top:22px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+  .hide{ display:none !important; }
+  kbd{ background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.25); border-radius:5px;
+    padding:2px 7px; font-family:inherit; font-weight:800; font-size:12px; color:#fff; }
+
+  /* ---- mobile touch controls ---- */
+  #touch{ position:fixed; inset:0; z-index:30; pointer-events:none; display:none; }
+  #joy{ position:fixed; left:24px; bottom:26px; width:130px; height:130px; border-radius:50%;
+    background:rgba(255,255,255,.05); border:1px solid rgba(168,85,255,.4); pointer-events:auto; }
+  #joyNub{ position:absolute; left:50%; top:50%; width:56px; height:56px; margin:-28px 0 0 -28px;
+    border-radius:50%; background:linear-gradient(160deg,var(--cyan),var(--violet));
+    box-shadow:0 0 18px rgba(51,232,255,.6); }
+  #btnJump{ position:fixed; right:24px; bottom:34px; width:92px; height:92px; border-radius:50%;
+    pointer-events:auto; font:900 13px/1 'Segoe UI'; letter-spacing:1px; color:#04121a;
+    background:linear-gradient(160deg,var(--lime),#4bd6ff); border:none;
+    box-shadow:0 0 18px rgba(155,255,91,.5); }
+  #btnTrain{ position:fixed; right:132px; bottom:52px; width:112px; height:112px; border-radius:50%;
+    pointer-events:auto; font:900 15px/1 'Segoe UI'; letter-spacing:1px; color:#fff;
+    background:linear-gradient(160deg,var(--magenta),var(--violet)); border:none;
+    box-shadow:0 0 22px rgba(255,61,240,.6); display:none; }
+  #btnTrain:active,#btnJump:active{ filter:brightness(1.2); }
+</style>
+</head>
+<body>
+<a id="homeBtn" href="index.html" title="Back to Arcade">← ARCADE</a>
+<div id="muteBtn">🔊 SOUND</div>
+
+<canvas id="c3d"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="greet" class="panel">👋 <span id="greetName">ROOKIE</span></div>
+
+  <div id="statPanel" class="panel">
+    <div id="levelRow">
+      <span class="lvlLabel">TOTAL STRENGTH</span>
+      <span class="lvlNum" id="lvlNum">0</span>
+    </div>
+    <div id="rankTitle">🏅 <span id="rankName">ROOKIE</span></div>
+    <div class="stat"><div class="top"><span>💪 ARM</span><span class="n" id="nArm">0</span></div><div class="bar b-arm"><i id="barArm"></i></div></div>
+    <div class="stat"><div class="top"><span>🦵 LEG</span><span class="n" id="nLeg">0</span></div><div class="bar b-leg"><i id="barLeg"></i></div></div>
+    <div class="stat"><div class="top"><span>⚡ SPEED</span><span class="n" id="nSpd">0</span></div><div class="bar b-spd"><i id="barSpd"></i></div></div>
+    <div class="stat"><div class="top"><span>🔋 STAMINA</span><span class="n" id="nStam">100</span></div><div class="bar b-stam"><i id="barStam"></i></div></div>
+    <div id="coinRow"><span>🪙 REPS</span><b id="coins">0</b></div>
+    <div id="hudBtns">
+      <button class="hudBtn" id="shopBtn">🛒 SHOP</button>
+      <button class="hudBtn" id="goalBtn">🏆 GOALS</button>
+    </div>
+  </div>
+
+  <div id="prompt" class="panel"></div>
+  <div id="toast"></div>
+</div>
+
+<!-- touch controls -->
+<div id="touch">
+  <div id="joy"><div id="joyNub"></div></div>
+  <button id="btnTrain">TRAIN</button>
+  <button id="btnJump">JUMP</button>
+</div>
+
+<!-- START overlay -->
+<div id="startOverlay" class="overlay">
+  <div class="card panel">
+    <h1>💪 IRON GYM</h1>
+    <p style="letter-spacing:2px;color:var(--lime);font-weight:800">STRENGTH SIMULATOR</p>
+    <p>Welcome, <b id="startName" style="color:var(--cyan)">ROOKIE</b>. You start with nothing.
+       Walk up to the machines, <b>hold to train</b>, and watch yourself get SWOLE.
+       Bigger stats = faster, higher jumps, and access to locked heavy gear.</p>
+    <div class="hint">
+      <b>Desktop:</b> <kbd>W A S D</kbd> move · <kbd>Q</kbd><kbd>E</kbd> or drag = rotate camera ·
+      <kbd>Space</kbd> jump · hold <kbd>E</kbd> near a machine to train · <kbd>Esc</kbd> pause<br>
+      <b>Mobile:</b> left joystick to move · drag right side to look · TRAIN &amp; JUMP buttons
+    </div>
+    <div class="btnRow">
+      <button class="neonBtn" id="playBtn">▶ PLAY</button>
+      <button class="ghostBtn" id="resetBtn">RESET SAVE</button>
+    </div>
+  </div>
+</div>
+
+<!-- TUTORIAL overlay -->
+<div id="tutOverlay" class="overlay hide">
+  <div class="card panel">
+    <h2 id="tutTitle">HOW TO PLAY</h2>
+    <p id="tutBody">...</p>
+    <div class="btnRow">
+      <button class="ghostBtn" id="tutSkip">SKIP</button>
+      <button class="neonBtn" id="tutNext">NEXT ▶</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHOP / MENU overlay (tabbed) -->
+<div id="menuOverlay" class="overlay hide">
+  <div class="card panel">
+    <h2 id="menuTitle" style="margin-top:0">🛒 IRON SHOP</h2>
+    <div id="menuReps">🪙 <span id="menuRepsN">0</span> REPS</div>
+    <div id="menuTabs">
+      <button class="tabBtn active" data-tab="upgrades">Upgrades</button>
+      <button class="tabBtn" data-tab="skins">Skins</button>
+      <button class="tabBtn" data-tab="goals">Goals</button>
+      <button class="tabBtn" data-tab="ranks">Ranks</button>
+      <button class="tabBtn" data-tab="board">Board</button>
+    </div>
+    <div id="menuBody"></div>
+    <div class="btnRow"><button class="neonBtn" id="menuClose">▶ BACK TO GYM</button></div>
+  </div>
+</div>
+
+<!-- PAUSE overlay -->
+<div id="pauseOverlay" class="overlay hide">
+  <div class="card panel">
+    <h2>⏸ PAUSED</h2>
+    <p>Your progress is saved automatically.</p>
+    <div class="btnRow">
+      <button class="neonBtn" id="resumeBtn">▶ RESUME</button>
+      <a class="ghostBtn" href="index.html" style="text-decoration:none">← ARCADE</a>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+/* =========================================================================
+   IRON GYM — 3D Strength / Gym Simulator
+   Single-file. THREE via CDN module import (matches the arcade's 3D game).
+   Data-driven stations & stats so the player can edit/extend easily.
+   ========================================================================= */
+
+// ---------- persistence keys ----------
+const K = {
+  name:  'headon_username',
+  sound: 'headon_sound_on',
+  save:  'headon_gym_save',
+  tut:   'headon_gym_seen_tutorial',
+};
+
+const PLAYER = (localStorage.getItem(K.name) || 'ROOKIE').toUpperCase();
+let soundOn  = localStorage.getItem(K.sound) !== '0';
+
+// ---------- save / load ----------
+// A single JSON blob. A fresh (empty) save boots cleanly with tiny stats.
+const FRESH = () => ({
+  arm: 1, leg: 1, spd: 1, stam: 100,   // starting stats (start weak & small)
+  coins: 0,
+  boostSpeed: 0, boostStam: 0,          // purchasable permanent boosts
+  boostMove: 0, auto: 0,                // move/regen boost + auto-trainer (added)
+  boostCoin: 0, boostJump: 0,           // REPS multiplier + jump-height boost (added)
+  unlocks: {},                          // stationId / 'outdoor' -> true once its gate is passed
+  milestones: {},                       // stat -> highest milestone reached (juice)
+  skin: 'classic', ownedSkins: null,    // cosmetics
+  achv: null, lastDay: null,            // achievements + daily bonus
+});
+let save = FRESH();
+(function load(){
+  try{
+    const raw = localStorage.getItem(K.save);
+    if(raw){
+      const o = JSON.parse(raw);
+      if(o && typeof o === 'object'){
+        save = Object.assign(FRESH(), o);
+        save.unlocks = o.unlocks || {};
+      }
+    }
+  }catch(e){ save = FRESH(); }
+  // clamp / sanitize so bad saves never crash
+  save.arm  = clamp(+save.arm  || 1, 1, 99999);
+  save.leg  = clamp(+save.leg  || 1, 1, 99999);
+  save.spd  = clamp(+save.spd  || 1, 1, 99999);
+  save.coins= Math.max(0, Math.floor(+save.coins || 0));
+  save.boostSpeed = clamp(Math.floor(+save.boostSpeed||0),0,5);
+  save.boostStam  = clamp(Math.floor(+save.boostStam ||0),0,5);
+  save.boostMove  = clamp(Math.floor(+save.boostMove ||0),0,5);
+  save.auto       = clamp(Math.floor(+save.auto      ||0),0,5);
+  save.boostCoin  = clamp(Math.floor(+save.boostCoin ||0),0,5);
+  save.boostJump  = clamp(Math.floor(+save.boostJump ||0),0,5);
+  if(typeof save.milestones!=='object'||!save.milestones) save.milestones={};
+  save.stam = clamp(+save.stam || 100, 0, maxStamina());
+})();
+
+function persist(){
+  try{
+    save.arm=round1(save.arm); save.leg=round1(save.leg); save.spd=round1(save.spd);
+    localStorage.setItem(K.save, JSON.stringify(save));
+  }catch(e){}
+}
+window.addEventListener('beforeunload', persist);
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) persist(); });
+setInterval(persist, 5000);
+
+// ---------- tiny helpers ----------
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+function round1(v){ return Math.round(v*10)/10; }
+function lerp(a,b,t){ return a+(b-a)*t; }
+const $ = id => document.getElementById(id);
+
+// stamina cap grows with bought boosts
+function maxStamina(){ return 100 + (save.boostStam||0)*40; }
+function totalStrength(){ return Math.floor(save.arm + save.leg + save.spd); }
+
+// =========================================================================
+//  STAT DEFINITIONS (data-driven — safe to edit)
+// =========================================================================
+const STATS = {
+  arm: { label:'ARM',   color:0xff3df0 },
+  leg: { label:'LEG',   color:0x33e8ff },
+  spd: { label:'SPEED', color:0x9bff5b },
+};
+
+// =========================================================================
+//  STATION DEFINITIONS (data-driven — add/move/edit freely)
+//  Each: id, name, pos[x,z], color, trains{stat:ratePerSec,...},
+//        gate (optional {stat, amount}) — needs stat>=amount to use,
+//        anim: which character animation to play while training.
+// =========================================================================
+const STATIONS = [
+  {
+    id:'treadmill', name:'Treadmill', pos:[-9, -6], color:0x33e8ff, zone:'gym', solidR:1.6,
+    trains:{ leg:2.2, spd:2.6 }, anim:'run',
+    prompt:'Hold to run — trains LEG + SPEED',
+  },
+  {
+    id:'bench', name:'Weight Bench', pos:[9, -6], color:0xff3df0, zone:'gym', solidR:1.5,
+    trains:{ arm:3.0 }, anim:'benchpress',
+    prompt:'Hold to bench press — trains ARM STRENGTH',
+  },
+  {
+    id:'jumppad', name:'Box-Jump Pad', pos:[-9, 6], color:0x9bff5b, zone:'gym', solidR:1.5,
+    trains:{ spd:3.2, leg:1.0 }, anim:'jumpTrain',
+    prompt:'Hold to box-jump — trains SPEED',
+  },
+  {
+    id:'cables', name:'Resistance Cables', pos:[9, 6], color:0xa855ff, zone:'gym', solidR:1.5,
+    trains:{ arm:2.0, leg:1.4 }, anim:'cable',
+    prompt:'Hold to pull — resistance training',
+  },
+  {
+    id:'bag', name:'Punching Bag', pos:[0, 6], color:0xff7733, zone:'gym', solidR:1.2,
+    trains:{ arm:2.6, spd:1.6 }, anim:'cable',
+    prompt:'Hold to hit the bag — ARM + SPEED (fighting)',
+  },
+  // --- gated heavy-weight rack: escalating plates ---
+  {
+    id:'rack50', name:'Heavy Rack I', pos:[-2.5, -11.5], color:0xffaa22, zone:'gym', solidR:1.3,
+    trains:{ arm:5.0 }, anim:'lift', gate:{ stat:'arm', amount:50 },
+    prompt:'Hold to hoist — big ARM gains',
+  },
+  {
+    id:'rack120', name:'Heavy Rack II', pos:[-7, -11.5], color:0xff5522, zone:'gym', solidR:1.3,
+    trains:{ arm:8.0 }, anim:'lift', gate:{ stat:'arm', amount:120 },
+    prompt:'Hold to hoist — huge ARM gains',
+  },
+  {
+    id:'rack250', name:'Titan Rack', pos:[-11.5, -11.5], color:0xff2266, zone:'gym', solidR:1.3,
+    trains:{ arm:12.0 }, anim:'lift', gate:{ stat:'arm', amount:250 },
+    prompt:'Hold to hoist — TITAN ARM gains',
+  },
+  {
+    id:'rack500', name:'God Rack', pos:[11.5, -11.5], color:0xffe066, zone:'gym', solidR:1.4,
+    trains:{ arm:20.0 }, anim:'lift', gate:{ stat:'arm', amount:500 },
+    prompt:'Hold to hoist — GODLY ARM gains',
+  },
+  // --- OUTDOOR PARK stations (only reachable once the park is unlocked) ---
+  {
+    id:'trail', name:'River Trail', pos:[24, 5], color:0x33ffcc, zone:'park', solidR:1.4,
+    trains:{ spd:6.0, leg:3.0 }, anim:'run',
+    prompt:'Hold to sprint the trail — SPEED + LEG',
+  },
+  {
+    id:'boulder', name:'Boulder Press', pos:[26, -6], color:0x8b6f4e, zone:'park', solidR:1.7,
+    trains:{ arm:16.0, leg:4.0 }, anim:'lift', gate:{ stat:'arm', amount:400 },
+    prompt:'Hold to press the boulder — massive ARM',
+  },
+];
+
+// =========================================================================
+//  THREE.JS SCENE
+// =========================================================================
+const canvas = $('c3d');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05030f);
+scene.fog = new THREE.Fog(0x05030f, 34, 66);
+
+const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 300);
+
+// lights — neon accents
+scene.add(new THREE.HemisphereLight(0x6688ff, 0x0a0818, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 0.85);
+key.position.set(8, 18, 10); key.castShadow = true;
+key.shadow.mapSize.set(1024,1024);
+key.shadow.camera.left=-24; key.shadow.camera.right=24;
+key.shadow.camera.top=24; key.shadow.camera.bottom=-24;
+scene.add(key);
+const neonCyan = new THREE.PointLight(0x33e8ff, 0.9, 40); neonCyan.position.set(-12,7,-12); scene.add(neonCyan);
+const neonMag  = new THREE.PointLight(0xff3df0, 0.9, 40); neonMag.position.set(12,7,12);   scene.add(neonMag);
+const neonVio  = new THREE.PointLight(0xa855ff, 0.7, 40); neonVio.position.set(0,7,0);      scene.add(neonVio);
+
+// ---- room ----
+const ROOM = 30, WALL_H = 8;
+const floorMat = new THREE.MeshStandardMaterial({ color:0x141026, roughness:0.9, metalness:0.1 });
+const floor = new THREE.Mesh(new THREE.BoxGeometry(ROOM, 0.4, ROOM), floorMat);
+floor.position.y = -0.2; floor.receiveShadow = true; scene.add(floor);
+
+// neon floor grid lines
+(function grid(){
+  const g = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color:0x2a2450 });
+  for(let i=-ROOM/2+3;i<ROOM/2;i+=3){
+    const a = new THREE.Mesh(new THREE.BoxGeometry(ROOM,0.02,0.05), mat); a.position.set(0,0.02,i); g.add(a);
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.05,0.02,ROOM), mat); b.position.set(i,0.02,0); g.add(b);
+  }
+  scene.add(g);
+})();
+
+// walls with neon trim
+const wallMat = new THREE.MeshStandardMaterial({ color:0x0c0822, roughness:1 });
+function wall(w,h,d,x,y,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),wallMat); m.position.set(x,y,z); m.receiveShadow=true; scene.add(m); return m; }
+wall(ROOM,WALL_H,0.4, 0,WALL_H/2,-ROOM/2);   // back
+wall(0.4,WALL_H,ROOM, -ROOM/2,WALL_H/2,0);   // left
+// RIGHT wall has a DOORWAY gap (z in [-3,3]) leading to the outdoor park.
+wall(0.4,WALL_H,12, ROOM/2,WALL_H/2, 9);     // right (upper segment)
+wall(0.4,WALL_H,12, ROOM/2,WALL_H/2,-9);     // right (lower segment)
+// front wall kept LOW so the third-person chase camera always sees over it
+// (open, bright, Roblox-arena feel) and never clips a full wall.
+wall(ROOM,1.4,0.4, 0,0.7, ROOM/2);
+// ceiling
+const ceil = new THREE.Mesh(new THREE.BoxGeometry(ROOM,0.3,ROOM), wallMat);
+ceil.position.y = WALL_H; scene.add(ceil);
+
+// doorway frame (neon)
+(function doorframe(){
+  const m=new THREE.MeshBasicMaterial({color:0x9bff5b});
+  const top=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.4,6.4),m); top.position.set(ROOM/2,WALL_H-1,0); scene.add(top);
+  [-3.1,3.1].forEach(z=>{const p=new THREE.Mesh(new THREE.BoxGeometry(0.5,WALL_H,0.4),m);p.position.set(ROOM/2,WALL_H/2,z);scene.add(p);});
+})();
+
+// neon wall trim strips
+function trim(color,x,z,w,d){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d),
+    new THREE.MeshBasicMaterial({color})); m.position.set(x,WALL_H-0.6,z); scene.add(m);
+}
+trim(0x33e8ff, 0,-ROOM/2+0.3, ROOM,0.14);
+trim(0xff3df0, 0, ROOM/2-0.3, ROOM,0.14);
+trim(0x9bff5b, -ROOM/2+0.3,0, 0.14,ROOM);
+trim(0xa855ff,  ROOM/2-0.3,0, 0.14,ROOM);
+
+// =========================================================================
+//  OUTDOOR PARK (east of the gym, through the doorway) — unlockable zone
+//  Walkable park with grass, a real animated river, fence, trees + stations.
+//  Gated behind TOTAL STRENGTH so the world grows as the player does.
+// =========================================================================
+const OUTDOOR = { need: 180, minX:16.5, maxX:40, minZ:-15, maxZ:15 };
+const park = new THREE.Group(); scene.add(park);
+
+// ground (grass)
+const parkGround = new THREE.Mesh(new THREE.BoxGeometry(26,0.4,32),
+  new THREE.MeshStandardMaterial({color:0x1c5c2a, roughness:1}));
+parkGround.position.set(28,-0.2,0); parkGround.receiveShadow=true; park.add(parkGround);
+// path from doorway
+const path = new THREE.Mesh(new THREE.BoxGeometry(9,0.05,5),
+  new THREE.MeshStandardMaterial({color:0x3a3550, roughness:1}));
+path.position.set(19.5,0.02,0); park.add(path);
+
+// animated river along the far edge
+const riverMat = new THREE.MeshStandardMaterial({ color:0x1240aa, emissive:0x0a2a66, roughness:0.25, metalness:0.5, transparent:true, opacity:0.92 });
+const river = new THREE.Mesh(new THREE.PlaneGeometry(30, 9, 30, 9), riverMat);
+river.rotation.x = -Math.PI/2; river.position.set(30,0.02, 12.5);
+park.add(river);
+const riverBase = river.geometry.attributes.position.array.slice();
+
+// low fence around the park edge
+(function fence(){
+  const fm=new THREE.MeshStandardMaterial({color:0x9bff5b, emissive:0x1a2a10});
+  for(let z=-15;z<=15;z+=3){ const p=new THREE.Mesh(new THREE.BoxGeometry(0.2,1.4,0.2),fm); p.position.set(40,0.7,z); park.add(p); }
+  const rail=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.15,30),fm); rail.position.set(40,1.1,0); park.add(rail);
+})();
+// simple stylized trees
+function tree(x,z){
+  const g=new THREE.Group();
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.25,0.3,1.6),new THREE.MeshStandardMaterial({color:0x5a3a1a}));
+  trunk.position.y=0.8; trunk.castShadow=true; g.add(trunk);
+  const leaves=new THREE.Mesh(new THREE.DodecahedronGeometry(1.3),new THREE.MeshStandardMaterial({color:0x2f9e44, roughness:0.9}));
+  leaves.position.y=2.4; leaves.castShadow=true; g.add(leaves);
+  g.position.set(x,0,z); park.add(g);
+}
+tree(34,-11); tree(37,-3); tree(35,8); tree(22,-13);
+
+// ---- outdoor unlock gate: glowing barrier across the doorway ----
+const outGate = new THREE.Group();
+(function(){
+  const barMat=new THREE.MeshBasicMaterial({color:0x9bff5b, transparent:true, opacity:0.3, side:THREE.DoubleSide});
+  const bar=new THREE.Mesh(new THREE.PlaneGeometry(6.2,WALL_H-1),barMat);
+  bar.rotation.y=Math.PI/2; bar.position.set(ROOM/2,(WALL_H-1)/2,0); outGate.add(bar);
+  outGate.userData.bar=bar;
+  const lbl=textSpriteEarly(`🔒 PARK — Requires ${OUTDOOR.need} TOTAL STRENGTH`, '#c9ffb0', 24);
+  lbl.position.set(ROOM/2-0.2, WALL_H-2, 0); lbl.scale.set(6.6,1.65,1); outGate.add(lbl);
+})();
+scene.add(outGate);
+if(save.unlocks.outdoor) outGate.visible=false;
+
+// small early textSprite (defined again fuller below is same) — declare helper now
+function textSpriteEarly(text,color,size){
+  const c=document.createElement('canvas'); c.width=512; c.height=128;
+  const g=c.getContext('2d'); g.font=`bold ${size}px Segoe UI, sans-serif`;
+  g.textAlign='center'; g.textBaseline='middle'; g.fillStyle=color; g.shadowColor=color; g.shadowBlur=10;
+  g.fillText(text,256,64);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthTest:false}));
+  sp.scale.set(4.5,1.1,1); return sp;
+}
+
+// =========================================================================
+//  BLOCKY HUMANOID CHARACTER
+//  Built so we can animate limbs (arms up/down, running legs) and SCALE
+//  torso/arms/legs as strength grows (getting swole).
+// =========================================================================
+// ===== COSMETIC BODY SKINS (unlockable / purchasable avatar colours) =====
+const SKINS = [
+  { id:'classic', name:'Classic Blue', color:0x2e7dff, cost:0 },
+  { id:'crimson', name:'Crimson',      color:0xe0393b, cost:120 },
+  { id:'emerald', name:'Emerald',      color:0x2fb85a, cost:180 },
+  { id:'violet',  name:'Neon Violet',  color:0xa855ff, cost:260 },
+  { id:'gold',    name:'Gold Beast',   color:0xffcf33, cost:500 },
+  { id:'magenta', name:'Hot Magenta',  color:0xff3df0, cost:400 },
+  { id:'carbon',  name:'Carbon Black', color:0x2a2f3a, cost:650 },
+  { id:'cyan',    name:'Cyber Cyan',   color:0x33e8ff, cost:800 },
+];
+if(!save.skin) save.skin='classic';
+if(!save.ownedSkins) save.ownedSkins={ classic:true };
+function skinColor(){ const s=SKINS.find(s=>s.id===save.skin)||SKINS[0]; return s.color; }
+
+// ===== PLAYER AVATAR — copied from game.html buildBlocky() (Roblox R6 style)
+// so it looks IDENTICAL to the PvP on-foot avatar. Parts stashed for the
+// walk animator (like animatePvpAvatarLimbs) and the "get buff" scaling.
+function buildBlocky(teamHex){
+  const g = new THREE.Group();
+  const body = new THREE.MeshLambertMaterial({ color: teamHex });
+  const dark = new THREE.MeshLambertMaterial({ color: new THREE.Color(teamHex).multiplyScalar(0.66).getHex() });
+  const skin = new THREE.MeshLambertMaterial({ color: 0xf6d64e });   // classic Roblox yellow head + arms
+  // Roblox R6 proportions, feet at y=0: legs 0–1.0, torso 1.0–2.0, head 2.0–2.56.
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 0.5), body); torso.position.set(0, 1.5, 0); torso.castShadow=true; g.add(torso);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.56, 0.64), skin); head.position.set(0, 2.28, 0); head.castShadow=true; g.add(head);
+  const faceMat = new THREE.MeshBasicMaterial({ color: 0x1c1c1c });
+  for (const sx of [-0.15, 0.15]) { const e = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.13, 0.03), faceMat); e.position.set(sx, 2.35, 0.33); g.add(e); }
+  const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.05, 0.03), faceMat); mouth.position.set(0, 2.16, 0.33); g.add(mouth);
+  function limb(px, py, pz, len, w, mat, foot) {
+    const pivot = new THREE.Group(); pivot.position.set(px, py, pz);
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w, len, w * 0.9), mat); b.position.y = -len / 2; b.castShadow=true; pivot.add(b);
+    if (foot) { const f = new THREE.Mesh(new THREE.BoxGeometry(w * 1.05, 0.16, w * 1.5), mat); f.position.set(0, -len, 0.1); pivot.add(f); }
+    pivot.userData.mesh = b; pivot.userData.baseX = px;
+    g.add(pivot); return pivot;
+  }
+  const la = limb(-0.68, 2.0, 0, 1.0, 0.36, skin, false);   // arms
+  const ra = limb( 0.68, 2.0, 0, 1.0, 0.36, skin, false);
+  const ll = limb(-0.26, 1.0, 0, 1.0, 0.44, dark, true);    // legs (pants) with feet
+  const rl = limb( 0.26, 1.0, 0, 1.0, 0.44, dark, true);
+  g.userData.limbs = { la, ra, ll, rl };
+  g.userData.parts = { torso, head, la, ra, ll, rl };
+  g.userData.mats  = { body, dark, skin };
+  return g;
+}
+
+const AVA_SCALE = 1.7;
+const player = new THREE.Group();      // outer transform (position + facing)
+let avatar = buildBlocky(skinColor());
+avatar.scale.setScalar(AVA_SCALE);
+player.add(avatar);
+player.userData = { avatar, limbs: avatar.userData.limbs, parts: avatar.userData.parts };
+player.position.set(0, 0, 6);
+player.rotation.y = Math.PI;   // face into the gym (-z) so the default cam looks at the room
+scene.add(player);
+
+// rebuild the avatar mesh when the player equips a new skin
+function rebuildAvatar(){
+  player.remove(avatar);
+  avatar = buildBlocky(skinColor());
+  avatar.scale.setScalar(AVA_SCALE);
+  player.add(avatar);
+  player.userData.avatar = avatar;
+  player.userData.limbs = avatar.userData.limbs;
+  player.userData.parts = avatar.userData.parts;
+  physique = null;         // reset smoothing so scaling re-applies
+  applyPhysique(0);
+}
+
+// name label above character (canvas sprite)
+function makeLabel(text){
+  const c=document.createElement('canvas'); c.width=256; c.height=64;
+  const g=c.getContext('2d');
+  g.font='bold 34px Segoe UI, sans-serif'; g.textAlign='center'; g.textBaseline='middle';
+  g.fillStyle='#33e8ff'; g.shadowColor='#33e8ff'; g.shadowBlur=12;
+  g.fillText(text,128,34);
+  const tex=new THREE.CanvasTexture(c);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false}));
+  sp.scale.set(2.6,0.65,1); return sp;
+}
+const nameLabel = makeLabel(PLAYER);
+nameLabel.position.y = 5.2; nameLabel.scale.set(3.2,0.8,1); player.add(nameLabel);
+
+// ===== "GET BUFF" scaling — smoothly grows arms/torso/legs as stats rise,
+// staying flush against the (Roblox R6) torso so there are no gaps. =====
+let physique = null;   // {arm,leg,tw} current (lerped toward target for smooth swole)
+function targetPhysique(){
+  return {
+    arm: 1 + Math.min(save.arm,600)/210,   // girth up to ~3.9x
+    leg: 1 + Math.min(save.leg,600)/240,
+    tw:  1 + Math.min(save.arm,600)/340,   // torso widens with arm
+  };
+}
+function applyPhysique(dt){
+  const t = targetPhysique();
+  if(!physique) physique = { arm:t.arm, leg:t.leg, tw:t.tw };
+  const sp = dt ? Math.min(1, dt*3) : 1;   // smooth transition
+  physique.arm = lerp(physique.arm, t.arm, sp);
+  physique.leg = lerp(physique.leg, t.leg, sp);
+  physique.tw  = lerp(physique.tw,  t.tw,  sp);
+  const { arm, leg, tw } = physique;
+  const P = player.userData.parts;
+  P.torso.scale.set(tw, 1, 1+(tw-1)*0.6);
+  P.la.userData.mesh.scale.set(arm,1,arm); P.ra.userData.mesh.scale.set(arm,1,arm);
+  P.ll.userData.mesh.scale.set(leg,1,leg); P.rl.userData.mesh.scale.set(leg,1,leg);
+  // keep arms flush against the widened torso (torso half=0.5*tw, arm half=0.18*arm)
+  const ax = 0.5*tw + 0.18*arm;
+  P.la.position.x = -ax; P.ra.position.x = ax;
+  const lx = 0.26 + (leg-1)*0.14;
+  P.ll.position.x = -lx; P.rl.position.x = lx;
+}
+applyPhysique(0);
+
+// =========================================================================
+//  STATION 3D OBJECTS  (built from the data array)
+// =========================================================================
+const stationMeshes = {};   // id -> { group, def, gate }
+const RADIUS = 3.2;         // how close you must be to train
+
+function textSprite(text, color='#fff', size=30){
+  const c=document.createElement('canvas'); c.width=512; c.height=128;
+  const g=c.getContext('2d');
+  g.font=`bold ${size}px Segoe UI, sans-serif`; g.textAlign='center'; g.textBaseline='middle';
+  g.fillStyle=color; g.shadowColor=color; g.shadowBlur=10;
+  g.fillText(text,256,64);
+  const tex=new THREE.CanvasTexture(c);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false}));
+  sp.scale.set(4.5,1.1,1); return sp;
+}
+
+function buildStation(def){
+  const g = new THREE.Group();
+  g.position.set(def.pos[0], 0, def.pos[1]);
+  const mat = new THREE.MeshStandardMaterial({ color:def.color, roughness:0.4, metalness:0.3, emissive:new THREE.Color(def.color).multiplyScalar(0.12) });
+  const dark = new THREE.MeshStandardMaterial({ color:0x1a1730, roughness:0.7 });
+
+  if(def.id==='treadmill'){
+    const base=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.4,3.2),dark); base.position.y=0.2; base.castShadow=true; g.add(base);
+    const belt=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.1,2.8),mat); belt.position.y=0.42; g.add(belt);
+    const bar=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.12,0.12),mat); bar.position.set(0,1.5,-1.2); g.add(bar);
+    [-0.8,0.8].forEach(x=>{const p=new THREE.Mesh(new THREE.BoxGeometry(0.12,1.4,0.12),dark);p.position.set(x,0.9,-1.2);g.add(p);});
+  } else if(def.id==='bench'){
+    const seat=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.25,2.4),mat); seat.position.y=0.7; seat.castShadow=true; g.add(seat);
+    [-1,1].forEach(z=>{const l=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.7,0.2),dark);l.position.set(0,0.35,z);g.add(l);});
+    [-1.1,1.1].forEach(x=>{const p=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,1.6),dark);p.position.set(x,0.8,-0.9);g.add(p);});
+    const bb=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,2.6),new THREE.MeshStandardMaterial({color:0xcccccc,metalness:0.8,roughness:0.3}));
+    bb.rotation.z=Math.PI/2; bb.position.set(0,1.55,-0.9); g.add(bb);
+    [-1.0,1.0].forEach(x=>{const pl=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,0.16),mat);pl.rotation.z=Math.PI/2;pl.position.set(x,1.55,-0.9);g.add(pl);});
+  } else if(def.id==='jumppad'){
+    const box=new THREE.Mesh(new THREE.BoxGeometry(1.8,1.2,1.8),mat); box.position.y=0.6; box.castShadow=true; g.add(box);
+    const top=new THREE.Mesh(new THREE.BoxGeometry(1.9,0.2,1.9),new THREE.MeshBasicMaterial({color:def.color})); top.position.y=1.25; g.add(top);
+  } else if(def.id==='cables'){
+    const frame=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.3,0.3),dark); frame.position.y=3; g.add(frame);
+    [-1.1,1.1].forEach(x=>{const p=new THREE.Mesh(new THREE.BoxGeometry(0.24,3,0.24),dark);p.position.set(x,1.5,0);p.castShadow=true;g.add(p);});
+    [-1.1,1.1].forEach(x=>{const cy=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,2.4),mat);cy.position.set(x,1.7,0.2);g.add(cy);
+      const h=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.12,0.12),mat);h.position.set(x,0.6,0.2);g.add(h);});
+  } else if(def.id==='bag'){
+    const post=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.3),dark); post.position.y=3.1; g.add(post);
+    const bag=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.45,2.0,16),mat); bag.position.y=1.7; bag.castShadow=true; g.add(bag);
+    g.userData.swing = bag;   // animated in the loop
+  } else if(def.id==='trail'){
+    // a little running track marker + arrows
+    const track=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.1,4.0),new THREE.MeshStandardMaterial({color:0x333a4a}));
+    track.position.y=0.06; g.add(track);
+    for(let z=-1.4;z<=1.4;z+=0.7){const ln=new THREE.Mesh(new THREE.BoxGeometry(0.25,0.02,0.3),new THREE.MeshBasicMaterial({color:def.color}));ln.position.set(0,0.12,z);g.add(ln);}
+  } else if(def.id==='boulder'){
+    const rock=new THREE.Mesh(new THREE.DodecahedronGeometry(1.1),new THREE.MeshStandardMaterial({color:def.color, roughness:1, flatShading:true}));
+    rock.position.y=1.0; rock.castShadow=true; g.add(rock);
+  } else {
+    // weight racks (rack50/120/250/500): a plate stack that looks heavier
+    const heavy = def.id==='rack500'?0.6 : def.id==='rack250'?0.5 : def.id==='rack120'?0.4 : 0.3;
+    const stand=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.3,1.2),dark); stand.position.y=0.15; g.add(stand);
+    const bb=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,2.2),new THREE.MeshStandardMaterial({color:0xcccccc,metalness:0.8}));
+    bb.rotation.z=Math.PI/2; bb.position.y=1.4; g.add(bb);
+    [-0.85,0.85].forEach(x=>{const pl=new THREE.Mesh(new THREE.CylinderGeometry(0.35+heavy,0.35+heavy,0.2+heavy*0.4),mat);pl.rotation.z=Math.PI/2;pl.position.set(x,1.4,0);pl.castShadow=true;g.add(pl);});
+  }
+
+  // glowing base ring marker
+  const ring=new THREE.Mesh(new THREE.RingGeometry(RADIUS-0.15,RADIUS,48),
+    new THREE.MeshBasicMaterial({color:def.color, side:THREE.DoubleSide, transparent:true, opacity:0.35}));
+  ring.rotation.x=-Math.PI/2; ring.position.y=0.03; g.add(ring);
+  g.userData.ring = ring;
+
+  // name label
+  const label = textSprite(def.name, '#'+new THREE.Color(def.color).getHexString(), 30);
+  label.position.y = 3.6; g.add(label);
+
+  // ---- gate barrier ----
+  let gateGroup=null;
+  if(def.gate){
+    gateGroup = new THREE.Group();
+    const barMat=new THREE.MeshBasicMaterial({color:0xff4466, transparent:true, opacity:0.28, side:THREE.DoubleSide});
+    const bar=new THREE.Mesh(new THREE.CylinderGeometry(RADIUS+0.4,RADIUS+0.4,3.4,32,1,true),barMat);
+    bar.position.y=1.7; gateGroup.add(bar);
+    const gl=textSprite(`🔒 Requires ${def.gate.amount} ${STATS[def.gate.stat].label}`, '#ff8f8f', 26);
+    gl.position.y=2.5; gl.scale.set(5.4,1.35,1); gateGroup.add(gl);
+    gateGroup.userData.bar = bar;
+    g.add(gateGroup);
+  }
+
+  scene.add(g);
+  stationMeshes[def.id] = { group:g, def, gate:gateGroup };
+
+  if(def.gate && save.unlocks[def.id] && gateGroup) gateGroup.visible=false;
+}
+STATIONS.forEach(buildStation);
+
+function isUnlocked(def){
+  if(!def.gate) return true;
+  if(save.unlocks[def.id]) return true;
+  if(save[def.gate.stat] >= def.gate.amount){ save.unlocks[def.id]=true; return true; }
+  return false;
+}
+
+// =========================================================================
+//  WEBAUDIO — tiny blips, gated behind user gesture
+// =========================================================================
+let actx=null;
+function audio(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
+function blip(freq=440, dur=0.06, type='sine', vol=0.12){
+  if(!soundOn) return; const a=audio(); if(!a) return;
+  try{
+    const o=a.createOscillator(), g=a.createGain();
+    o.type=type; o.frequency.value=freq;
+    g.gain.setValueAtTime(0.0001,a.currentTime);
+    g.gain.exponentialRampToValueAtTime(vol,a.currentTime+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur);
+    o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime+dur+0.02);
+  }catch(e){}
+}
+const sfx = {
+  rep(){ blip(300+Math.random()*80, 0.05, 'square', 0.09); },
+  jump(){ blip(520,0.12,'sine',0.12); blip(680,0.12,'sine',0.06); },
+  unlock(){ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>blip(f,0.16,'triangle',0.14),i*90)); },
+  ui(){ blip(660,0.06,'sine',0.1); },
+  levelup(){ blip(440,0.1,'sawtooth',0.1); blip(880,0.14,'sawtooth',0.06); },
+  rankup(){ [523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>blip(f,0.18,'triangle',0.15),i*80)); },
+  milestone(){ blip(880,0.08,'triangle',0.11); blip(1175,0.1,'triangle',0.08); },
+  ach(){ blip(784,0.1,'square',0.1); blip(1047,0.12,'square',0.08); },
+  buy(){ blip(392,0.08,'square',0.12); blip(587,0.1,'square',0.09); },
+  err(){ blip(160,0.14,'sawtooth',0.12); },
+};
+
+// mute button
+function updateMute(){ $('muteBtn').textContent = soundOn ? '🔊 SOUND' : '🔇 MUTED'; }
+updateMute();
+$('muteBtn').addEventListener('click', ()=>{
+  soundOn=!soundOn; localStorage.setItem(K.sound, soundOn?'1':'0'); updateMute(); if(soundOn) sfx.ui();
+});
+
+// =========================================================================
+//  INPUT
+// =========================================================================
+const keys = {};
+addEventListener('keydown', e=>{
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+  keys[e.key.toLowerCase()] = true;
+  if(e.key==='Escape') togglePause();
+});
+addEventListener('keyup', e=>{ keys[e.key.toLowerCase()] = false; });
+
+// THIRD-PERSON CHASE CAMERA (behind + above the character, looking gently
+// down at chest height — scaled-down version of game.html's arena chase cam).
+// orbitYaw is a user look-around OFFSET that eases back to "behind" when idle,
+// so the default view is always good on its own.
+let orbitYaw = 0;          // user look offset (radians), eases back to 0
+let camDist  = 8.5;        // distance behind (mouse-wheel zoom)
+let camHeight= 5.0;        // height above (vertical drag)
+let userLook = 0;          // seconds since the user last moved the camera
+let dragging=false, lastX=0, lastY=0;
+canvas.addEventListener('mousedown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; });
+addEventListener('mouseup', ()=>{ dragging=false; });
+addEventListener('mousemove', e=>{
+  if(!dragging) return;
+  orbitYaw = clamp(orbitYaw - (e.clientX-lastX)*0.007, -2.4, 2.4);
+  camHeight= clamp(camHeight + (e.clientY-lastY)*0.03, 3.5, 10);
+  userLook = 1.4;
+  lastX=e.clientX; lastY=e.clientY;
+});
+addEventListener('wheel', e=>{ camDist = clamp(camDist + Math.sign(e.deltaY)*0.7, 5.5, 16); }, {passive:true});
+
+// ---- touch ----
+const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints>0;
+let joyVec = {x:0, y:0};   // -1..1 in screen space
+let touchTrain=false, touchJump=false;
+if(isTouch){
+  $('touch').style.display='block';
+  const joy=$('joy'), nub=$('joyNub');
+  let joyId=null;
+  function setNub(dx,dy){
+    const max=45, d=Math.hypot(dx,dy); const s=d>max?max/d:1;
+    nub.style.transform=`translate(${dx*s}px,${dy*s}px)`;
+    joyVec.x=clamp(dx/max,-1,1); joyVec.y=clamp(dy/max,-1,1);
+  }
+  joy.addEventListener('touchstart',e=>{ e.preventDefault(); joyId=e.changedTouches[0].identifier;
+    const r=joy.getBoundingClientRect(); const t=e.changedTouches[0];
+    setNub(t.clientX-(r.left+r.width/2), t.clientY-(r.top+r.height/2)); },{passive:false});
+  joy.addEventListener('touchmove',e=>{ e.preventDefault();
+    for(const t of e.changedTouches){ if(t.identifier===joyId){ const r=joy.getBoundingClientRect();
+      setNub(t.clientX-(r.left+r.width/2), t.clientY-(r.top+r.height/2)); } } },{passive:false});
+  function joyEnd(e){ for(const t of e.changedTouches){ if(t.identifier===joyId){ joyId=null;
+    nub.style.transform='translate(0,0)'; joyVec.x=0; joyVec.y=0; } } }
+  joy.addEventListener('touchend',joyEnd); joy.addEventListener('touchcancel',joyEnd);
+
+  // camera drag on right half of screen (ignore control zones)
+  let camTouchId=null;
+  addEventListener('touchstart',e=>{
+    for(const t of e.changedTouches){
+      if(t.clientX > innerWidth*0.5 && camTouchId===null){
+        const el=document.elementFromPoint(t.clientX,t.clientY);
+        if(el && (el.id==='btnJump'||el.id==='btnTrain')) continue;
+        camTouchId=t.identifier; lastX=t.clientX; lastY=t.clientY;
+      }
+    }
+  },{passive:true});
+  addEventListener('touchmove',e=>{
+    for(const t of e.changedTouches){ if(t.identifier===camTouchId){
+      orbitYaw = clamp(orbitYaw - (t.clientX-lastX)*0.009, -2.4, 2.4);
+      camHeight= clamp(camHeight + (t.clientY-lastY)*0.035, 3.5, 10);
+      userLook = 1.4;
+      lastX=t.clientX; lastY=t.clientY; } }
+  },{passive:true});
+  addEventListener('touchend',e=>{ for(const t of e.changedTouches){ if(t.identifier===camTouchId) camTouchId=null; } });
+
+  const bt=$('btnTrain'), bj=$('btnJump');
+  bt.addEventListener('touchstart',e=>{e.preventDefault(); touchTrain=true;},{passive:false});
+  bt.addEventListener('touchend',  e=>{e.preventDefault(); touchTrain=false;},{passive:false});
+  bj.addEventListener('touchstart',e=>{e.preventDefault(); touchJump=true;},{passive:false});
+  bj.addEventListener('touchend',  e=>{e.preventDefault(); touchJump=false;},{passive:false});
+}
+
+// =========================================================================
+//  GAME STATE
+// =========================================================================
+let running=false, paused=false;
+let velY=0, onGround=true;
+let animPhase=0;
+let currentStation=null;
+let trainAnim='idle';
+let repAccum=0;
+const popups=[];
+let prevLevel = totalStrength();
+
+// =========================================================================
+//  FLOATING POPUPS (+N STRENGTH)
+// =========================================================================
+function spawnPopup(text, color, worldPos){
+  const c=document.createElement('canvas'); c.width=256; c.height=64;
+  const g=c.getContext('2d');
+  g.font='bold 40px Segoe UI'; g.textAlign='center'; g.textBaseline='middle';
+  g.fillStyle=color; g.shadowColor=color; g.shadowBlur=14; g.fillText(text,128,34);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthTest:false}));
+  sp.scale.set(2,0.5,1); sp.position.copy(worldPos); sp.position.y+=3.6;
+  scene.add(sp); popups.push({sp, life:1.0});
+}
+
+// =========================================================================
+//  TOAST / UNLOCK BANNER
+// =========================================================================
+let toastTimer=null;
+function toast(msg){
+  const t=$('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'), 2600);
+}
+
+// =========================================================================
+//  TRAINING
+// =========================================================================
+function nearestStation(){
+  let best=null, bestD=RADIUS;
+  for(const def of STATIONS){
+    const dx=player.position.x-def.pos[0], dz=player.position.z-def.pos[1];
+    const d=Math.hypot(dx,dz);
+    if(d<bestD){ bestD=d; best=def; }
+  }
+  return best;
+}
+
+function doTrain(dt, def){
+  if(save.stam <= 0){ return; }
+  const drain = 11 * (1 - Math.min(save.boostStam||0,3)*0.12);
+  save.stam = clamp(save.stam - drain*dt, 0, maxStamina());
+
+  const mult = 1 + (save.boostSpeed||0)*0.25;
+  for(const [stat, rate] of Object.entries(def.trains)){
+    if(save[stat]!==undefined){
+      save[stat] = clamp(save[stat] + rate*mult*dt, 1, 99999);
+    }
+  }
+  save.coins += 4*mult*dt*(1 + (save.boostCoin||0)*0.35);
+  trainAnim = def.anim;
+
+  repAccum += dt;
+  const repEvery = 0.42;
+  if(repAccum >= repEvery){
+    repAccum = 0;
+    sfx.rep();
+    let topStat='arm', topRate=0;
+    for(const [s,r] of Object.entries(def.trains)) if(r>topRate){topRate=r;topStat=s;}
+    const gain = Math.round(topRate*repEvery*mult*10)/10;
+    spawnPopup(`+${gain} ${STATS[topStat].label}`, '#'+new THREE.Color(STATS[topStat].color).getHexString(), player.position);
+  }
+
+  checkUnlocks();
+
+  const lvl=totalStrength();
+  if(lvl>prevLevel){ if(Math.floor(lvl/10)>Math.floor(prevLevel/10)) sfx.levelup(); prevLevel=lvl; }
+}
+
+function checkUnlocks(){
+  for(const def of STATIONS){
+    if(def.gate && !save.unlocks[def.id] && save[def.gate.stat] >= def.gate.amount){
+      save.unlocks[def.id]=true;
+      const sm=stationMeshes[def.id];
+      if(sm && sm.gate){ sm.gate.visible=false; }
+      sfx.unlock();
+      toast(`🔓 UNLOCKED: ${def.name}!`);
+      persist();
+    }
+  }
+}
+
+// =========================================================================
+//  HUD UPDATE
+// =========================================================================
+function updateHUD(){
+  $('lvlNum').textContent = totalStrength();
+  $('nArm').textContent = Math.floor(save.arm);
+  $('nLeg').textContent = Math.floor(save.leg);
+  $('nSpd').textContent = Math.floor(save.spd);
+  $('nStam').textContent = Math.floor(save.stam);
+  $('coins').textContent = Math.floor(save.coins);
+  $('barArm').style.width = clamp(save.arm/300*100,0,100)+'%';
+  $('barLeg').style.width = clamp(save.leg/300*100,0,100)+'%';
+  $('barSpd').style.width = clamp(save.spd/300*100,0,100)+'%';
+  $('barStam').style.width = clamp(save.stam/maxStamina()*100,0,100)+'%';
+  $('rankName').textContent = currentTitle().name;
+}
+
+function updatePrompt(){
+  const p=$('prompt');
+  if(!currentStation){ p.style.display='none'; if(isTouch) $('btnTrain').style.display='none'; return; }
+  const def=currentStation;
+  const unlocked = isUnlocked(def);
+  p.style.display='block';
+  if(unlocked){
+    p.classList.remove('locked');
+    p.innerHTML = `▶ ${def.name}<span class="sub">${def.prompt}${isTouch?'':' — hold <b>E</b> / <b>Space</b>'}</span>`;
+    if(isTouch) $('btnTrain').style.display='block';
+  }else{
+    p.classList.add('locked');
+    p.innerHTML = `🔒 ${def.name}<span class="sub">Requires ${def.gate.amount} ${STATS[def.gate.stat].label} STRENGTH — you have ${Math.floor(save[def.gate.stat])}</span>`;
+    if(isTouch) $('btnTrain').style.display='none';
+  }
+}
+
+// =========================================================================
+//  COLLISION — lightweight walkable-area test + station bounding circles.
+//  Indoor gym + (once unlocked) an outdoor park to the east through a door.
+// =========================================================================
+function stationSolid(x,z){
+  for(const def of STATIONS){
+    if(def.zone==='park' && !save.unlocks.outdoor) continue;
+    if(def.gate && !save.unlocks[def.id]) continue;   // locked gear isn't solid (walk up to it)
+    const r=def.solidR||1.4, dx=x-def.pos[0], dz=z-def.pos[1];
+    if(dx*dx+dz*dz < r*r) return true;
+  }
+  return false;
+}
+function inWalkable(x,z){
+  const out = !!save.unlocks.outdoor;
+  if(x>=-14 && x<=14 && z>=-14 && z<=14) return true;               // gym
+  if(out){
+    if(Math.abs(z)<=2.7 && x>=14 && x<=16.6) return true;           // doorway corridor
+    if(x>=16.6 && x<=OUTDOOR.maxX-1 && z>=OUTDOOR.minZ+1 && z<=OUTDOOR.maxZ-1) return true; // park
+  }
+  return false;
+}
+function canStand(x,z){ return inWalkable(x,z) && !stationSolid(x,z); }
+function moveWithCollision(wx,wz,dist){
+  const px=player.position.x, pz=player.position.z;
+  const tx=px+wx*dist, tz=pz+wz*dist;
+  if(canStand(tx,tz)){ player.position.x=tx; player.position.z=tz; }
+  else if(canStand(tx,pz)){ player.position.x=tx; }   // slide along walls
+  else if(canStand(px,tz)){ player.position.z=tz; }
+}
+
+// =========================================================================
+//  RANK TITLES  (rise with TOTAL STRENGTH)
+// =========================================================================
+const TITLES = [
+  {name:'ROOKIE', min:0}, {name:'LIFTER', min:30}, {name:'BRUISER', min:90},
+  {name:'BEAST', min:220}, {name:'TITAN', min:480}, {name:'LEGEND', min:900}, {name:'GODLIKE', min:1600},
+];
+function currentTitle(){ let t=TITLES[0]; for(const x of TITLES) if(totalStrength()>=x.min) t=x; return t; }
+let prevTitleName = currentTitle().name;
+function checkRank(){
+  const now=currentTitle().name;
+  if(now!==prevTitleName){
+    prevTitleName=now; sfx.rankup();
+    toast(`⭐ NEW RANK: ${now}!`);
+    burst(player.position.x, 3, player.position.z, 0xffe066, 40);
+  }
+}
+
+// =========================================================================
+//  MILESTONE PARTICLE BURSTS (get-buff juice every +25 in a stat)
+// =========================================================================
+const burstPool=[];
+function burst(x,y,z,color,n=26){
+  const geo=new THREE.BufferGeometry();
+  const pos=new Float32Array(n*3), vel=[];
+  for(let i=0;i<n;i++){
+    pos[i*3]=x; pos[i*3+1]=y; pos[i*3+2]=z;
+    const a=Math.random()*Math.PI*2, e=Math.random()*Math.PI-Math.PI/2, sp=2+Math.random()*4;
+    vel.push(Math.cos(a)*Math.cos(e)*sp, Math.abs(Math.sin(e))*sp+2, Math.sin(a)*Math.cos(e)*sp);
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  const pts=new THREE.Points(geo, new THREE.PointsMaterial({color, size:0.4, transparent:true, opacity:1, depthWrite:false}));
+  scene.add(pts); burstPool.push({pts, vel, life:1.0});
+}
+function updateBursts(dt){
+  for(let i=burstPool.length-1;i>=0;i--){
+    const b=burstPool[i]; b.life-=dt*1.3;
+    const p=b.pts.geometry.attributes.position.array;
+    for(let j=0;j<b.vel.length/3;j++){
+      p[j*3]+=b.vel[j*3]*dt; p[j*3+1]+=b.vel[j*3+1]*dt; p[j*3+2]+=b.vel[j*3+2]*dt;
+      b.vel[j*3+1]-=9*dt;
+    }
+    b.pts.geometry.attributes.position.needsUpdate=true;
+    b.pts.material.opacity=Math.max(0,b.life);
+    if(b.life<=0){ scene.remove(b.pts); b.pts.geometry.dispose(); b.pts.material.dispose(); burstPool.splice(i,1); }
+  }
+}
+const MILE=25;
+function checkMilestones(){
+  for(const stat of ['arm','leg','spd']){
+    const m=Math.floor(save[stat]/MILE);
+    const prev=save.milestones[stat]||0;
+    if(m>prev){
+      save.milestones[stat]=m;
+      burst(player.position.x, 3.4, player.position.z, STATS[stat].color, 30);
+      sfx.milestone();
+    }
+  }
+}
+
+// =========================================================================
+//  OUTDOOR PARK GATE (unlocks when TOTAL STRENGTH is high enough)
+// =========================================================================
+function checkOutdoorGate(){
+  if(!save.unlocks.outdoor && totalStrength() >= OUTDOOR.need){
+    save.unlocks.outdoor = true;
+    outGate.visible=false;
+    sfx.unlock(); toast('🌳 THE PARK IS OPEN! Head east through the door.');
+    burst(ROOM/2, 3, 0, 0x9bff5b, 50);
+    grantAch('park');
+    persist();
+  }
+}
+
+// =========================================================================
+//  AUTO-TRAINER (shop upgrade) — slowly trains the nearest UNLOCKED machine
+// =========================================================================
+function autoTrain(dt){
+  if(!save.auto) return;
+  let best=null, bd=1e9;
+  for(const def of STATIONS){
+    if(def.zone==='park' && !save.unlocks.outdoor) continue;
+    if(!isUnlocked(def)) continue;
+    const dx=player.position.x-def.pos[0], dz=player.position.z-def.pos[1], d=dx*dx+dz*dz;
+    if(d<bd){ bd=d; best=def; }
+  }
+  if(!best) return;
+  const f = save.auto*0.14;   // fraction of normal rate
+  for(const [stat,rate] of Object.entries(best.trains)){
+    if(save[stat]!==undefined) save[stat]=clamp(save[stat]+rate*f*dt, 1, 99999);
+  }
+  save.coins += 1.2*save.auto*dt;
+}
+
+// =========================================================================
+//  ACHIEVEMENTS  (one-time REPS rewards)
+// =========================================================================
+const ACHS = [
+  { id:'first',  name:'First Rep',        desc:'Train for the first time',   reward:25,  test:()=> (save.arm+save.leg+save.spd)>3.2 },
+  { id:'arm50',  name:'Getting Swole',    desc:'Reach 50 Arm Strength',      reward:60,  test:()=> save.arm>=50 },
+  { id:'arm250', name:'Titan Arms',       desc:'Reach 250 Arm Strength',     reward:250, test:()=> save.arm>=250 },
+  { id:'arm500', name:'God Hands',        desc:'Reach 500 Arm Strength',     reward:600, test:()=> save.arm>=500 },
+  { id:'spd150', name:'Speed Demon',      desc:'Reach 150 Speed',            reward:120, test:()=> save.spd>=150 },
+  { id:'leg150', name:'Leg Day King',     desc:'Reach 150 Leg Strength',     reward:120, test:()=> save.leg>=150 },
+  { id:'park',   name:'Great Outdoors',   desc:'Unlock the park',            reward:150, test:()=> !!save.unlocks.outdoor },
+  { id:'total500',name:'Half a Grand',    desc:'Reach 500 Total Strength',   reward:300, test:()=> totalStrength()>=500 },
+  { id:'legend', name:'Living Legend',    desc:'Reach the LEGEND rank',      reward:800, test:()=> totalStrength()>=900 },
+  { id:'shopper',name:'Big Spender',      desc:'Buy 6 upgrades total',       reward:200, test:()=> (save.boostSpeed+save.boostStam+save.boostMove+save.auto)>=6 },
+];
+if(!save.achv) save.achv={};
+function grantAch(id){
+  const a=ACHS.find(a=>a.id===id); if(!a || save.achv[id]) return;
+  save.achv[id]=true; save.coins+=a.reward;
+  toast(`🏆 ${a.name}  +${a.reward} REPS`); sfx.ach(); persist();
+}
+function checkAchievements(){
+  for(const a of ACHS){ if(!save.achv[a.id] && a.test()) grantAch(a.id); }
+}
+setInterval(()=>{ if(running && !paused) checkAchievements(); }, 700);
+
+// =========================================================================
+//  DAILY BONUS  (a few free REPS once per real day)
+// =========================================================================
+function checkDaily(){
+  const today=new Date().toISOString().slice(0,10);
+  if(save.lastDay!==today){
+    const first = !save.lastDay;
+    save.lastDay=today;
+    if(!first){ save.coins+=100; toast('🎁 Daily bonus: +100 REPS!'); sfx.ach(); }
+    persist();
+  }
+}
+
+// =========================================================================
+//  MAIN LOOP
+// =========================================================================
+let last=performance.now();
+function frame(now){
+  requestAnimationFrame(frame);
+  let dt=(now-last)/1000; last=now;
+  dt=Math.min(dt,0.05);   // cap dt
+  if(!running || paused || menuOpen){ updateBursts(dt); renderer.render(scene,camera); return; }
+  update(dt);
+  renderer.render(scene,camera);
+}
+
+function update(dt){
+  // ---- movement input ----
+  let mx=0, mz=0;
+  if(keys['w']||keys['arrowup'])   mz-=1;
+  if(keys['s']||keys['arrowdown']) mz+=1;
+  if(keys['a']||keys['arrowleft']) mx-=1;
+  if(keys['d']||keys['arrowright'])mx+=1;
+  if(isTouch){ mx+=joyVec.x; mz+=joyVec.y; }
+  const moveLen=Math.hypot(mx,mz);
+
+  // camera orbit keys (Q/E nudge the look offset; E only when not training)
+  const nearUsable = currentStation && isUnlocked(currentStation);
+  if(keys['q']){ orbitYaw = clamp(orbitYaw + 1.7*dt, -2.4, 2.4); userLook=1.4; }
+  if(keys['e'] && !nearUsable){ orbitYaw = clamp(orbitYaw - 1.7*dt, -2.4, 2.4); userLook=1.4; }
+
+  const camAz = player.rotation.y + orbitYaw;
+
+  // ---- move relative to the camera view (W = away from camera = forward) ----
+  const speed = (3.4 + Math.min(save.spd,400)*0.03) * (1 + (save.boostMove||0)*0.15);
+  let moving=false;
+  if(moveLen>0.08){
+    moving=true;
+    const nx=mx/moveLen, nz=mz/moveLen;
+    const sinA=Math.sin(camAz), cosA=Math.cos(camAz);
+    const wx = (-nz)*sinA + nx*cosA;
+    const wz = (-nz)*cosA - nx*sinA;
+    moveWithCollision(wx, wz, speed*dt);
+    const targetRot = Math.atan2(wx, wz);
+    let d = targetRot - player.rotation.y;
+    while(d>Math.PI) d-=Math.PI*2; while(d<-Math.PI) d+=Math.PI*2;
+    player.rotation.y += d*Math.min(1,dt*12);
+  }
+
+  // ---- near a station? ----
+  currentStation = nearestStation();
+
+  // ---- training (hold E / Space near unlocked station, or TRAIN btn) ----
+  const holdTrain = (keys['e']||keys[' ']||touchTrain);
+  let isTraining=false;
+  const canTrainHere = currentStation && isUnlocked(currentStation) && onGround && moveLen<0.2 && save.stam>0;
+  if(canTrainHere && holdTrain){
+    isTraining=true;
+    doTrain(dt, currentStation);
+  }
+
+  // ---- jump (only when NOT training) ----
+  const wantJump = (keys[' ']||touchJump) && !isTraining;
+  if(wantJump && onGround){
+    velY = 6 + Math.min(save.leg,300)*0.035 + (save.boostJump||0)*0.9;   // LEG STRENGTH + boost = higher jump
+    onGround=false; sfx.jump();
+  }
+  velY -= 18*dt;
+  player.position.y += velY*dt;
+  if(player.position.y<=0){ player.position.y=0; velY=0; onGround=true; }
+
+  // ---- stamina regen when not training ----
+  if(!isTraining){
+    save.stam = clamp(save.stam + (moving?6:16)*dt, 0, maxStamina());
+    trainAnim = moving ? 'walk' : 'idle';
+  }
+
+  // ---- auto-trainer boost (trains nearest unlocked machine slowly on its own) ----
+  autoTrain(dt);
+
+  // ---- animate character + smooth "get buff" scaling ----
+  animateCharacter(dt, isTraining ? currentStation.anim : trainAnim, moving, isTraining);
+  applyPhysique(dt);
+
+  // ---- stat milestone bursts + rank titles + achievements/goals ----
+  checkMilestones();
+  checkRank();
+  checkOutdoorGate();
+  updateBursts(dt);
+
+  // ---- station ring pulse + gate flicker ----
+  const t=performance.now()/1000;
+  for(const id in stationMeshes){
+    const sm=stationMeshes[id];
+    const active = currentStation && currentStation.id===id;
+    sm.group.userData.ring.material.opacity = active ? 0.35+Math.sin(t*6)*0.25 : 0.18;
+    if(sm.gate && sm.gate.visible){
+      sm.gate.userData.bar.material.opacity = 0.22+Math.sin(t*3)*0.1;
+      sm.gate.rotation.y = t*0.4;
+    }
+    // punching bag swings, harder while you hit it
+    if(sm.group.userData.swing){
+      const amp = (active && trainAnim==='cable') ? 0.5 : 0.12;
+      sm.group.userData.swing.rotation.x = Math.sin(t*7)*amp;
+    }
+  }
+  // outdoor gate barrier shimmer
+  if(outGate.visible){ outGate.userData.bar.material.opacity = 0.24+Math.sin(t*2.5)*0.1; }
+
+  // ---- animated river ----
+  const rp=river.geometry.attributes.position;
+  for(let i=0;i<rp.count;i++){
+    const x=riverBase[i*3], y=riverBase[i*3+1];
+    rp.array[i*3+2]= Math.sin(x*0.5 + t*2)*0.25 + Math.cos(y*0.6 + t*1.4)*0.2;
+  }
+  rp.needsUpdate=true;
+
+  // ---- popups ----
+  for(let i=popups.length-1;i>=0;i--){
+    const p=popups[i]; p.life-=dt*0.9; p.sp.position.y+=dt*1.4;
+    p.sp.material.opacity=Math.max(0,p.life);
+    if(p.life<=0){ scene.remove(p.sp); if(p.sp.material.map) p.sp.material.map.dispose(); p.sp.material.dispose(); popups.splice(i,1); }
+  }
+
+  // ---- CHASE CAMERA: behind + above, looking gently down at chest height ----
+  // ease the user's look-offset back to "directly behind" when idle
+  if(userLook>0) userLook-=dt; else orbitYaw = lerp(orbitYaw, 0, Math.min(1,dt*1.6));
+  const az = player.rotation.y + orbitYaw;
+  const px=player.position.x, py=Math.max(player.position.y,0), pz=player.position.z;
+  const gx = px - Math.sin(az)*camDist;
+  const gz = pz - Math.cos(az)*camDist;
+  const gy = py + camHeight;
+  const k = Math.min(1,dt*7);
+  camera.position.x = lerp(camera.position.x, gx, k);
+  camera.position.y = lerp(camera.position.y, gy, k);
+  camera.position.z = lerp(camera.position.z, gz, k);
+  camera.lookAt(px + Math.sin(az)*2.2, player.position.y + 2.6, pz + Math.cos(az)*2.2);
+
+  updateHUD();
+  updatePrompt();
+}
+
+// =========================================================================
+//  CHARACTER ANIMATION
+// =========================================================================
+function animateCharacter(dt, anim, moving, training){
+  const L = player.userData.limbs, P = player.userData.parts, AV = player.userData.avatar;
+  animPhase += dt * (anim==='run'||anim==='jumpTrain' ? 13 : (anim==='lift'||anim==='benchpress'||anim==='cable') ? 6.5 : moving ? 11 : 2.2);
+  const s = Math.sin(animPhase);
+  const set = (pv,rx,rz=0)=>{ pv.rotation.x=rx; pv.rotation.z=rz; };
+  // ease the avatar body transform back to neutral each frame (bench press moves it)
+  AV.position.x = lerp(AV.position.x,0,0.2);
+  AV.position.y = lerp(AV.position.y,0,0.2);
+  AV.rotation.x = lerp(AV.rotation.x,0,0.2);
+  P.torso.rotation.x = lerp(P.torso.rotation.x, 0, 0.2);
+
+  if(training && anim==='lift'){
+    // standing overhead press — ARMS RAISE UP AND DOWN repeatedly (as requested)
+    const up = -Math.PI * (0.55+0.45*Math.sin(animPhase));   // 0 → ~-180° overhead
+    set(L.la, up, 0.12); set(L.ra, up, -0.12);
+    set(L.ll,0); set(L.rl,0);
+    P.torso.rotation.x = 0.04*Math.sin(animPhase);
+  } else if(training && anim==='benchpress'){
+    // LYING-DOWN bench press: recline the whole avatar, press arms up & down
+    AV.rotation.x = -1.35;                 // lie on back
+    AV.position.y = 1.25; AV.position.z = 0;
+    const press = -1.9 + 0.8*Math.sin(animPhase);  // arms push toward ceiling
+    set(L.la, press, 0.1); set(L.ra, press, -0.1);
+    set(L.ll, -0.1); set(L.rl, -0.1);
+  } else if(training && anim==='cable'){
+    // alternating cable pulls
+    set(L.la, -1.5 + 0.95*Math.sin(animPhase));
+    set(L.ra, -1.5 - 0.95*Math.sin(animPhase));
+    set(L.ll,0); set(L.rl,0);
+  } else if(training && anim==='run'){
+    set(L.ll, s*1.0); set(L.rl, -s*1.0);
+    set(L.la, -s*0.85); set(L.ra, s*0.85);
+    P.torso.rotation.x = 0.14;
+  } else if(training && anim==='jumpTrain'){
+    // box jumps — hop in place with arms up
+    const h = Math.abs(Math.sin(animPhase));
+    AV.position.y = h*0.9;
+    const crouch = (1-h)*0.6;
+    set(L.ll, crouch); set(L.rl, crouch);
+    set(L.la, -2.4); set(L.ra, -2.4);
+  } else if(moving){
+    // walk/run cycle — same feel as PvP animatePvpAvatarLimbs (arms/legs swing)
+    const sw = s*0.62;
+    set(L.la, sw); set(L.ra, -sw);
+    set(L.ll, -sw); set(L.rl, sw);
+    P.torso.rotation.x = 0.03;
+  } else {
+    // subtle idle: gentle breathing + arms settling to the sides
+    set(L.ll,0); set(L.rl,0);
+    L.la.rotation.x = lerp(L.la.rotation.x, 0.04+0.02*s, 0.12); L.la.rotation.z=lerp(L.la.rotation.z,0,0.1);
+    L.ra.rotation.x = lerp(L.ra.rotation.x, 0.04+0.02*s, 0.12); L.ra.rotation.z=lerp(L.ra.rotation.z,0,0.1);
+    P.torso.rotation.x = 0.015*s;
+    P.head.rotation.x = 0.02*s;
+  }
+}
+
+// =========================================================================
+//  RESIZE
+// =========================================================================
+function resize(){
+  const w=innerWidth, h=innerHeight;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+  renderer.setSize(w,h,false);
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+
+// =========================================================================
+//  PAUSE
+// =========================================================================
+function togglePause(){
+  if(!running) return;
+  paused=!paused;
+  $('pauseOverlay').classList.toggle('hide', !paused);
+  if(paused) persist();
+}
+$('resumeBtn').addEventListener('click', ()=>{ paused=false; $('pauseOverlay').classList.add('hide'); });
+
+// =========================================================================
+//  TUTORIAL
+// =========================================================================
+const TUT = [
+  { t:'👟 MOVE AROUND', b:'Use W A S D (or the left joystick on mobile) to walk your character around the gym. Drag the screen (or Q / E) to spin the camera.' },
+  { t:'🏋️ TRAIN AT A MACHINE', b:'Walk into the glowing ring at a machine. When the prompt appears, HOLD E / Space (or the TRAIN button) to train. Watch your stats climb and your character get bigger!' },
+  { t:'💪 STATS MAKE YOU STRONGER', b:'ARM = lift heavier & unlock gear. LEG = jump higher (Space). SPEED = move faster. STAMINA drains while training and refills when you rest.' },
+  { t:'🔒 UNLOCK HEAVY GEAR', b:'The big weight racks are LOCKED until your Arm Strength is high enough. Train the bench, hit the number, and the barrier drops. There is always a next goal — go get swole!' },
+];
+let tutStep=0;
+function showTut(){ tutStep=0; renderTut(); $('tutOverlay').classList.remove('hide'); }
+function renderTut(){
+  const s=TUT[tutStep];
+  $('tutTitle').textContent=s.t; $('tutBody').textContent=s.b;
+  $('tutNext').textContent = tutStep===TUT.length-1 ? "LET'S GO 💪" : 'NEXT ▶';
+}
+$('tutNext').addEventListener('click', ()=>{
+  sfx.ui();
+  if(tutStep<TUT.length-1){ tutStep++; renderTut(); }
+  else endTut();
+});
+$('tutSkip').addEventListener('click', endTut);
+function endTut(){ $('tutOverlay').classList.add('hide'); localStorage.setItem(K.tut,'1'); }
+
+// =========================================================================
+//  SHOP / MENU  (tabbed: Upgrades · Skins · Goals · Ranks · Leaderboard)
+// =========================================================================
+const UPGRADES = [
+  { key:'boostSpeed', icon:'⚡', name:'Faster Training', desc:'+25% stat gain from every machine', base:60 },
+  { key:'boostStam',  icon:'🔋', name:'Bigger Stamina',  desc:'+40 max stamina & slower drain', base:55 },
+  { key:'boostMove',  icon:'🏃', name:'Move Speed',      desc:'+15% walk/run speed', base:70 },
+  { key:'boostJump',  icon:'🦘', name:'Jump Power',      desc:'Jump noticeably higher', base:65 },
+  { key:'boostCoin',  icon:'🪙', name:'REPS Magnet',     desc:'+35% REPS earned while training', base:90 },
+  { key:'auto',       icon:'🤖', name:'Auto-Trainer',    desc:'Slowly auto-trains the nearest machine', base:150 },
+];
+const UP_MAX = 5;
+function upCost(u){ return Math.round(u.base * Math.pow(1.9, save[u.key]||0)); }
+
+let menuOpen=false, menuTab='upgrades';
+function openMenu(tab){ audio(); menuTab=tab||'upgrades'; menuOpen=true; $('menuOverlay').classList.remove('hide'); renderMenu(); if(soundOn) sfx.ui(); }
+function closeMenu(){ menuOpen=false; $('menuOverlay').classList.add('hide'); persist(); }
+$('shopBtn').addEventListener('click', ()=>openMenu('upgrades'));
+$('goalBtn').addEventListener('click', ()=>openMenu('goals'));
+$('menuClose').addEventListener('click', closeMenu);
+document.querySelectorAll('.tabBtn').forEach(b=> b.addEventListener('click', ()=>{ menuTab=b.dataset.tab; renderMenu(); sfx.ui(); }));
+
+function row(cls){ const d=document.createElement('div'); d.className=cls; return d; }
+function renderMenu(){
+  $('menuRepsN').textContent = Math.floor(save.coins);
+  document.querySelectorAll('.tabBtn').forEach(x=> x.classList.toggle('active', x.dataset.tab===menuTab));
+  $('menuTitle').textContent = ({upgrades:'🛒 IRON SHOP',skins:'🎨 AVATAR SKINS',goals:'🏆 GOALS',ranks:'🏅 RANKS',board:'📊 LEADERBOARD'})[menuTab]||'MENU';
+  const b=$('menuBody'); b.innerHTML='';
+  if(menuTab==='upgrades') renderUpgrades(b);
+  else if(menuTab==='skins') renderSkins(b);
+  else if(menuTab==='goals') renderGoals(b);
+  else if(menuTab==='ranks') renderRanks(b);
+  else renderBoard(b);
+}
+function renderUpgrades(b){
+  for(const u of UPGRADES){
+    const lv=save[u.key]||0, maxed=lv>=UP_MAX, cost=upCost(u), afford=save.coins>=cost;
+    const it=row('shopItem');
+    const info=row('info');
+    info.innerHTML=`<div class="nm">${u.icon} ${u.name}</div><div class="ds">${u.desc}</div>`
+      + `<div class="lv">LEVEL ${lv} / ${UP_MAX}</div>`;
+    const btn=document.createElement('button');
+    btn.className='buyBtn'+(maxed?' maxed':(afford?'':' cant'));
+    btn.textContent = maxed?'MAXED':('🪙 '+cost);
+    if(!maxed) btn.addEventListener('click', ()=>{
+      const c=upCost(u);
+      if((save.coins>=c)){ save.coins-=c; save[u.key]=(save[u.key]||0)+1; save.stam=clamp(save.stam,0,maxStamina());
+        sfx.buy(); persist(); checkAchievements(); updateHUD(); renderMenu(); }
+      else { sfx.err(); }
+    });
+    it.appendChild(info); it.appendChild(btn); b.appendChild(it);
+  }
+}
+function renderSkins(b){
+  for(const s of SKINS){
+    const owned=!!save.ownedSkins[s.id], equipped=save.skin===s.id, afford=save.coins>=s.cost;
+    const it=row('shopItem');
+    const sw=row('swatch'); sw.style.background='#'+s.color.toString(16).padStart(6,'0');
+    const info=row('info'); info.innerHTML=`<div class="nm">${s.name}</div><div class="ds">${owned?'Owned':('Cost 🪙 '+s.cost)}</div>`;
+    const btn=document.createElement('button');
+    if(equipped){ btn.className='buyBtn maxed'; btn.textContent='EQUIPPED'; }
+    else if(owned){ btn.className='buyBtn'; btn.textContent='EQUIP'; btn.addEventListener('click',()=>{ save.skin=s.id; rebuildAvatar(); sfx.ui(); persist(); renderMenu(); }); }
+    else { btn.className='buyBtn'+(afford?'':' cant'); btn.textContent='🪙 '+s.cost;
+      btn.addEventListener('click',()=>{ if(save.coins>=s.cost){ save.coins-=s.cost; save.ownedSkins[s.id]=true; save.skin=s.id; rebuildAvatar(); sfx.buy(); persist(); updateHUD(); renderMenu(); } else sfx.err(); }); }
+    it.appendChild(sw); it.appendChild(info); it.appendChild(btn); b.appendChild(it);
+  }
+}
+function renderGoals(b){
+  const done=ACHS.filter(a=>save.achv[a.id]).length;
+  const hd=row('lv'); hd.style.margin='0 0 8px'; hd.textContent=`${done} / ${ACHS.length} completed`; b.appendChild(hd);
+  for(const a of ACHS){
+    const ok=!!save.achv[a.id];
+    const r=row('achRow'+(ok?' done':''));
+    r.innerHTML=`<div class="st">${ok?'✅':'🔒'}</div><div class="info"><div class="nm">${a.name}</div><div class="ds">${a.desc}</div></div><div class="lv">🪙 ${a.reward}</div>`;
+    b.appendChild(r);
+  }
+}
+function renderRanks(b){
+  const ts=totalStrength();
+  for(let i=0;i<TITLES.length;i++){
+    const cur=TITLES[i], reached=ts>=cur.min, isNow=currentTitle().name===cur.name;
+    const r=row('achRow'+(reached?' done':''));
+    const next=TITLES[i+1];
+    const sub = isNow && next ? `${Math.floor(ts)} / ${next.min} to ${next.name}` : (reached?'Achieved':`Requires ${cur.min} total`);
+    r.innerHTML=`<div class="st">${isNow?'⭐':(reached?'✅':'🔒')}</div><div class="info"><div class="nm">${cur.name}</div><div class="ds">${sub}</div></div>`;
+    b.appendChild(r);
+  }
+}
+function renderBoard(b){
+  const roster=[['IRON MIKE',1450],['GIGACHAD',980],['BRUTUS',720],['ATLAS',540],['MAX REPS',360],['TANK',210],['ROCKY',120],['NOODLE',40]];
+  const list=roster.map(r=>({name:r[0],str:r[1],you:false}));
+  list.push({name:PLAYER+' (YOU)', str:totalStrength(), you:true});
+  list.sort((a,b)=>b.str-a.str);
+  list.forEach((e,i)=>{
+    const r=row('lbRow'+(e.you?' you':''));
+    r.innerHTML=`<span>#${i+1}  ${e.name}</span><span>${e.str} 💪</span>`;
+    b.appendChild(r);
+  });
+}
+
+// =========================================================================
+//  START / RESET
+// =========================================================================
+$('greetName').textContent = PLAYER;
+$('startName').textContent = PLAYER;
+
+function startGame(){
+  audio(); if(soundOn) sfx.ui();
+  $('startOverlay').classList.add('hide');
+  running=true; paused=false;
+  checkDaily(); checkAchievements(); updateHUD();
+  if(localStorage.getItem(K.tut)!=='1') showTut();
+}
+$('playBtn').addEventListener('click', startGame);
+
+$('resetBtn').addEventListener('click', ()=>{
+  if(confirm('Reset all gym progress? This cannot be undone.')){
+    save=FRESH();
+    if(!save.ownedSkins) save.ownedSkins={classic:true};
+    if(!save.achv) save.achv={};
+    localStorage.removeItem(K.save);
+    localStorage.removeItem(K.tut);
+    for(const id in stationMeshes){ const sm=stationMeshes[id]; if(sm.gate) sm.gate.visible=true; }
+    outGate.visible=true;
+    prevLevel=totalStrength(); prevTitleName=currentTitle().name;
+    physique=null; rebuildAvatar(); updateHUD();
+    sfx.ui();
+    toast('Progress reset — starting fresh!');
+  }
+});
+
+// kick off render loop (renders scene behind the start overlay too)
+updateHUD();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

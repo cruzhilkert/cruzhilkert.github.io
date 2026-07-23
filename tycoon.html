@@ -904,22 +904,24 @@ addEventListener('keyup', e=>{ keys[e.key.toLowerCase()] = false; });
 // camAz is an INDEPENDENT camera orbit angle; movement is relative to it and
 // the camera eases behind the character's facing when you're not orbiting,
 // so the default view is always good and movement never feeds back on itself.
-let camAz    = player.rotation.y;  // camera orbit azimuth (INDEPENDENT of heading — avoids feedback)
-let camDist  = 8.5;        // distance behind (mouse-wheel zoom)
-let camHeight= 5.0;        // height above (vertical drag)
-let userLook = 0;          // seconds since the user last moved the camera (pauses auto-follow)
+let camAz    = 0;          // user-controlled azimuth (drag / Q / E) — INDEPENDENT of facing
+let heading  = Math.PI;    // character facing angle (faces its MOVEMENT direction — Key Room model)
+let camDist  = 16;         // distance behind (mouse-wheel zoom)
+let camHeight= 10.5;       // height above (vertical drag)
+const CHEST  = 2.6;        // camera look-at height (chest of the ~4.4-tall avatar)
+let userLook = 0;          // (retained; camera no longer auto-follows facing)
 let dragging=false, lastX=0, lastY=0;
 function angLerp(a,b,t){ let d=b-a; while(d>Math.PI)d-=Math.PI*2; while(d<-Math.PI)d+=Math.PI*2; return a+d*t; }
 canvas.addEventListener('mousedown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; });
 addEventListener('mouseup', ()=>{ dragging=false; });
 addEventListener('mousemove', e=>{
   if(!dragging) return;
-  camAz    -= (e.clientX-lastX)*0.007;
-  camHeight = clamp(camHeight + (e.clientY-lastY)*0.03, 3.5, 10);
+  camAz    -= (e.clientX-lastX)*0.006;
+  camHeight = clamp(camHeight + (e.clientY-lastY)*0.045, 5, 17);
   userLook  = 1.6;
   lastX=e.clientX; lastY=e.clientY;
 });
-addEventListener('wheel', e=>{ camDist = clamp(camDist + Math.sign(e.deltaY)*0.7, 5.5, 16); }, {passive:true});
+addEventListener('wheel', e=>{ camDist = clamp(camDist + Math.sign(e.deltaY)*1.0, 9, 26); }, {passive:true});
 
 // ---- touch ----
 const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints>0;
@@ -957,8 +959,8 @@ if(isTouch){
   },{passive:true});
   addEventListener('touchmove',e=>{
     for(const t of e.changedTouches){ if(t.identifier===camTouchId){
-      camAz    -= (t.clientX-lastX)*0.009;
-      camHeight = clamp(camHeight + (t.clientY-lastY)*0.035, 3.5, 10);
+      camAz    -= (t.clientX-lastX)*0.008;
+      camHeight = clamp(camHeight + (t.clientY-lastY)*0.05, 5, 17);
       userLook  = 1.6;
       lastX=t.clientX; lastY=t.clientY; } }
   },{passive:true});
@@ -1285,25 +1287,25 @@ function update(dt){
 
   // camera orbit keys (Q/E rotate the camera; E only when not training)
   const nearUsable = currentStation && isUnlocked(currentStation);
-  if(keys['q']){ camAz += 1.8*dt; userLook=1.6; }
-  if(keys['e'] && !nearUsable){ camAz -= 1.8*dt; userLook=1.6; }
+  if(keys['q']){ camAz += 1.6*dt; userLook=1.6; }
+  if(keys['e'] && !nearUsable){ camAz -= 1.6*dt; userLook=1.6; }
 
-  // ---- move relative to the camera view (PvP model: the camera/look angle
-  //      drives facing, movement is relative to it — completely stable, no
-  //      feedback loop; W = into the screen, A/D strafe, S = back). ----
+  // ---- KEY ROOM movement: camera-relative, CHARACTER FACES MOVEMENT DIRECTION.
+  //      camAz is user-controlled only (drag / Q / E); it never follows facing. ----
   const speed = (3.8 + Math.min(save.spd,400)*0.035) * (1 + (save.boostMove||0)*0.15);
+  const iF = -mz, iR = mx;                              // forward/back + strafe (incl. joystick)
+  const fX = -Math.sin(camAz), fZ = -Math.cos(camAz);  // forward = away from camera
+  const rX =  Math.cos(camAz), rZ = -Math.sin(camAz);  // right
+  let wx = fX*iF + rX*iR, wz = fZ*iF + rZ*iR;
   let moving=false;
-  if(moveLen>0.08){
+  const mlen = Math.hypot(wx, wz);
+  if(mlen>0.08){
     moving=true;
-    const nx=mx/moveLen, nz=mz/moveLen;
-    const sinA=Math.sin(camAz), cosA=Math.cos(camAz);
-    // forward (W, nz<0) = into the screen = +camAz direction (sinA,cosA)
-    const wx = (-nz)*sinA + nx*cosA;
-    const wz = (-nz)*cosA - nx*sinA;
+    wx/=mlen; wz/=mlen;
     moveWithCollision(wx, wz, speed*dt);
+    heading = Math.atan2(wx, wz);                       // FACE MOVEMENT DIRECTION
   }
-  // avatar always faces the camera/look direction (like the PvP on-foot avatar)
-  player.rotation.y = angLerp(player.rotation.y, camAz, Math.min(1,dt*10));
+  player.rotation.y = angLerp(player.rotation.y, heading, Math.min(1,dt*12));
 
   // ---- near a station? ----
   currentStation = nearestStation();
@@ -1380,19 +1382,17 @@ function update(dt){
     if(p.life<=0){ scene.remove(p.sp); if(p.sp.material.map) p.sp.material.map.dispose(); p.sp.material.dispose(); popups.splice(i,1); }
   }
 
-  // ---- CHASE CAMERA: behind + above, looking gently down at chest height.
-  //      camAz is user-controlled (drag / Q / E); the camera always sits a
-  //      fixed distance behind the character in that direction. ----
-  if(userLook>0) userLook-=dt;
+  // ---- KEY ROOM camera: stable behind + above, only rotates when the player
+  //      drags (camAz). Looks slightly down at the character's chest. ----
   const px=player.position.x, py=Math.max(player.position.y,0), pz=player.position.z;
-  const gx = px - Math.sin(camAz)*camDist;
-  const gz = pz - Math.cos(camAz)*camDist;
-  const gy = py + camHeight;
-  const k = Math.min(1,dt*7);
-  camera.position.x = lerp(camera.position.x, gx, k);
-  camera.position.y = lerp(camera.position.y, gy, k);
-  camera.position.z = lerp(camera.position.z, gz, k);
-  camera.lookAt(px + Math.sin(camAz)*2.2, player.position.y + 2.6, pz + Math.cos(camAz)*2.2);
+  const cx = px + Math.sin(camAz)*camDist;
+  const cz = pz + Math.cos(camAz)*camDist;
+  const cy = py + camHeight;
+  const k = Math.min(1,dt*6);
+  camera.position.x += (cx - camera.position.x)*k;
+  camera.position.y += (cy - camera.position.y)*k;
+  camera.position.z += (cz - camera.position.z)*k;
+  camera.lookAt(px, player.position.y + CHEST, pz);
 
   updateHUD();
   updatePrompt();
@@ -1644,8 +1644,8 @@ $('resetBtn').addEventListener('click', ()=>{
 
 // place the chase camera correctly for the very first rendered frame
 (function initCam(){
-  camera.position.set(player.position.x - Math.sin(camAz)*camDist, camHeight, player.position.z - Math.cos(camAz)*camDist);
-  camera.lookAt(player.position.x + Math.sin(camAz)*2.2, 2.6, player.position.z + Math.cos(camAz)*2.2);
+  camera.position.set(player.position.x + Math.sin(camAz)*camDist, camHeight, player.position.z + Math.cos(camAz)*camDist);
+  camera.lookAt(player.position.x, CHEST, player.position.z);
 })();
 
 // kick off render loop (renders scene behind the start overlay too)

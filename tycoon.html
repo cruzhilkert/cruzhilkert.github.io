@@ -321,6 +321,7 @@ let save = FRESH();
   save.boostCoin  = clamp(Math.floor(+save.boostCoin ||0),0,5);
   save.boostJump  = clamp(Math.floor(+save.boostJump ||0),0,5);
   if(typeof save.milestones!=='object'||!save.milestones) save.milestones={};
+  ['arm','leg','spd'].forEach(s=>{ const m=Math.floor(save[s]/25); if((save.milestones[s]||0)<m) save.milestones[s]=m; });
   save.stam = clamp(+save.stam || 100, 0, maxStamina());
 })();
 
@@ -359,64 +360,34 @@ const STATS = {
 //        gate (optional {stat, amount}) — needs stat>=amount to use,
 //        anim: which character animation to play while training.
 // =========================================================================
+// room / world dimensions (declared here so STATIONS positions can use HALF)
+const ROOM = 44, WALL_H = 9, HALF = ROOM/2;   // bigger gym floor
+
 const STATIONS = [
-  {
-    id:'treadmill', name:'Treadmill', pos:[-9, -6], color:0x33e8ff, zone:'gym', solidR:1.6,
-    trains:{ leg:2.2, spd:2.6 }, anim:'run',
-    prompt:'Hold to run — trains LEG + SPEED',
-  },
-  {
-    id:'bench', name:'Weight Bench', pos:[9, -6], color:0xff3df0, zone:'gym', solidR:1.5,
-    trains:{ arm:3.0 }, anim:'benchpress',
-    prompt:'Hold to bench press — trains ARM STRENGTH',
-  },
-  {
-    id:'jumppad', name:'Box-Jump Pad', pos:[-9, 6], color:0x9bff5b, zone:'gym', solidR:1.5,
-    trains:{ spd:3.2, leg:1.0 }, anim:'jumpTrain',
-    prompt:'Hold to box-jump — trains SPEED',
-  },
-  {
-    id:'cables', name:'Resistance Cables', pos:[9, 6], color:0xa855ff, zone:'gym', solidR:1.5,
-    trains:{ arm:2.0, leg:1.4 }, anim:'cable',
-    prompt:'Hold to pull — resistance training',
-  },
-  {
-    id:'bag', name:'Punching Bag', pos:[0, 6], color:0xff7733, zone:'gym', solidR:1.2,
-    trains:{ arm:2.6, spd:1.6 }, anim:'cable',
-    prompt:'Hold to hit the bag — ARM + SPEED (fighting)',
-  },
-  // --- gated heavy-weight rack: escalating plates ---
-  {
-    id:'rack50', name:'Heavy Rack I', pos:[-2.5, -11.5], color:0xffaa22, zone:'gym', solidR:1.3,
-    trains:{ arm:5.0 }, anim:'lift', gate:{ stat:'arm', amount:50 },
-    prompt:'Hold to hoist — big ARM gains',
-  },
-  {
-    id:'rack120', name:'Heavy Rack II', pos:[-7, -11.5], color:0xff5522, zone:'gym', solidR:1.3,
-    trains:{ arm:8.0 }, anim:'lift', gate:{ stat:'arm', amount:120 },
-    prompt:'Hold to hoist — huge ARM gains',
-  },
-  {
-    id:'rack250', name:'Titan Rack', pos:[-11.5, -11.5], color:0xff2266, zone:'gym', solidR:1.3,
-    trains:{ arm:12.0 }, anim:'lift', gate:{ stat:'arm', amount:250 },
-    prompt:'Hold to hoist — TITAN ARM gains',
-  },
-  {
-    id:'rack500', name:'God Rack', pos:[11.5, -11.5], color:0xffe066, zone:'gym', solidR:1.4,
-    trains:{ arm:20.0 }, anim:'lift', gate:{ stat:'arm', amount:500 },
-    prompt:'Hold to hoist — GODLY ARM gains',
-  },
-  // --- OUTDOOR PARK stations (only reachable once the park is unlocked) ---
-  {
-    id:'trail', name:'River Trail', pos:[24, 5], color:0x33ffcc, zone:'park', solidR:1.4,
-    trains:{ spd:6.0, leg:3.0 }, anim:'run',
-    prompt:'Hold to sprint the trail — SPEED + LEG',
-  },
-  {
-    id:'boulder', name:'Boulder Press', pos:[26, -6], color:0x8b6f4e, zone:'park', solidR:1.7,
-    trains:{ arm:16.0, leg:4.0 }, anim:'lift', gate:{ stat:'arm', amount:400 },
-    prompt:'Hold to press the boulder — massive ARM',
-  },
+  // ---- CARDIO ROW (left wall) ----
+  { id:'treadmill',  name:'Treadmill',      pos:[-18,-9], color:0x33e8ff, zone:'gym', solidR:1.6, trains:{leg:2.2, spd:2.6}, anim:'run', prompt:'Hold to run — trains LEG + SPEED' },
+  { id:'treadmill2', name:'Treadmill 2',    pos:[-18,-3], color:0x33e8ff, zone:'gym', solidR:1.6, trains:{leg:2.0, spd:2.8}, anim:'run', prompt:'Hold to run — trains LEG + SPEED' },
+  { id:'treadmill3', name:'Treadmill 3',    pos:[-18, 3], color:0x33e8ff, zone:'gym', solidR:1.6, trains:{leg:2.4, spd:2.4}, anim:'run', prompt:'Hold to run — trains LEG + SPEED' },
+  { id:'jumppad',    name:'Box-Jump Pad',   pos:[-18, 10], color:0x9bff5b, zone:'gym', solidR:1.5, trains:{spd:3.2, leg:1.0}, anim:'jumpTrain', prompt:'Hold to box-jump — trains SPEED' },
+  // ---- ARM / UPPER-BODY (front, +z) ----
+  { id:'bench',      name:'Weight Bench',   pos:[-8, 17], color:0xff3df0, zone:'gym', solidR:1.5, trains:{arm:3.0}, anim:'benchpress', prompt:'Hold to bench press — trains ARM' },
+  { id:'dumbbell',   name:'Dumbbell Curls', pos:[-2, 17], color:0xff7abf, zone:'gym', solidR:1.2, trains:{arm:2.6}, anim:'lift', prompt:'Hold to curl — trains ARM' },
+  { id:'pullup',     name:'Pull-Up Bar',    pos:[4, 17],  color:0x66ccff, zone:'gym', solidR:1.2, trains:{arm:2.8, leg:0.6}, anim:'lift', prompt:'Hold to do pull-ups — trains ARM' },
+  { id:'cables',     name:'Cable Machine',  pos:[11, 16], color:0xa855ff, zone:'gym', solidR:1.5, trains:{arm:2.0, leg:1.4}, anim:'cable', prompt:'Hold to pull — resistance training' },
+  { id:'bag',        name:'Punching Bag',   pos:[7, 8],   color:0xff7733, zone:'gym', solidR:1.2, trains:{arm:2.6, spd:1.6}, anim:'cable', prompt:'Hold to hit the bag — ARM + SPEED (fighting)' },
+  { id:'kettle',     name:'Kettlebells',    pos:[13, 9],  color:0xffaa55, zone:'gym', solidR:1.2, trains:{arm:2.2, leg:1.6}, anim:'lift', prompt:'Hold to swing — ARM + LEG' },
+  { id:'medball',    name:'Medicine Ball',  pos:[14, 3],  color:0xff5599, zone:'gym', solidR:1.2, trains:{arm:1.8, spd:1.8}, anim:'cable', prompt:'Hold to slam — ARM + SPEED' },
+  // ---- LEG ZONE (centre-left) ----
+  { id:'legpress',   name:'Leg Press',      pos:[-10, 10], color:0x8bd450, zone:'gym', solidR:1.5, trains:{leg:3.0}, anim:'squat', prompt:'Hold to press — trains LEG' },
+  { id:'squat',      name:'Squat Rack',     pos:[-4, 10],  color:0x33ffaa, zone:'gym', solidR:1.4, trains:{leg:3.6}, anim:'squat', gate:{stat:'leg', amount:60}, prompt:'Hold to squat — big LEG gains' },
+  // ---- HEAVY RACKS (back wall, escalating ARM gates) ----
+  { id:'rack50',  name:'Heavy Rack I',  pos:[-18,-18], color:0xffaa22, zone:'gym', solidR:1.3, trains:{arm:5.0},  anim:'lift', gate:{stat:'arm', amount:50},  prompt:'Hold to hoist — big ARM gains' },
+  { id:'rack120', name:'Heavy Rack II', pos:[-12,-18], color:0xff5522, zone:'gym', solidR:1.3, trains:{arm:8.0},  anim:'lift', gate:{stat:'arm', amount:120}, prompt:'Hold to hoist — huge ARM gains' },
+  { id:'rack250', name:'Titan Rack',    pos:[-6,-18],  color:0xff2266, zone:'gym', solidR:1.3, trains:{arm:12.0}, anim:'lift', gate:{stat:'arm', amount:250}, prompt:'Hold to hoist — TITAN ARM gains' },
+  { id:'rack500', name:'God Rack',      pos:[0,-18],   color:0xffe066, zone:'gym', solidR:1.4, trains:{arm:20.0}, anim:'lift', gate:{stat:'arm', amount:500}, prompt:'Hold to hoist — GODLY ARM gains' },
+  // ---- OUTDOOR PARK (unlockable) ----
+  { id:'trail',   name:'River Trail',   pos:[HALF+9, 5],  color:0x33ffcc, zone:'park', solidR:1.4, trains:{spd:6.0, leg:3.0}, anim:'run', prompt:'Hold to sprint the trail — SPEED + LEG' },
+  { id:'boulder', name:'Boulder Press', pos:[HALF+15,-6], color:0x8b6f4e, zone:'park', solidR:1.7, trains:{arm:16.0, leg:4.0}, anim:'lift', gate:{stat:'arm', amount:400}, prompt:'Hold to press the boulder — massive ARM' },
 ];
 
 // =========================================================================
@@ -430,7 +401,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x05030f);
-scene.fog = new THREE.Fog(0x05030f, 34, 66);
+scene.fog = new THREE.Fog(0x05030f, 46, 110);
 
 const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 300);
 
@@ -438,16 +409,18 @@ const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 300);
 scene.add(new THREE.HemisphereLight(0x6688ff, 0x0a0818, 0.55));
 const key = new THREE.DirectionalLight(0xffffff, 0.85);
 key.position.set(8, 18, 10); key.castShadow = true;
-key.shadow.mapSize.set(1024,1024);
-key.shadow.camera.left=-24; key.shadow.camera.right=24;
-key.shadow.camera.top=24; key.shadow.camera.bottom=-24;
+key.shadow.mapSize.set(2048,2048);
+key.shadow.camera.left=-28; key.shadow.camera.right=28;
+key.shadow.camera.top=28; key.shadow.camera.bottom=-28;
 scene.add(key);
-const neonCyan = new THREE.PointLight(0x33e8ff, 0.9, 40); neonCyan.position.set(-12,7,-12); scene.add(neonCyan);
-const neonMag  = new THREE.PointLight(0xff3df0, 0.9, 40); neonMag.position.set(12,7,12);   scene.add(neonMag);
-const neonVio  = new THREE.PointLight(0xa855ff, 0.7, 40); neonVio.position.set(0,7,0);      scene.add(neonVio);
+const neonCyan = new THREE.PointLight(0x33e8ff, 0.9, 46); neonCyan.position.set(-16,7,-16); scene.add(neonCyan);
+const neonMag  = new THREE.PointLight(0xff3df0, 0.9, 46); neonMag.position.set(16,7,16);   scene.add(neonMag);
+const neonVio  = new THREE.PointLight(0xa855ff, 0.8, 46); neonVio.position.set(0,7,0);      scene.add(neonVio);
+const neonLime = new THREE.PointLight(0x9bff5b, 0.7, 46); neonLime.position.set(-16,7,16);  scene.add(neonLime);
+const neonWarm = new THREE.PointLight(0xffcf66, 0.6, 50); neonWarm.position.set(16,7,-16);  scene.add(neonWarm);
+const parkLight= new THREE.PointLight(0xbfe8ff, 0.6, 60); parkLight.position.set(0,10,0);   scene.add(parkLight);
 
-// ---- room ----
-const ROOM = 30, WALL_H = 8;
+// ---- room ---- (ROOM / WALL_H / HALF declared earlier, above STATIONS)
 const floorMat = new THREE.MeshStandardMaterial({ color:0x141026, roughness:0.9, metalness:0.1 });
 const floor = new THREE.Mesh(new THREE.BoxGeometry(ROOM, 0.4, ROOM), floorMat);
 floor.position.y = -0.2; floor.receiveShadow = true; scene.add(floor);
@@ -469,8 +442,8 @@ function wall(w,h,d,x,y,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),
 wall(ROOM,WALL_H,0.4, 0,WALL_H/2,-ROOM/2);   // back
 wall(0.4,WALL_H,ROOM, -ROOM/2,WALL_H/2,0);   // left
 // RIGHT wall has a DOORWAY gap (z in [-3,3]) leading to the outdoor park.
-wall(0.4,WALL_H,12, ROOM/2,WALL_H/2, 9);     // right (upper segment)
-wall(0.4,WALL_H,12, ROOM/2,WALL_H/2,-9);     // right (lower segment)
+wall(0.4,WALL_H,19, ROOM/2,WALL_H/2, 12.5);  // right (upper segment)
+wall(0.4,WALL_H,19, ROOM/2,WALL_H/2,-12.5);  // right (lower segment)
 // front wall kept LOW so the third-person chase camera always sees over it
 // (open, bright, Roblox-arena feel) and never clips a full wall.
 wall(ROOM,1.4,0.4, 0,0.7, ROOM/2);
@@ -500,30 +473,31 @@ trim(0xa855ff,  ROOM/2-0.3,0, 0.14,ROOM);
 //  Walkable park with grass, a real animated river, fence, trees + stations.
 //  Gated behind TOTAL STRENGTH so the world grows as the player does.
 // =========================================================================
-const OUTDOOR = { need: 180, minX:16.5, maxX:40, minZ:-15, maxZ:15 };
+const OUTDOOR = { need: 180, minX:HALF+1.6, maxX:HALF+30, minZ:-16, maxZ:16 };
+const PCX = (OUTDOOR.minX+OUTDOOR.maxX)/2;   // park centre X
 const park = new THREE.Group(); scene.add(park);
 
 // ground (grass)
-const parkGround = new THREE.Mesh(new THREE.BoxGeometry(26,0.4,32),
+const parkGround = new THREE.Mesh(new THREE.BoxGeometry(OUTDOOR.maxX-OUTDOOR.minX+4,0.4,ROOM+4),
   new THREE.MeshStandardMaterial({color:0x1c5c2a, roughness:1}));
-parkGround.position.set(28,-0.2,0); parkGround.receiveShadow=true; park.add(parkGround);
+parkGround.position.set(PCX,-0.2,0); parkGround.receiveShadow=true; park.add(parkGround);
 // path from doorway
-const path = new THREE.Mesh(new THREE.BoxGeometry(9,0.05,5),
+const path = new THREE.Mesh(new THREE.BoxGeometry(OUTDOOR.minX-HALF+3,0.05,5),
   new THREE.MeshStandardMaterial({color:0x3a3550, roughness:1}));
-path.position.set(19.5,0.02,0); park.add(path);
+path.position.set(HALF+2,0.02,0); park.add(path);
 
 // animated river along the far edge
 const riverMat = new THREE.MeshStandardMaterial({ color:0x1240aa, emissive:0x0a2a66, roughness:0.25, metalness:0.5, transparent:true, opacity:0.92 });
-const river = new THREE.Mesh(new THREE.PlaneGeometry(30, 9, 30, 9), riverMat);
-river.rotation.x = -Math.PI/2; river.position.set(30,0.02, 12.5);
+const river = new THREE.Mesh(new THREE.PlaneGeometry(OUTDOOR.maxX-OUTDOOR.minX+4, 10, 30, 9), riverMat);
+river.rotation.x = -Math.PI/2; river.position.set(PCX,0.02, ROOM/2+0.5);
 park.add(river);
 const riverBase = river.geometry.attributes.position.array.slice();
 
 // low fence around the park edge
 (function fence(){
   const fm=new THREE.MeshStandardMaterial({color:0x9bff5b, emissive:0x1a2a10});
-  for(let z=-15;z<=15;z+=3){ const p=new THREE.Mesh(new THREE.BoxGeometry(0.2,1.4,0.2),fm); p.position.set(40,0.7,z); park.add(p); }
-  const rail=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.15,30),fm); rail.position.set(40,1.1,0); park.add(rail);
+  for(let z=-16;z<=16;z+=3){ const p=new THREE.Mesh(new THREE.BoxGeometry(0.2,1.4,0.2),fm); p.position.set(OUTDOOR.maxX,0.7,z); park.add(p); }
+  const rail=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.15,32),fm); rail.position.set(OUTDOOR.maxX,1.1,0); park.add(rail);
 })();
 // simple stylized trees
 function tree(x,z){
@@ -534,7 +508,7 @@ function tree(x,z){
   leaves.position.y=2.4; leaves.castShadow=true; g.add(leaves);
   g.position.set(x,0,z); park.add(g);
 }
-tree(34,-11); tree(37,-3); tree(35,8); tree(22,-13);
+tree(PCX+6,-13); tree(OUTDOOR.maxX-3,-4); tree(PCX+4,10); tree(HALF+4,-14); tree(OUTDOOR.maxX-4,9);
 
 // ---- outdoor unlock gate: glowing barrier across the doorway ----
 const outGate = new THREE.Group();
@@ -700,7 +674,7 @@ function buildStation(def){
   const mat = new THREE.MeshStandardMaterial({ color:def.color, roughness:0.4, metalness:0.3, emissive:new THREE.Color(def.color).multiplyScalar(0.12) });
   const dark = new THREE.MeshStandardMaterial({ color:0x1a1730, roughness:0.7 });
 
-  if(def.id==='treadmill'){
+  if(def.id.startsWith('treadmill')){
     const base=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.4,3.2),dark); base.position.y=0.2; base.castShadow=true; g.add(base);
     const belt=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.1,2.8),mat); belt.position.y=0.42; g.add(belt);
     const bar=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.12,0.12),mat); bar.position.set(0,1.5,-1.2); g.add(bar);
@@ -724,6 +698,28 @@ function buildStation(def){
     const post=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.3),dark); post.position.y=3.1; g.add(post);
     const bag=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.45,2.0,16),mat); bag.position.y=1.7; bag.castShadow=true; g.add(bag);
     g.userData.swing = bag;   // animated in the loop
+  } else if(def.id==='dumbbell'){
+    const rackm=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.9,0.6),dark); rackm.position.set(0,0.5,-0.6); g.add(rackm);
+    for(let i=-1;i<=1;i++){ const bar=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.7),new THREE.MeshStandardMaterial({color:0xcccccc,metalness:0.8})); bar.rotation.z=Math.PI/2; bar.position.set(i*0.5,0.9,-0.6); g.add(bar);
+      [-0.3,0.3].forEach(x=>{const b=new THREE.Mesh(new THREE.SphereGeometry(0.16),mat); b.position.set(i*0.5+x,0.9,-0.6); g.add(b);}); }
+  } else if(def.id==='pullup'){
+    [-1,1].forEach(x=>{const p=new THREE.Mesh(new THREE.BoxGeometry(0.2,3.2,0.2),dark);p.position.set(x,1.6,0);p.castShadow=true;g.add(p);});
+    const bar=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.09,2.2),mat); bar.rotation.z=Math.PI/2; bar.position.y=3.1; g.add(bar);
+  } else if(def.id==='kettle'){
+    const stand=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.3,0.8),dark); stand.position.y=0.15; g.add(stand);
+    [-0.5,0,0.5].forEach((x,i)=>{const k=new THREE.Mesh(new THREE.SphereGeometry(0.28+i*0.04),mat); k.position.set(x,0.4,0); k.castShadow=true; g.add(k);
+      const hn=new THREE.Mesh(new THREE.TorusGeometry(0.12,0.03,6,10),dark); hn.position.set(x,0.62,0); g.add(hn);});
+  } else if(def.id==='medball'){
+    const stand=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.6,0.3,12),dark); stand.position.y=0.15; g.add(stand);
+    const ball=new THREE.Mesh(new THREE.SphereGeometry(0.5,16,12),mat); ball.position.y=0.75; ball.castShadow=true; g.add(ball);
+  } else if(def.id==='legpress'){
+    const seat=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.3,1.4),mat); seat.position.set(0,0.45,0.6); g.add(seat);
+    const ramp=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.15,1.8),dark); ramp.position.set(0,1.2,-0.6); ramp.rotation.x=-0.6; ramp.castShadow=true; g.add(ramp);
+    const plate=new THREE.Mesh(new THREE.BoxGeometry(1.3,1.0,0.2),mat); plate.position.set(0,1.7,-1.1); plate.rotation.x=-0.6; g.add(plate);
+  } else if(def.id==='squat'){
+    [-0.9,0.9].forEach(x=>{const p=new THREE.Mesh(new THREE.BoxGeometry(0.2,3.0,0.2),dark);p.position.set(x,1.5,0);p.castShadow=true;g.add(p);});
+    const bb=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,2.4),new THREE.MeshStandardMaterial({color:0xcccccc,metalness:0.8})); bb.rotation.z=Math.PI/2; bb.position.y=2.2; g.add(bb);
+    [-0.9,0.9].forEach(x=>{const pl=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.4,0.16),mat);pl.rotation.z=Math.PI/2;pl.position.set(x,2.2,0);g.add(pl);});
   } else if(def.id==='trail'){
     // a little running track marker + arrows
     const track=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.1,4.0),new THREE.MeshStandardMaterial({color:0x333a4a}));
@@ -770,6 +766,84 @@ function buildStation(def){
   if(def.gate && save.unlocks[def.id] && gateGroup) gateGroup.visible=false;
 }
 STATIONS.forEach(buildStation);
+
+// decorative training dummies (flavour NPCs standing around the gym)
+[[16,14,0x8892a8],[-15,15,0x8892a8],[16,-15,0x6f7890],[3,-13,0x7a8398]].forEach(([x,z,c])=>{
+  const d=buildBlocky(c); d.scale.setScalar(1.5); d.position.set(x,0,z);
+  d.rotation.y = Math.atan2(-x,-z); scene.add(d);
+});
+
+// =========================================================================
+//  GYM DECOR — mirrors, posters, lockers, front desk, plants, signs, props.
+//  Purely visual (not solid) and hugged to the walls so it fills the room
+//  without blocking the walkable floor.
+// =========================================================================
+(function buildDecor(){
+  const add=(m,x,y,z,rx,ry)=>{ m.position.set(x,y,z); if(rx)m.rotation.x=rx; if(ry)m.rotation.y=ry; scene.add(m); return m; };
+  const box=(w,h,d,c,rough=0.8,metal=0.1)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color:c,roughness:rough,metalness:metal}));
+  const W=HALF-0.35;
+
+  // rubber floor mats (colour zones)
+  const matC=[0x14203a,0x1a1430,0x101a24];
+  [[-18,-9,4,10],[-18,7,4,8],[-6,15,10,6],[9,11,9,10],[-8,10,10,7],[-9,-18,20,5]].forEach((r,i)=>{
+    const m=new THREE.Mesh(new THREE.BoxGeometry(r[2],0.04,r[3]),new THREE.MeshStandardMaterial({color:matC[i%3],roughness:1}));
+    m.position.set(r[0],0.03,r[1]); m.receiveShadow=true; scene.add(m);
+  });
+
+  // wall MIRRORS (left wall + parts of front) — dark glossy panels with neon frame
+  const mirrorMat=new THREE.MeshStandardMaterial({color:0x9fd4e6, roughness:0.05, metalness:0.9, emissive:0x0a1a22});
+  for(const z of [-14,-6,2,10]){
+    add(new THREE.Mesh(new THREE.PlaneGeometry(6.4,5),mirrorMat), -W+0.05, 3.2, z, 0, Math.PI/2);
+    add(box(6.8,0.25,0.15,0x33e8ff,0.3,0.4), -W+0.06, 5.8, z, 0, Math.PI/2);
+    add(box(6.8,0.25,0.15,0x33e8ff,0.3,0.4), -W+0.06, 0.7, z, 0, Math.PI/2);
+  }
+
+  // POSTERS / BANNERS on the back wall
+  const posterCols=[0xff3df0,0x9bff5b,0xa855ff,0x33e8ff];
+  posterCols.forEach((c,i)=>{ add(box(3.4,4.4,0.1,c,0.6,0), -6+i*5, 5.2, -W+0.05); });
+  // big neon gym sign on the back wall
+  const sign=textSprite('IRON GYM', '#9bff5b', 62); sign.scale.set(12,3,1); add(sign, 0, WALL_H-2.2, -W+0.2);
+  const sign2=textSprite('NO PAIN · NO GAINS', '#33e8ff', 34); sign2.scale.set(11,1.4,1); add(sign2, 0, WALL_H-4, -W+0.2);
+
+  // LOCKERS along the lower-right wall
+  const lockerMat=new THREE.MeshStandardMaterial({color:0x2a4a8a,roughness:0.6,metalness:0.3});
+  for(let i=0;i<7;i++){ const l=new THREE.Mesh(new THREE.BoxGeometry(1.3,3.2,0.9),lockerMat);
+    l.position.set(-13+i*1.35, 1.6, W-0.5); l.castShadow=true; scene.add(l);
+    scene.add(add(box(0.1,0.4,0.05,0x9bff5b,0.4,0.3), -13+i*1.35+0.4, 2.2, W-0.95)); }
+
+  // FRONT DESK near the doorway
+  const desk=box(4,1.2,1.6,0x3a2a5a,0.6,0.2); add(desk, W-3, 0.6, -6); desk.castShadow=true;
+  add(box(4.2,0.2,1.8,0x33e8ff,0.3,0.3), W-3, 1.25, -6);
+  const monitor=box(1.2,0.8,0.1,0x0a1420,0.2,0.6); add(monitor, W-3, 1.9, -6.4);
+
+  // WATER COOLER
+  const cooler=box(0.8,1.4,0.8,0xdfe8ff,0.4,0.1); add(cooler, W-1.5, 0.7, 4);
+  add(box(0.7,0.6,0.7,0x33a8ff,0.2,0.2), W-1.5, 1.7, 4);
+
+  // POTTED PLANTS in the corners
+  function plant(x,z){ const g=new THREE.Group();
+    const pot=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.3,0.7,10),new THREE.MeshStandardMaterial({color:0x8a5a3a}));
+    pot.position.y=0.35; g.add(pot);
+    for(let i=0;i<3;i++){ const leaf=new THREE.Mesh(new THREE.ConeGeometry(0.5,1.4,8),new THREE.MeshStandardMaterial({color:0x2f9e44,roughness:0.9}));
+      leaf.position.set((Math.random()-0.5)*0.3,1.1+i*0.2,(Math.random()-0.5)*0.3); leaf.rotation.z=(Math.random()-0.5)*0.4; g.add(leaf); }
+    g.position.set(x,0,z); scene.add(g); }
+  plant(-W+1,-W+1); plant(W-1,W-1); plant(-W+1,W-1);
+
+  // CEILING SPEAKERS in corners
+  const spk=(x,z)=>{ const s=box(0.9,0.9,0.9,0x111119,0.6,0.2); add(s,x,WALL_H-1,z);
+    add(new THREE.Mesh(new THREE.CircleGeometry(0.3,12),new THREE.MeshStandardMaterial({color:0x33e8ff})), x, WALL_H-1, z+0.46); };
+  spk(-W+1,-W+1); spk(W-1,-W+1); spk(-W+1,W-1); spk(W-1,W-1);
+
+  // WEIGHT-PLATE stacks + a barbell on the floor (props)
+  function plates(x,z,c){ for(let i=0;i<5;i++){ const p=new THREE.Mesh(new THREE.CylinderGeometry(0.6-i*0.02,0.6-i*0.02,0.12,18),new THREE.MeshStandardMaterial({color:c,roughness:0.5,metalness:0.3})); p.position.set(x,0.1+i*0.14,z); p.castShadow=true; scene.add(p);} }
+  plates(-20,-14,0xff3df0); plates(-20,16,0x33e8ff); plates(4,-16,0xffe066);
+  const barbell=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,4,10),new THREE.MeshStandardMaterial({color:0xcccccc,metalness:0.8})); barbell.rotation.x=Math.PI/2; add(barbell,10,0.3,-14);
+  [-1.6,1.6].forEach(o=>{ const pl=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.2,16),new THREE.MeshStandardMaterial({color:0x222,metalness:0.6})); pl.rotation.x=Math.PI/2; add(pl,10,0.3,-14+o); });
+
+  // medicine-ball / yoga corner
+  [[0xff5599,0.4],[0xffaa55,0.34],[0x9bff5b,0.3]].forEach((b,i)=>{ const m=new THREE.Mesh(new THREE.SphereGeometry(b[1],14,10),new THREE.MeshStandardMaterial({color:b[0],roughness:0.6})); m.position.set(17-i*0.9,b[1],-9); m.castShadow=true; scene.add(m); });
+  for(let i=0;i<3;i++){ const y=new THREE.Mesh(new THREE.BoxGeometry(1.4,0.06,3.4),new THREE.MeshStandardMaterial({color:[0xa855ff,0x33e8ff,0x9bff5b][i],roughness:1})); y.position.set(18,0.05+i*0.02,-2+i*0.2); y.rotation.y=0.2; scene.add(y); }
+})();
 
 function isUnlocked(def){
   if(!def.gate) return true;
@@ -827,20 +901,22 @@ addEventListener('keyup', e=>{ keys[e.key.toLowerCase()] = false; });
 
 // THIRD-PERSON CHASE CAMERA (behind + above the character, looking gently
 // down at chest height — scaled-down version of game.html's arena chase cam).
-// orbitYaw is a user look-around OFFSET that eases back to "behind" when idle,
-// so the default view is always good on its own.
-let orbitYaw = 0;          // user look offset (radians), eases back to 0
+// camAz is an INDEPENDENT camera orbit angle; movement is relative to it and
+// the camera eases behind the character's facing when you're not orbiting,
+// so the default view is always good and movement never feeds back on itself.
+let camAz    = player.rotation.y;  // camera orbit azimuth (INDEPENDENT of heading — avoids feedback)
 let camDist  = 8.5;        // distance behind (mouse-wheel zoom)
 let camHeight= 5.0;        // height above (vertical drag)
-let userLook = 0;          // seconds since the user last moved the camera
+let userLook = 0;          // seconds since the user last moved the camera (pauses auto-follow)
 let dragging=false, lastX=0, lastY=0;
+function angLerp(a,b,t){ let d=b-a; while(d>Math.PI)d-=Math.PI*2; while(d<-Math.PI)d+=Math.PI*2; return a+d*t; }
 canvas.addEventListener('mousedown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; });
 addEventListener('mouseup', ()=>{ dragging=false; });
 addEventListener('mousemove', e=>{
   if(!dragging) return;
-  orbitYaw = clamp(orbitYaw - (e.clientX-lastX)*0.007, -2.4, 2.4);
-  camHeight= clamp(camHeight + (e.clientY-lastY)*0.03, 3.5, 10);
-  userLook = 1.4;
+  camAz    -= (e.clientX-lastX)*0.007;
+  camHeight = clamp(camHeight + (e.clientY-lastY)*0.03, 3.5, 10);
+  userLook  = 1.6;
   lastX=e.clientX; lastY=e.clientY;
 });
 addEventListener('wheel', e=>{ camDist = clamp(camDist + Math.sign(e.deltaY)*0.7, 5.5, 16); }, {passive:true});
@@ -881,9 +957,9 @@ if(isTouch){
   },{passive:true});
   addEventListener('touchmove',e=>{
     for(const t of e.changedTouches){ if(t.identifier===camTouchId){
-      orbitYaw = clamp(orbitYaw - (t.clientX-lastX)*0.009, -2.4, 2.4);
-      camHeight= clamp(camHeight + (t.clientY-lastY)*0.035, 3.5, 10);
-      userLook = 1.4;
+      camAz    -= (t.clientX-lastX)*0.009;
+      camHeight = clamp(camHeight + (t.clientY-lastY)*0.035, 3.5, 10);
+      userLook  = 1.6;
       lastX=t.clientX; lastY=t.clientY; } }
   },{passive:true});
   addEventListener('touchend',e=>{ for(const t of e.changedTouches){ if(t.identifier===camTouchId) camTouchId=null; } });
@@ -1035,10 +1111,10 @@ function stationSolid(x,z){
 }
 function inWalkable(x,z){
   const out = !!save.unlocks.outdoor;
-  if(x>=-14 && x<=14 && z>=-14 && z<=14) return true;               // gym
+  if(x>=-(HALF-1) && x<=HALF-1 && z>=-(HALF-1) && z<=HALF-1) return true;   // gym floor
   if(out){
-    if(Math.abs(z)<=2.7 && x>=14 && x<=16.6) return true;           // doorway corridor
-    if(x>=16.6 && x<=OUTDOOR.maxX-1 && z>=OUTDOOR.minZ+1 && z<=OUTDOOR.maxZ-1) return true; // park
+    if(Math.abs(z)<=2.7 && x>=HALF-1 && x<=OUTDOOR.minX) return true;       // doorway corridor
+    if(x>=OUTDOOR.minX && x<=OUTDOOR.maxX-1 && z>=OUTDOOR.minZ+1 && z<=OUTDOOR.maxZ-1) return true; // park
   }
   return false;
 }
@@ -1207,28 +1283,27 @@ function update(dt){
   if(isTouch){ mx+=joyVec.x; mz+=joyVec.y; }
   const moveLen=Math.hypot(mx,mz);
 
-  // camera orbit keys (Q/E nudge the look offset; E only when not training)
+  // camera orbit keys (Q/E rotate the camera; E only when not training)
   const nearUsable = currentStation && isUnlocked(currentStation);
-  if(keys['q']){ orbitYaw = clamp(orbitYaw + 1.7*dt, -2.4, 2.4); userLook=1.4; }
-  if(keys['e'] && !nearUsable){ orbitYaw = clamp(orbitYaw - 1.7*dt, -2.4, 2.4); userLook=1.4; }
+  if(keys['q']){ camAz += 1.8*dt; userLook=1.6; }
+  if(keys['e'] && !nearUsable){ camAz -= 1.8*dt; userLook=1.6; }
 
-  const camAz = player.rotation.y + orbitYaw;
-
-  // ---- move relative to the camera view (W = away from camera = forward) ----
-  const speed = (3.4 + Math.min(save.spd,400)*0.03) * (1 + (save.boostMove||0)*0.15);
+  // ---- move relative to the camera view (PvP model: the camera/look angle
+  //      drives facing, movement is relative to it — completely stable, no
+  //      feedback loop; W = into the screen, A/D strafe, S = back). ----
+  const speed = (3.8 + Math.min(save.spd,400)*0.035) * (1 + (save.boostMove||0)*0.15);
   let moving=false;
   if(moveLen>0.08){
     moving=true;
     const nx=mx/moveLen, nz=mz/moveLen;
     const sinA=Math.sin(camAz), cosA=Math.cos(camAz);
+    // forward (W, nz<0) = into the screen = +camAz direction (sinA,cosA)
     const wx = (-nz)*sinA + nx*cosA;
     const wz = (-nz)*cosA - nx*sinA;
     moveWithCollision(wx, wz, speed*dt);
-    const targetRot = Math.atan2(wx, wz);
-    let d = targetRot - player.rotation.y;
-    while(d>Math.PI) d-=Math.PI*2; while(d<-Math.PI) d+=Math.PI*2;
-    player.rotation.y += d*Math.min(1,dt*12);
   }
+  // avatar always faces the camera/look direction (like the PvP on-foot avatar)
+  player.rotation.y = angLerp(player.rotation.y, camAz, Math.min(1,dt*10));
 
   // ---- near a station? ----
   currentStation = nearestStation();
@@ -1305,19 +1380,19 @@ function update(dt){
     if(p.life<=0){ scene.remove(p.sp); if(p.sp.material.map) p.sp.material.map.dispose(); p.sp.material.dispose(); popups.splice(i,1); }
   }
 
-  // ---- CHASE CAMERA: behind + above, looking gently down at chest height ----
-  // ease the user's look-offset back to "directly behind" when idle
-  if(userLook>0) userLook-=dt; else orbitYaw = lerp(orbitYaw, 0, Math.min(1,dt*1.6));
-  const az = player.rotation.y + orbitYaw;
+  // ---- CHASE CAMERA: behind + above, looking gently down at chest height.
+  //      camAz is user-controlled (drag / Q / E); the camera always sits a
+  //      fixed distance behind the character in that direction. ----
+  if(userLook>0) userLook-=dt;
   const px=player.position.x, py=Math.max(player.position.y,0), pz=player.position.z;
-  const gx = px - Math.sin(az)*camDist;
-  const gz = pz - Math.cos(az)*camDist;
+  const gx = px - Math.sin(camAz)*camDist;
+  const gz = pz - Math.cos(camAz)*camDist;
   const gy = py + camHeight;
   const k = Math.min(1,dt*7);
   camera.position.x = lerp(camera.position.x, gx, k);
   camera.position.y = lerp(camera.position.y, gy, k);
   camera.position.z = lerp(camera.position.z, gz, k);
-  camera.lookAt(px + Math.sin(az)*2.2, player.position.y + 2.6, pz + Math.cos(az)*2.2);
+  camera.lookAt(px + Math.sin(camAz)*2.2, player.position.y + 2.6, pz + Math.cos(camAz)*2.2);
 
   updateHUD();
   updatePrompt();
@@ -1355,6 +1430,13 @@ function animateCharacter(dt, anim, moving, training){
     set(L.la, -1.5 + 0.95*Math.sin(animPhase));
     set(L.ra, -1.5 - 0.95*Math.sin(animPhase));
     set(L.ll,0); set(L.rl,0);
+  } else if(training && anim==='squat'){
+    // squat / leg press — dip down and rise, arms braced up
+    const d = 0.5+0.5*Math.sin(animPhase);
+    set(L.ll, d*0.85); set(L.rl, d*0.85);
+    set(L.la, -2.5); set(L.ra, -2.5);
+    AV.position.y = -d*0.55;
+    P.torso.rotation.x = d*0.22;
   } else if(training && anim==='run'){
     set(L.ll, s*1.0); set(L.rl, -s*1.0);
     set(L.la, -s*0.85); set(L.ra, s*0.85);
@@ -1559,6 +1641,12 @@ $('resetBtn').addEventListener('click', ()=>{
     toast('Progress reset — starting fresh!');
   }
 });
+
+// place the chase camera correctly for the very first rendered frame
+(function initCam(){
+  camera.position.set(player.position.x - Math.sin(camAz)*camDist, camHeight, player.position.z - Math.cos(camAz)*camDist);
+  camera.lookAt(player.position.x + Math.sin(camAz)*2.2, 2.6, player.position.z + Math.cos(camAz)*2.2);
+})();
 
 // kick off render loop (renders scene behind the start overlay too)
 updateHUD();

@@ -77,6 +77,9 @@
   #fireBtn{ position:fixed; right:26px; bottom:38px; z-index:25; width:94px; height:94px; border-radius:50%; border:none;
     color:#320; font-weight:900; letter-spacing:2px; font-size:15px; background:linear-gradient(90deg,#ff8a3d,#ff3df0);
     box-shadow:0 0 20px rgba(255,61,240,.5); touch-action:none; }
+  #missileBtn{ position:fixed; right:128px; bottom:74px; z-index:25; width:64px; height:64px; border-radius:50%; border:none;
+    color:#04121a; font-size:24px; background:linear-gradient(90deg,#33e8ff,#9bff5b);
+    box-shadow:0 0 16px rgba(51,232,255,.5); touch-action:none; }
   #flyhint{ position:fixed; left:0; right:0; bottom:4px; z-index:18; text-align:center; pointer-events:none;
     font-size:10px; letter-spacing:2px; color:#8fa0cf; text-transform:uppercase; }
 </style>
@@ -111,7 +114,8 @@
   <div id="lobbyBtn">← LOBBY</div>
   <div id="fstick"><div class="fnub"></div></div>
   <button id="fireBtn">FIRE</button>
-  <div id="flyhint">Turn A/D · Up/Down W/S · Fire Space · Boost Shift · grab ammo crates</div>
+  <button id="missileBtn">🚀</button>
+  <div id="flyhint">Turn A/D · Up/Down W/S · Fire Space · Missile F · Boost Shift · grab crates</div>
 </div>
 
 <script type="module">
@@ -216,15 +220,15 @@ function tone(f,dur,vol){ if(!soundOn) return; try{ if(!actx) actx=new (window.A
 // ===== flight world =====
 let mode='lobby';
 let ground=null, gridA=null;
-const enemies=[], bullets=[], crates=[];
+const enemies=[], bullets=[], crates=[], missileList=[];
 const P={ x:0,y:70,z:0, yaw:0, pitch:0, roll:0 };
-let score=0, ammo=25, runCredits=0, fireCd=0;
+let score=0, ammo=25, missiles=3, runCredits=0, fireCd=0;
 const camPos={ x:0,y:71,z:0 };
 function fwd(){ const cp=Math.cos(P.pitch); return { x:Math.sin(P.yaw)*cp, y:Math.sin(P.pitch), z:Math.cos(P.yaw)*cp }; }
 
 function spawnEnemy(){ const cfg={ body:0xd23b3b, accent:0x5a1414, scale:0.95, sweep:0.4, twinTail:false, tanks:false };
   const m=makeJet(cfg); const a=Math.random()*Math.PI*2, r=200+Math.random()*400;
-  m.userData={ yaw:Math.random()*Math.PI*2, speed:32+Math.random()*22 };
+  m.userData={ yaw:Math.random()*Math.PI*2, pitch:0, roll:0, speed:30+Math.random()*24 };
   m.position.set(P.x+Math.sin(a)*r, 30+Math.random()*120, P.z+Math.cos(a)*r); scene.add(m); enemies.push(m); }
 function spawnCrate(){ const m=new THREE.Mesh(new THREE.BoxGeometry(4,4,4),
     new THREE.MeshStandardMaterial({ color:0xffd23b, emissive:0xffa000, emissiveIntensity:0.8, metalness:0.3, roughness:0.4 }));
@@ -240,7 +244,7 @@ function startFlight(){
   ground=new THREE.Mesh(new THREE.PlaneGeometry(7000,7000), new THREE.MeshStandardMaterial({ color:0x2f6b3a, roughness:1 }));
   ground.rotation.x=-Math.PI/2; scene.add(ground);
   gridA=new THREE.GridHelper(7000,140,0x9bff5b,0x2b7d3a); gridA.position.y=0.2; scene.add(gridA);
-  P.x=0; P.y=70; P.z=0; P.yaw=0; P.pitch=0; P.roll=0; score=0; ammo=25; runCredits=0;
+  P.x=0; P.y=70; P.z=0; P.yaw=0; P.pitch=0; P.roll=0; score=0; ammo=25; missiles=3; runCredits=0;
   for(let i=0;i<6;i++) spawnEnemy(); for(let i=0;i<6;i++) spawnCrate();
   updateFstats(); tone(720,0.14);
 }
@@ -253,10 +257,11 @@ function endFlight(){
   for(const e of enemies) scene.remove(e); enemies.length=0;
   for(const b of bullets) scene.remove(b.m); bullets.length=0;
   for(const c of crates) scene.remove(c); crates.length=0;
+  for(const m of missileList) scene.remove(m.m); missileList.length=0;
   if(ground){ scene.remove(ground); ground=null; } if(gridA){ scene.remove(gridA); gridA=null; }
   showShop();
 }
-function updateFstats(){ $('#fstats').textContent = `SCORE ${score} · AMMO ${ammo} · ⬧${credits+runCredits}`; }
+function updateFstats(){ $('#fstats').textContent = `SCORE ${score} · AMMO ${ammo} · 🚀${missiles} · ⬧${credits+runCredits}`; }
 
 function fire(){ if(mode!=='flight'||fireCd>0) return;
   if(ammo<=0){ tone(120,0.05,0.08); return; }
@@ -266,10 +271,20 @@ function fire(){ if(mode!=='flight'||fireCd>0) return;
   b.position.set(P.x+f.x*5, P.y+f.y*5, P.z+f.z*5); scene.add(b); bullets.push({ m:b, dx:f.x, dy:f.y, dz:f.z, life:1.5 });
   tone(240,0.05,0.09);
 }
+function fireMissile(){ if(mode!=='flight'||missiles<=0) return;
+  missiles--; updateFstats();
+  let tgt=null, best=1e9;   // lock the nearest enemy
+  for(const e of enemies){ const d=Math.hypot(e.position.x-P.x,e.position.y-P.y,e.position.z-P.z); if(d<best){ best=d; tgt=e; } }
+  const f=fwd(); const m=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.5,2.6,10),
+    new THREE.MeshStandardMaterial({ color:0xffe08a, emissive:0xff6a2a, emissiveIntensity:1.3 }));
+  m.position.set(P.x+f.x*5, P.y+f.y*5, P.z+f.z*5); scene.add(m);
+  missileList.push({ m, dx:f.x, dy:f.y, dz:f.z, tgt, life:4.5 });
+  tone(320,0.24,0.17);
+}
 
 // ===== input =====
 const keys={};
-addEventListener('keydown', e=>{ keys[e.key.toLowerCase()]=true; if(e.key===' '){ e.preventDefault(); fire(); } });
+addEventListener('keydown', e=>{ keys[e.key.toLowerCase()]=true; if(e.key===' '){ e.preventDefault(); fire(); } if(e.key.toLowerCase()==='f'){ fireMissile(); } });
 addEventListener('keyup',   e=>{ keys[e.key.toLowerCase()]=false; });
 let joyX=0, joyY=0, stickId=null;
 const stick=$('#fstick'), nub=stick.querySelector('.fnub');
@@ -280,7 +295,10 @@ function moveNub(e){ const r=stick.getBoundingClientRect(); let dx=e.clientX-(r.
   const max=r.width/2-12, len=Math.hypot(dx,dy); if(len>max){ dx*=max/len; dy*=max/len; }
   nub.style.transform=`translate(${dx}px,${dy}px)`; joyX=dx/max; joyY=dy/max; }
 $('#fireBtn').addEventListener('pointerdown', e=>{ e.preventDefault(); fire(); });
+$('#missileBtn').addEventListener('pointerdown', e=>{ e.preventDefault(); fireMissile(); });
 $('#lobbyBtn').addEventListener('click', endFlight);
+renderer.domElement.addEventListener('contextmenu', e=>e.preventDefault());
+renderer.domElement.addEventListener('pointerdown', e=>{ if(mode==='flight' && e.button===2) fireMissile(); });
 
 showShop();
 
@@ -314,13 +332,36 @@ function flightStep(dt){
   // ground follows
   ground.position.x=P.x; ground.position.z=P.z; gridA.position.x=P.x; gridA.position.z=P.z;
   // enemies
-  for(const e of enemies){ const s=e.userData.speed;
-    e.position.x+=Math.sin(e.userData.yaw)*s*dt; e.position.z+=Math.cos(e.userData.yaw)*s*dt;
-    e.rotation.y=e.userData.yaw+Math.PI; e.userData.yaw+=Math.sin(clock.elapsedTime*0.5+e.position.x)*0.2*dt;
-    if(Math.hypot(e.position.x-P.x,e.position.z-P.z)>1300){ scene.remove(e); enemies.splice(enemies.indexOf(e),1); spawnEnemy(); } }
+  for(const e of enemies){ const u=e.userData;
+    // steer toward the player and bank into the turn (realistic dogfight flight)
+    const dx=P.x-e.position.x, dy=P.y-e.position.y, dz=P.z-e.position.z;
+    let want=Math.atan2(dx,dz), d=want-u.yaw; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI;
+    const turn=Math.max(-1,Math.min(1,d*1.4));
+    u.yaw += turn*0.55*dt;
+    u.pitch += (Math.max(-0.35,Math.min(0.35,dy*0.0016))-u.pitch)*Math.min(1,dt*0.9);
+    u.roll += ((-turn*0.6)-u.roll)*Math.min(1,dt*3);
+    const cp=Math.cos(u.pitch), fx=Math.sin(u.yaw)*cp, fy=Math.sin(u.pitch), fz=Math.cos(u.yaw)*cp;
+    e.position.x+=fx*u.speed*dt; e.position.y+=fy*u.speed*dt; e.position.z+=fz*u.speed*dt;
+    if(e.position.y<12)e.position.y=12; if(e.position.y>320)e.position.y=320;
+    e.rotation.set(-u.pitch, u.yaw, u.roll);   // nose points where it flies
+    if(Math.hypot(dx,dz)>1500){ scene.remove(e); enemies.splice(enemies.indexOf(e),1); spawnEnemy(); } }
+  // homing missiles: seek the locked enemy and curve toward it
+  for(let i=missileList.length-1;i>=0;i--){ const ms=missileList[i], msp=560;
+    if(ms.tgt && enemies.includes(ms.tgt)){
+      const tx=ms.tgt.position.x-ms.m.position.x, ty=ms.tgt.position.y-ms.m.position.y, tz=ms.tgt.position.z-ms.m.position.z;
+      const L=Math.hypot(tx,ty,tz)||1, k=Math.min(1,dt*3.2);
+      ms.dx+=(tx/L-ms.dx)*k; ms.dy+=(ty/L-ms.dy)*k; ms.dz+=(tz/L-ms.dz)*k;
+      const dl=Math.hypot(ms.dx,ms.dy,ms.dz)||1; ms.dx/=dl; ms.dy/=dl; ms.dz/=dl;
+    }
+    ms.m.position.x+=ms.dx*msp*dt; ms.m.position.y+=ms.dy*msp*dt; ms.m.position.z+=ms.dz*msp*dt;
+    ms.m.lookAt(ms.m.position.x+ms.dx, ms.m.position.y+ms.dy, ms.m.position.z+ms.dz);
+    ms.life-=dt; let boom=false;
+    if(ms.tgt && enemies.includes(ms.tgt) && Math.hypot(ms.m.position.x-ms.tgt.position.x,ms.m.position.y-ms.tgt.position.y,ms.m.position.z-ms.tgt.position.z)<24){
+      boom=true; scene.remove(ms.tgt); enemies.splice(enemies.indexOf(ms.tgt),1); score++; runCredits+=45; ammo+=3; updateFstats(); tone(80,0.34,0.22); spawnEnemy(); }
+    if(boom||ms.life<0){ scene.remove(ms.m); missileList.splice(i,1); } }
   // ammo crates: rotate + collect
   for(const c of crates){ c.rotation.y+=dt*1.5; c.rotation.x+=dt*0.7;
-    if(Math.hypot(c.position.x-P.x,c.position.y-P.y,c.position.z-P.z)<16){ ammo+=8; updateFstats(); tone(880,0.12,0.12);
+    if(Math.hypot(c.position.x-P.x,c.position.y-P.y,c.position.z-P.z)<16){ ammo+=8; missiles+=1; updateFstats(); tone(880,0.12,0.12);
       scene.remove(c); crates.splice(crates.indexOf(c),1); spawnCrate(); } }
   // bullets
   for(let i=bullets.length-1;i>=0;i--){ const b=bullets[i]; const bs=440;

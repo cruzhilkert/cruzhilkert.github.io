@@ -1,17 +1,25 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node -e \"const fs=require\\('fs'\\);const html=fs.readFileSync\\('/home/cruz/Documents/game/index.html','utf8'\\);const m=html.match\\(/<script>\\([\\\\s\\\\S]*?\\)<\\\\/script>/\\);require\\('vm'\\).createScript\\(m[1]\\);console.log\\('script parses OK'\\);\")",
-      "Bash(node -e \"const fs=require\\('fs'\\);const html=fs.readFileSync\\('/home/cruz/Documents/game/index.html','utf8'\\);const m=html.match\\(/<script type=\\\\\"module\\\\\">\\([\\\\s\\\\S]*?\\)<\\\\/script>/\\);require\\('vm'\\).createScript\\(m[1].replace\\(/^import.*$/m, ''\\)\\);console.log\\('script parses OK'\\);\")",
-      "Bash(node -e \"const fs=require\\('fs'\\);const html=fs.readFileSync\\('/home/cruz/Documents/game/index.html','utf8'\\);const m=html.match\\(/<script type=\\\\\"module\\\\\">\\([\\\\s\\\\S]*?\\)<\\\\/script>/\\);require\\('vm'\\).createScript\\(m[1].replace\\(/^import.*$/m, ''\\)\\);console.log\\('OK'\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\);const html=fs.readFileSync\\('/Users/cruzhilkert/code/game/index.html','utf8'\\);const m=html.match\\(/<script>\\([\\\\s\\\\S]*?\\)<\\\\/script>/\\);require\\('vm'\\).createScript\\(m[1]\\);console.log\\('script parses OK'\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\);const html=fs.readFileSync\\('/Users/cruzhilkert/code/game/index.html','utf8'\\);const m=html.match\\(/<script type=\\\\\"module\\\\\">\\([\\\\s\\\\S]*?\\)<\\\\/script>/\\);require\\('vm'\\).createScript\\(m[1].replace\\(/^import.*$/m, ''\\)\\);console.log\\('script parses OK'\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\);const html=fs.readFileSync\\('/Users/cruzhilkert/code/game/index.html','utf8'\\);const m=html.match\\(/<script type=\\\\\"module\\\\\">\\([\\\\s\\\\S]*?\\)<\\\\/script>/\\);require\\('vm'\\).createScript\\(m[1].replace\\(/^import.*$/m, ''\\)\\);console.log\\('OK'\\);\")",
       "Bash(git remote *)",
       "Bash(git push *)",
       "Bash(gh auth *)",
-      "Read(//home/cruz/**)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(echo \"\")",
-      "Bash(echo \"alias cc='claude --dangerously-skip-permissions'\")"
+      "Bash(echo \"alias cc='claude --dangerously-skip-permissions'\")",
+      "Bash(npm -v)",
+      "Bash(npm ls *)",
+      "Bash(browser-sync *)",
+      "Bash(pgrep -f *)",
+      "Bash(lsof -iTCP:3000 *)",
+      "Bash(curl -s *http://localhost:3000/*)",
+      "Skill(update-config)",
+      "Read(//Users/cruzhilkert/**)",
+      "Read(//private/tmp/**)"
     ]
   }
 }

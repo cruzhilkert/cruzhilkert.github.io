@@ -5,9 +5,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pgrep -f 'browser-sync start' > /dev/null || (cd /home/cruzhilkert/Documents/game && /home/cruzhilkert/.local/share/mise/installs/node/25.9.0/bin/browser-sync start --server --files '**/*' --no-open > /tmp/browser-sync-game.log 2>&1 &)",
+            "command": "pgrep -f 'browser-sync start' > /dev/null || (cd \"${CLAUDE_PROJECT_DIR:-$PWD}\" && PATH=\"$HOME/.local/share/mise/shims:$PATH\" browser-sync start --server --port 3000 --files '*.html' --no-open > /tmp/browser-sync-game.log 2>&1 &)",
             "async": true,
-            "statusMessage": "Starting browser-sync..."
+            "statusMessage": "Starting browser-sync on http://localhost:3000 ..."
           }
         ]
       }

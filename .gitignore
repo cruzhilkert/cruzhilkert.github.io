@@ -1,3 +1,6 @@
 # Local scratch: preview screenshots & style references (not part of the site)
 _preview_*.png
 _ref_*.png
+
+# Agent scratch worktrees (not part of the site)
+.claude/worktrees/

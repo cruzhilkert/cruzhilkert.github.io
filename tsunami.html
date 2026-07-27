@@ -1,0 +1,2844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>TSUNAMI</title>
+<style>
+  :root{ --aqua:#12cdf0; --deep:#0b7ce0; --foam:#f2feff; --sand:#ffdf9b; --lime:#67e87a;
+         --hot:#ff5ea8; --sun:#ffc93c; --ink:#06293c; --ink2:#0d4a64; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; height:100%; overflow:hidden; color:#eef;
+    background:linear-gradient(180deg,#a8ecff,#3fd0ea 55%,#0b8fc4);
+    font-family:'Segoe UI', system-ui, sans-serif; user-select:none; }
+  #gl{ display:block; position:fixed; inset:0; }
+  .hide{ display:none !important; }
+
+  /* ===== shared chrome ===== */
+  #home,#mute,#lobbyBtn,#musicBtn{ position:fixed; top:12px; z-index:40; text-decoration:none; cursor:pointer;
+    font:800 13px/1 system-ui; letter-spacing:2px; color:#fff; padding:10px 15px; border-radius:999px;
+    background:rgba(6,41,60,.55); border:1px solid rgba(255,255,255,.45); backdrop-filter:blur(7px);
+    box-shadow:0 4px 18px rgba(6,41,60,.25); }
+  #home,#lobbyBtn{ left:12px; } #mute{ right:12px; } #musicBtn{ right:126px; }
+  #home:hover,#mute:hover,#lobbyBtn:hover,#musicBtn:hover{ background:rgba(18,205,240,.85); color:#04283a; }
+  #musicBtn.off,#mute.off{ opacity:.55; }
+
+  .btn{ cursor:pointer; border:none; border-radius:15px; padding:15px 32px; font:900 16px/1 system-ui;
+    letter-spacing:2px; text-transform:uppercase; color:#04283a;
+    background:linear-gradient(90deg,var(--aqua),var(--lime));
+    box-shadow:0 6px 0 #0a8ba6, 0 8px 26px rgba(18,205,240,.5); }
+  .btn:active:not(:disabled){ transform:translateY(3px); box-shadow:0 3px 0 #0a8ba6; }
+  .btn:disabled{ filter:grayscale(.65) brightness(.75); cursor:default; box-shadow:none; }
+  .btn.buy{ background:linear-gradient(90deg,var(--sun),#ff8a3d); box-shadow:0 6px 0 #c47a12, 0 8px 26px rgba(255,201,60,.45); }
+  .btn.sm{ padding:10px 18px; font-size:13px; border-radius:12px; box-shadow:0 4px 0 #0a8ba6; }
+
+  /* ===== LOBBY ===== */
+  #lobby{ position:fixed; inset:0; z-index:20; display:flex; flex-direction:column; align-items:center;
+    padding:58px 10px 12px; pointer-events:none; }
+  #lobby > *{ pointer-events:auto; }
+  .title{ font-size:clamp(34px,9vw,74px); font-weight:900; letter-spacing:8px; line-height:.95;
+    background:linear-gradient(90deg,#fff,var(--aqua),#fff,var(--sun),#fff); background-size:300% 100%;
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    animation:hue 7s linear infinite; filter:drop-shadow(0 3px 10px rgba(6,41,60,.45)); }
+  @keyframes hue{ to{ background-position:300% 0; } }
+  .who{ font:800 12px/1.5 system-ui; letter-spacing:3px; color:#fff; text-transform:uppercase;
+    text-shadow:0 2px 8px rgba(6,41,60,.6); margin-top:2px; text-align:center; }
+  .who b{ color:var(--sun); } .who i{ font-style:normal; color:#bff6ff; }
+  #xpbar{ width:min(320px,80vw); height:7px; border-radius:99px; margin:7px 0 4px;
+    background:rgba(6,41,60,.35); overflow:hidden; border:1px solid rgba(255,255,255,.35); }
+  #xpfill{ display:block; height:100%; width:0%; border-radius:99px;
+    background:linear-gradient(90deg,var(--sun),var(--lime)); transition:width .4s; }
+
+  .tabs{ display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; justify-content:center; }
+  .tab{ cursor:pointer; font:800 11px/1 system-ui; letter-spacing:2px; padding:10px 13px; border-radius:11px;
+    color:#e8fbff; background:rgba(6,41,60,.4); border:1px solid rgba(255,255,255,.3); }
+  .tab.on{ background:linear-gradient(90deg,var(--aqua),var(--lime)); color:#04283a; border-color:transparent;
+    box-shadow:0 4px 16px rgba(18,205,240,.45); }
+
+  .panel{ margin-top:10px; width:min(560px,95vw); max-height:calc(100vh - 250px); overflow-y:auto;
+    padding:14px; border-radius:18px; background:rgba(255,255,255,.82); color:var(--ink);
+    border:1px solid rgba(255,255,255,.9); box-shadow:0 14px 40px rgba(6,41,60,.3); backdrop-filter:blur(9px); }
+  .panel::-webkit-scrollbar{ width:8px; } .panel::-webkit-scrollbar-thumb{ background:#9fd8e8; border-radius:9px; }
+  .panel h2{ margin:0 0 3px; font-size:23px; font-weight:900; letter-spacing:2px; }
+  .panel .sub{ font:700 11px/1.5 system-ui; letter-spacing:2px; color:#3d7f9a; text-transform:uppercase; }
+  .panel p{ margin:7px 0; font-size:13px; line-height:1.55; color:#22506b; }
+
+  /* island picker */
+  #mapRow{ display:flex; align-items:center; gap:8px; }
+  #mapRow .nav{ cursor:pointer; flex:0 0 auto; width:42px; height:42px; border-radius:50%; border:none;
+    font-size:22px; color:#04283a; background:linear-gradient(90deg,var(--aqua),var(--lime)); }
+  #mapCard{ flex:1; text-align:center; }
+  #mapCard .mn{ font:900 24px/1.1 system-ui; letter-spacing:2px; }
+  #mapCard .md{ font:600 12px/1.4 system-ui; color:#3d7f9a; min-height:34px; }
+  .chips{ display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-top:7px; }
+  .chip{ font:800 10px/1 system-ui; letter-spacing:1px; padding:7px 10px; border-radius:99px;
+    background:#e3f6fc; color:#12708f; border:1px solid #b8e4f0; }
+  .chip.lock{ background:#ffe9d6; color:#c4600f; border-color:#ffcda3; }
+  .chip.best{ background:#fff3c9; color:#9c6a00; border-color:#ffe08a; }
+  .chip.mode{ cursor:pointer; font-size:11px; padding:9px 12px; }
+  .chip.mode:hover{ background:#c9eefa; }
+
+  /* grids */
+  .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:8px; }
+  .cell{ cursor:pointer; border-radius:13px; padding:9px; text-align:center; border:2px solid #d3ecf5;
+    background:#f4fdff; transition:.12s; }
+  .cell:hover{ transform:translateY(-2px); }
+  .cell .sw{ height:34px; border-radius:9px; margin-bottom:6px; box-shadow:inset 0 -6px 12px rgba(255,255,255,.55); }
+  .cell .cn{ font:900 11px/1.2 system-ui; letter-spacing:1px; }
+  .cell .cp{ font:800 10px/1.4 system-ui; color:#12708f; }
+  .cell.own{ border-color:var(--lime); } .cell.on{ border-color:var(--aqua); background:#e2f9ff;
+    box-shadow:0 0 0 3px rgba(18,205,240,.28); }
+  .cell.no{ opacity:.62; }
+
+  /* rows (upgrades / missions) */
+  .row{ display:flex; align-items:center; gap:10px; padding:9px; border-radius:13px; margin-bottom:7px;
+    background:#f4fdff; border:1px solid #d3ecf5; }
+  .row .rt{ flex:1; min-width:0; }
+  .row .rn{ font:900 13px/1.3 system-ui; letter-spacing:1px; }
+  .row .rd{ font:600 11px/1.35 system-ui; color:#3d7f9a; }
+  .pips{ display:flex; gap:3px; margin-top:4px; }
+  .pips i{ width:15px; height:6px; border-radius:3px; background:#cfe9f2; }
+  .pips i.on{ background:linear-gradient(90deg,var(--aqua),var(--lime)); }
+  .mbar{ height:7px; border-radius:99px; background:#cfe9f2; overflow:hidden; margin-top:5px; }
+  .mbar i{ display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,var(--sun),var(--lime)); }
+  .row.done{ background:#eafff0; border-color:var(--lime); }
+
+  #lbar{ margin-top:auto; padding-top:12px; display:flex; gap:10px; align-items:center; }
+
+  /* ===== IN-GAME HUD ===== */
+  #hud{ position:fixed; inset:0; z-index:22; pointer-events:none; display:none; }
+  /* the HUD layer ignores clicks so you can drag to steer through it — but the
+     LOBBY button lives inside it, so it has to opt back in or the press falls
+     straight through to the canvas and starts a drag instead */
+  #lobbyBtn{ pointer-events:auto; touch-action:none; }
+  #hud .pill{ background:rgba(6,41,60,.55); border:1px solid rgba(255,255,255,.4);
+    backdrop-filter:blur(7px); border-radius:14px; box-shadow:0 4px 18px rgba(6,41,60,.28); }
+  #topmid{ position:absolute; top:12px; left:50%; transform:translateX(-50%); display:flex; gap:8px; }
+  #topmid .pill{ padding:9px 15px; text-align:center; min-width:84px; }
+  #topmid #time{ pointer-events:auto; cursor:pointer; }
+  #topmid .lab{ font:800 9px/1 system-ui; letter-spacing:2px; color:#9fe4f7; text-transform:uppercase; }
+  #topmid .val{ font:900 20px/1.15 system-ui; color:#fff; text-shadow:0 0 12px rgba(18,205,240,.7); }
+  #topmid .val.sm{ font-size:13px; padding-top:4px; letter-spacing:1px; }
+  #lives{ position:absolute; top:84px; left:50%; transform:translateX(-50%); font-size:24px;
+    letter-spacing:4px; filter:drop-shadow(0 3px 6px rgba(6,41,60,.6)); }
+  #time.low .val{ color:#ff9e9e; animation:pulse .7s infinite; }
+  @keyframes pulse{ 50%{ opacity:.45; } }
+
+  #board{ position:absolute; top:58px; right:12px; width:172px; padding:8px 9px; }
+  #board .bh{ font:800 9px/1 system-ui; letter-spacing:2px; color:#9fe4f7; margin-bottom:6px; }
+  #board .brow{ display:flex; align-items:center; gap:6px; font:800 11px/1.7 system-ui; color:#dff7ff; }
+  #board .brow .dot{ width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
+  #board .brow .nm{ flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  #board .brow .sz{ color:#fff; font-weight:900; }
+  #board .brow.me{ color:var(--sun); }
+  #mini{ position:absolute; right:12px; top:210px; width:130px; height:130px; border-radius:14px;
+    background:rgba(6,41,60,.5); border:1px solid rgba(255,255,255,.4); }
+
+  #sizewrap{ position:absolute; left:12px; bottom:14px; width:min(268px,62vw); padding:10px 12px; }
+  #sizewrap .st{ display:flex; align-items:baseline; gap:7px; }
+  #sizewrap .sv{ font:900 27px/1 system-ui; color:#fff; text-shadow:0 0 14px rgba(18,205,240,.75); }
+  #sizewrap .sl{ font:800 10px/1 system-ui; letter-spacing:2px; color:#9fe4f7; text-transform:uppercase; }
+  #sizewrap .tier{ font:900 12px/1.4 system-ui; letter-spacing:1px; color:var(--sun); }
+  #szbar{ height:9px; border-radius:99px; background:rgba(255,255,255,.22); overflow:hidden; margin-top:6px; }
+  #szfill{ display:block; height:100%; width:0%; border-radius:99px;
+    background:linear-gradient(90deg,var(--aqua),var(--lime),var(--sun)); }
+  #sizewrap .nx{ font:700 10px/1.5 system-ui; letter-spacing:1px; color:#cfeeff; margin-top:3px; }
+
+  #pw{ position:absolute; left:12px; bottom:96px; display:flex; flex-direction:column; gap:5px; }
+  #pw .pwc{ font:900 11px/1 system-ui; letter-spacing:1px; padding:7px 11px; border-radius:99px;
+    color:#04283a; background:linear-gradient(90deg,#fff,var(--aqua)); box-shadow:0 3px 12px rgba(0,0,0,.25); }
+
+  #surge{ position:absolute; right:16px; bottom:18px; width:96px; height:96px; border-radius:50%;
+    pointer-events:auto; cursor:pointer; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; color:#04283a; font:900 13px/1.15 system-ui; letter-spacing:1px; text-align:center;
+    background:linear-gradient(160deg,#fff,var(--aqua)); box-shadow:0 6px 0 #0a8ba6, 0 0 30px rgba(18,205,240,.55);
+    border:3px solid rgba(255,255,255,.85); overflow:hidden; }
+  #surge .cd{ position:absolute; inset:0; background:rgba(6,41,60,.62); transform-origin:bottom; }
+  #surge span{ position:relative; z-index:2; }
+  #surge small{ position:relative; z-index:2; font-size:9px; opacity:.75; letter-spacing:2px; }
+  #surge.ready{ animation:glow 1.4s infinite; }
+  @keyframes glow{ 50%{ box-shadow:0 6px 0 #0a8ba6, 0 0 46px rgba(103,232,122,.9); } }
+
+  #banner{ position:absolute; left:50%; top:26%; transform:translate(-50%,-50%) scale(.7); opacity:0;
+    text-align:center; white-space:nowrap; transition:.35s cubic-bezier(.2,1.5,.4,1); }
+  #banner.on{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+  #banner .b1{ font:900 clamp(26px,7vw,52px)/1 system-ui; letter-spacing:3px; color:#fff;
+    text-shadow:0 0 22px rgba(18,205,240,.9), 0 4px 0 #0a6f8c; }
+  #banner .b2{ font:800 clamp(12px,3vw,16px)/1.5 system-ui; letter-spacing:2px; color:var(--sun);
+    text-shadow:0 2px 8px rgba(6,41,60,.8); }
+  #combo{ position:absolute; left:50%; top:44%; transform:translateX(-50%); opacity:0;
+    font:900 30px/1 system-ui; letter-spacing:2px; color:var(--sun);
+    text-shadow:0 0 18px rgba(255,201,60,.8), 0 3px 0 #a35c00; transition:.18s; }
+  #combo.on{ opacity:1; }
+  .pop{ position:absolute; font:900 15px/1 system-ui; color:#fff; text-shadow:0 2px 6px rgba(6,41,60,.9);
+    pointer-events:none; opacity:0; transition:transform .7s linear, opacity .7s linear; }
+  .need{ position:absolute; display:none; white-space:nowrap; pointer-events:none;
+    transform:translate(-50%,-100%); font:900 12px/1 system-ui; color:#fff; padding:5px 9px;
+    border-radius:999px; background:rgba(6,41,60,.62); border:2px solid rgba(255,255,255,.55);
+    text-shadow:0 2px 5px rgba(6,41,60,.9); box-shadow:0 3px 10px rgba(6,41,60,.35); }
+  @media (max-width:760px){ .need{ font-size:10px; padding:4px 7px; border-width:1.5px; } }
+  #flash{ position:absolute; inset:0; background:radial-gradient(circle,transparent 40%,rgba(255,40,40,.55));
+    opacity:0; transition:opacity .3s; }
+  #danger{ position:absolute; inset:0; opacity:0; transition:opacity .3s;
+    box-shadow:inset 0 0 90px 20px rgba(255,40,60,.65); }
+  #pause{ position:fixed; inset:0; z-index:34; display:none; align-items:center; justify-content:center;
+    background:rgba(6,41,60,.6); backdrop-filter:blur(6px); }
+  #pause .card{ text-align:center; padding:24px 26px; border-radius:22px; background:rgba(255,255,255,.94);
+    color:var(--ink); box-shadow:0 20px 60px rgba(6,41,60,.5); width:min(380px,92vw); }
+  #pause h1{ margin:0 0 4px; font:900 30px/1.1 system-ui; letter-spacing:3px; }
+  #pause p{ margin:0 0 14px; font:700 12px/1.6 system-ui; color:#3d7f9a; letter-spacing:1px; }
+  #pause .btns{ display:flex; gap:8px; justify-content:center; }
+  #cdown{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font:900 clamp(70px,22vw,170px)/1 system-ui; color:#fff; letter-spacing:6px;
+    text-shadow:0 0 40px rgba(18,205,240,.9), 0 6px 0 #0a6f8c; }
+
+  #joy{ position:absolute; left:18px; bottom:120px; width:126px; height:126px; border-radius:50%;
+    background:rgba(6,41,60,.3); border:2px solid rgba(255,255,255,.4); pointer-events:auto; display:none; }
+  #joy i{ position:absolute; left:50%; top:50%; width:54px; height:54px; margin:-27px 0 0 -27px; border-radius:50%;
+    background:linear-gradient(160deg,#fff,var(--aqua)); box-shadow:0 0 18px rgba(18,205,240,.6); }
+  #hint{ position:absolute; left:50%; bottom:20px; transform:translateX(-50%); padding:8px 14px;
+    font:800 11px/1.5 system-ui; letter-spacing:2px; color:#eafcff; text-align:center; }
+
+  /* ===== RESULTS ===== */
+  #end{ position:fixed; inset:0; z-index:30; display:none; align-items:center; justify-content:center; padding:14px;
+    background:rgba(6,41,60,.55); backdrop-filter:blur(5px); }
+  #end .card{ width:min(430px,94vw); max-height:94vh; overflow-y:auto; padding:20px; border-radius:22px;
+    background:rgba(255,255,255,.94); color:var(--ink); box-shadow:0 20px 60px rgba(6,41,60,.5); text-align:center; }
+  #end h1{ margin:0; font:900 30px/1.1 system-ui; letter-spacing:3px; }
+  #end .rank{ font:900 13px/1.6 system-ui; letter-spacing:3px; color:#3d7f9a; text-transform:uppercase; }
+  #end .big{ font:900 46px/1.05 system-ui; color:#0b7ce0; margin:8px 0 2px; }
+  #end .rs{ display:grid; grid-template-columns:1fr 1fr; gap:7px; margin:12px 0; }
+  #end .rs div{ background:#f0fbff; border:1px solid #d3ecf5; border-radius:12px; padding:8px; }
+  #end .rs b{ display:block; font:900 18px/1.2 system-ui; }
+  #end .rs span{ font:800 9px/1.4 system-ui; letter-spacing:2px; color:#3d7f9a; text-transform:uppercase; }
+  #end .earn{ font:900 15px/1.7 system-ui; color:#0f8f4a; }
+  #end .mdone{ font:800 12px/1.6 system-ui; color:#c4600f; }
+  #end .btns{ display:flex; gap:8px; justify-content:center; margin-top:12px; }
+
+  /* ---- phone tweaks: keep the HUD out of its own way ---- */
+  @media (max-width:620px){
+    body.playing #musicBtn{ display:none; }
+    #board{ width:134px; padding:6px 8px; }
+    #board .brow{ font:800 10px/1.6 system-ui; }
+    #mini{ width:98px; height:98px; top:182px; }
+    #topmid .pill{ min-width:64px; padding:7px 10px; }
+    #topmid .val{ font-size:16px; }
+    #topmid .val.sm{ font-size:11px; }
+    #surge{ width:82px; height:82px; font-size:11px; right:12px; bottom:12px; }
+    #sizewrap{ width:min(210px,54vw); padding:8px 10px; }
+    #sizewrap .sv{ font-size:22px; }
+    #pw{ bottom:82px; }
+    #hint{ bottom:104px; width:min(300px,80vw); }
+    #pw .pwc{ font-size:10px; padding:6px 9px; }
+    .panel{ max-height:calc(100vh - 300px); }
+  }
+
+  #load{ position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
+    flex-direction:column; gap:12px; background:linear-gradient(180deg,#a8ecff,#0b8fc4);
+    font:900 15px/1 system-ui; letter-spacing:4px; color:#04283a; }
+  #load .w{ font-size:52px; animation:bob 1.1s ease-in-out infinite; }
+  @keyframes bob{ 50%{ transform:translateY(-12px) rotate(-8deg); } }
+</style>
+</head>
+<body>
+
+<div id="load"><div class="w">🌊</div><div>LOADING TSUNAMI…</div></div>
+
+<a id="home" href="index.html">← ARCADE</a>
+<div id="mute">🔊 SOUND</div>
+<div id="musicBtn">🎵 MUSIC</div>
+
+<!-- ================= LOBBY ================= -->
+<div id="lobby" class="hide">
+  <div class="title">TSUNAMI</div>
+  <div class="who">Hi, <b id="who">PLAYER</b> &nbsp;·&nbsp; <i id="lvl">LV 1</i> &nbsp;·&nbsp; <i id="cr">💧 0</i></div>
+  <div id="xpbar"><i id="xpfill"></i></div>
+  <button class="btn sm buy hide" id="gift" style="margin-top:6px">🎁 DAILY GIFT</button>
+
+  <div class="tabs">
+    <div class="tab on" data-t="maps">🏝️ ISLANDS</div>
+    <div class="tab" data-t="skins">🌊 WAVES</div>
+    <div class="tab" data-t="pets">🐣 PETS</div>
+    <div class="tab" data-t="miss">🎯 MISSIONS</div>
+    <div class="tab" data-t="stats">📊 STATS</div>
+    <div class="tab" data-t="how">❓ HOW</div>
+  </div>
+
+  <div class="panel" id="p-maps">
+    <div id="mapRow">
+      <button class="nav" id="mPrev">‹</button>
+      <div id="mapCard">
+        <div class="mn" id="mName">SUNNY BAY</div>
+        <div class="md" id="mDesc">…</div>
+        <div class="chips" id="mChips"></div>
+      </div>
+      <button class="nav" id="mNext">›</button>
+    </div>
+    <div class="sub" style="margin-top:12px;text-align:center">GAME MODE</div>
+    <div class="chips" id="modeRow"></div>
+    <div class="md" id="modeDesc" style="text-align:center;margin-top:6px"></div>
+  </div>
+
+  <div class="panel hide" id="p-pets">
+    <h2>PETS</h2>
+    <div class="sub">A buddy that swims with your wave — each one helps you</div>
+    <div class="grid" id="petGrid" style="margin-top:10px"></div>
+  </div>
+
+  <div class="panel hide" id="p-stats">
+    <h2>YOUR STATS</h2>
+    <div class="sub">Everything you have ever eaten</div>
+    <div id="statBody" style="margin-top:10px"></div>
+  </div>
+
+  <div class="panel hide" id="p-skins">
+    <h2>WAVE SKINS</h2>
+    <div class="sub">Buy with 💧 drops, then tap to equip</div>
+    <div class="grid" id="skinGrid" style="margin-top:10px"></div>
+  </div>
+
+  <div class="panel hide" id="p-upg">
+    <h2>UPGRADES</h2>
+    <div class="sub">Permanent — they stick forever</div>
+    <div id="upgList" style="margin-top:10px"></div>
+  </div>
+
+  <div class="panel hide" id="p-miss">
+    <h2>MISSIONS</h2>
+    <div class="sub">Finish them for big 💧 rewards</div>
+    <div id="missList" style="margin-top:10px"></div>
+  </div>
+
+  <div class="panel hide" id="p-how">
+    <h2>HOW TO PLAY</h2>
+    <p><b>You are a tsunami.</b> Roll over the island and swallow everything smaller than you. Every
+       thing you eat makes your wave <b>bigger</b>.</p>
+    <p><b>Move:</b> WASD / arrow keys, or drag anywhere on the screen. On a phone use the joystick.</p>
+    <p><b>SURGE:</b> press <b>SPACE</b> or the big button to dash — while surging your wave counts as
+       <b>45% bigger</b>, so you can gulp things you normally couldn't.</p>
+    <p><b>Too big?</b> Anything you can't swallow yet has a <b>🔒 number</b> floating over it — that's the
+       size you need. You <b>wash straight through it</b> (nothing bounces you), so go eat smaller stuff
+       and come back. The <b>little things live out on the beach</b>; the giants are downtown.</p>
+    <p><b>Rivals:</b> other waves are eating too. Roll into a <b>smaller</b> wave to swallow it for a
+       huge score. A <b>bigger</b> wave will eat you.</p>
+    <p><b>Getting eaten:</b> you don't lose the run. You get put <b>back at your spawn</b>, a bit
+       smaller, with a <b>🛡 one-minute spawn shield</b> — nothing can touch you while the bubble
+       is up, and the rivals won't even come after you. You can still eat everything on the island
+       during it; you just can't swallow another wave until it runs out.</p>
+    <p><b>The rivals fight each other too.</b> Whoever is bigger wins, same as with you. If two of
+       them are scrapping on the far side of the island, that's your chance.</p>
+    <p><b>No clock.</b> Nothing is timed. Play as long as you like and hit <b>QUIT</b> in the pause
+       menu when you want to bank your score.</p>
+    <p><b>No powerups, no upgrades.</b> Nothing to pick up off the ground and nothing to buy that
+       makes you stronger. You and every rival wave run on exactly the same stats, every round.</p>
+    <p><b>Max size:</b> every island has a size limit (it's on the island card) and it is a LOT
+       higher than it used to be. Growing is slow on purpose — every bite gives you less the bigger
+       you already are, and it gets steeper the bigger you get. Swallowing a rival is braked the
+       same way, so you can't farm the little ones. The rival waves live under the identical rule,
+       which is why nobody runs away with it. Hitting max size is meant to take a long, long run.</p>
+    <p><b>Game modes</b> (pick one under the island):</p>
+    <p>🌊 <b>CLASSIC</b> — normal rules, no clock.<br>
+       ⚡ <b>RUSH</b> — double points and much faster growing.<br>
+       ⏳ <b>MARATHON</b> — 2 extra rivals and powerups everywhere.<br>
+       👹 <b>BOSS HUNT</b> — a huge MEGA WAVE hunts you. Get big, then eat it for about 9,000 points.<br>
+       💀 <b>SURVIVAL</b> — rivals start big and chase you. You have 3 ❤️; lose them all and the
+       run ends.</p>
+    <p><b>Pets</b> can't be bought. Each one is <b>earned by finishing a mission</b> — the pet tab
+       tells you which. Once it's yours it swims next to your wave forever and gives a small bonus.</p>
+    <p><b>Missions</b> pay out automatically the moment you finish them — check the results screen.</p>
+    <p>Everything you buy is saved on this device under your name, <b id="howName">PLAYER</b>.</p>
+  </div>
+
+  <div id="lbar"><button class="btn" id="playBtn">▶ PLAY</button></div>
+</div>
+
+<!-- ================= HUD ================= -->
+<div id="hud">
+  <div id="lobbyBtn">← LOBBY</div>
+  <div id="topmid">
+    <div class="pill" id="time"><div class="lab">Time</div><div class="val" id="timeV">2:30</div></div>
+    <div class="pill"><div class="lab">Score</div><div class="val" id="scoreV">0</div></div>
+    <div class="pill" id="modeP"><div class="lab">Mode</div><div class="val sm" id="modeV">CLASSIC</div></div>
+  </div>
+  <div id="lives"></div>
+  <div class="pill" id="board"><div class="bh">BIGGEST WAVES</div><div id="brows"></div></div>
+  <canvas id="mini" width="130" height="130"></canvas>
+  <div class="pill" id="sizewrap">
+    <div class="st"><div class="sv" id="sizeV">220</div><div class="sl">size</div>
+      <div class="tier" id="tierV" style="margin-left:auto">TIER 1</div></div>
+    <div id="szbar"><i id="szfill"></i></div>
+    <div class="nx" id="nextV">NEXT: eat 20 more</div>
+  </div>
+  <div id="pw"></div>
+  <div id="surge"><div class="cd" id="surgeCd"></div><span>SURGE</span><small id="surgeK">SPACE</small></div>
+  <div id="banner"><div class="b1" id="b1"></div><div class="b2" id="b2"></div></div>
+  <div id="combo"></div>
+  <div id="needs"></div>
+  <div id="joy"><i></i></div>
+  <div id="hint"></div>
+  <div id="flash"></div>
+  <div id="danger"></div>
+  <div id="cdown" class="hide"></div>
+</div>
+
+<div id="pause">
+  <div class="card">
+    <h1>PAUSED</h1>
+    <p id="pauseInfo">Take your time.</p>
+    <div class="btns">
+      <button class="btn sm" id="pResume">▶ KEEP GOING</button>
+      <button class="btn sm buy" id="pQuit">END ROUND</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= RESULTS ================= -->
+<div id="end">
+  <div class="card">
+    <h1 id="eTitle">TIME UP!</h1>
+    <div class="rank" id="eRank">2nd biggest wave</div>
+    <div class="big" id="eScore">0</div>
+    <div class="sub" style="font:800 10px/1 system-ui;letter-spacing:3px;color:#3d7f9a">FINAL SCORE</div>
+    <div class="rs">
+      <div><b id="eSize">0</b><span>Final size</span></div>
+      <div><b id="eEat">0</b><span>Things eaten</span></div>
+      <div><b id="eRival">0</b><span>Waves eaten</span></div>
+      <div><b id="eBest">0</b><span>Island best</span></div>
+    </div>
+    <div class="earn" id="eEarn">+0 💧 &nbsp; +0 XP</div>
+    <div class="mdone" id="eMiss"></div>
+    <div class="btns">
+      <button class="btn sm" id="eAgain">▶ AGAIN</button>
+      <button class="btn sm buy" id="eLobby">LOBBY</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+const $ = s => document.querySelector(s);
+const clamp = (v,a,b) => v<a?a:v>b?b:v;
+const lerp = (a,b,t) => a+(b-a)*t;
+const rnd = (a,b) => a+Math.random()*(b-a);
+const ri = (a,b) => Math.floor(rnd(a,b+1));
+const pick = a => a[Math.floor(Math.random()*a.length)];
+
+/* =========================================================
+   SAVE  (all keys under headon_tsunami_*)
+   ========================================================= */
+const NAME = (localStorage.getItem('headon_username') || 'PLAYER').toUpperCase();
+let soundOn = localStorage.getItem('headon_sound_on') !== '0';
+
+const SK = 'headon_tsunami_';
+const loadJ = (k,d) => { try{ const v=JSON.parse(localStorage.getItem(SK+k)); return v==null?d:v; }catch(e){ return d; } };
+const S = {
+  credits: +localStorage.getItem(SK+'credits') || 0,
+  xp:      +localStorage.getItem(SK+'xp') || 0,
+  owned:   loadJ('owned',[0]),
+  equip:   +localStorage.getItem(SK+'equip') || 0,
+  pets:    loadJ('pets',[0]),
+  pet:     +localStorage.getItem(SK+'pet') || 0,
+  upg:     loadJ('upg',{}),
+  best:    loadJ('best',{}),
+  stat:    loadJ('stat',{eat:0,eatBig:0,rivals:0,pw:0,rounds:0,wins:0,size:0,score:0,maps:[],
+                         bosses:0,survived:0,combo:0,secs:0}),
+  claimed: loadJ('claimed',[]),
+  daily:   loadJ('daily',{ last:0, streak:0 }),
+  scores:  loadJ('scores',{}),
+};
+function save(){
+  localStorage.setItem(SK+'credits', S.credits);
+  localStorage.setItem(SK+'xp', S.xp);
+  localStorage.setItem(SK+'equip', S.equip);
+  localStorage.setItem(SK+'owned', JSON.stringify(S.owned));
+  localStorage.setItem(SK+'pets', JSON.stringify(S.pets));
+  localStorage.setItem(SK+'pet', S.pet);
+  localStorage.setItem(SK+'upg', JSON.stringify(S.upg));
+  localStorage.setItem(SK+'best', JSON.stringify(S.best));
+  localStorage.setItem(SK+'stat', JSON.stringify(S.stat));
+  localStorage.setItem(SK+'claimed', JSON.stringify(S.claimed));
+  localStorage.setItem(SK+'daily', JSON.stringify(S.daily));
+  localStorage.setItem(SK+'scores', JSON.stringify(S.scores));
+}
+const lvlOf = xp => Math.min(30, Math.floor(Math.pow(Math.max(0,xp)/140, .58)) + 1);
+const xpFor = lv => Math.ceil(Math.pow(lv-1, 1/.58) * 140);
+let LV = lvlOf(S.xp);
+
+/* =========================================================
+   SOUND  (pure WebAudio, no files)
+   ========================================================= */
+let AC = null;
+function ac(){
+  if (!AC) { try { AC = new (window.AudioContext||window.webkitAudioContext)(); } catch(e){ return null; } }
+  if (AC && AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone(f1, f2, dur, type, vol){
+  if (!soundOn) return; const a = ac(); if (!a) return;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type || 'sine'; o.frequency.setValueAtTime(f1, a.currentTime);
+  if (f2) o.frequency.exponentialRampToValueAtTime(Math.max(20,f2), a.currentTime + dur);
+  g.gain.setValueAtTime(0, a.currentTime);
+  g.gain.linearRampToValueAtTime(vol==null?.14:vol, a.currentTime + .012);
+  g.gain.exponentialRampToValueAtTime(.0008, a.currentTime + dur);
+  o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + dur + .02);
+}
+let noiseBuf = null;
+function splash(dur, vol, f0, f1){
+  if (!soundOn) return; const a = ac(); if (!a) return;
+  if (!noiseBuf){
+    noiseBuf = a.createBuffer(1, a.sampleRate * .5, a.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i=0;i<d.length;i++) d[i] = (Math.random()*2-1) * (1 - i/d.length);
+  }
+  const s = a.createBufferSource(); s.buffer = noiseBuf;
+  const f = a.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.1;
+  f.frequency.setValueAtTime(f0||900, a.currentTime);
+  f.frequency.exponentialRampToValueAtTime(f1||260, a.currentTime + dur);
+  const g = a.createGain();
+  g.gain.setValueAtTime(vol==null?.2:vol, a.currentTime);
+  g.gain.exponentialRampToValueAtTime(.0008, a.currentTime + dur);
+  s.connect(f); f.connect(g); g.connect(a.destination); s.start(); s.stop(a.currentTime + dur + .02);
+}
+const SFX = {
+  eat(t){ tone(180 + t*40, 90 + t*30, .1 + t*.03, 'sine', .09); splash(.14 + t*.05, .1, 1400 - t*140, 300); },
+  big(){ splash(.55, .3, 700, 120); tone(120, 55, .5, 'sawtooth', .12); },
+  tier(){ [0,1,2,3].forEach(i => setTimeout(()=>tone(420*Math.pow(1.26,i), 0, .16, 'triangle', .13), i*85)); splash(.7,.22,1800,300); },
+  pw(){ [0,1,2].forEach(i => setTimeout(()=>tone(700+i*260, 0, .1, 'square', .07), i*55)); },
+  surge(){ splash(.42, .28, 380, 1700); tone(260, 720, .3, 'sawtooth', .08); },
+  hurt(){ tone(200, 60, .35, 'square', .13); splash(.3, .22, 400, 90); },
+  rival(){ tone(300, 900, .3, 'triangle', .13); splash(.5, .26, 900, 200); },
+  buy(){ [0,1,2].forEach(i => setTimeout(()=>tone(520+i*200, 0, .13, 'triangle', .1), i*70)); },
+  no(){ tone(180, 120, .16, 'square', .09); },
+  win(){ [0,2,4,7,9,12].forEach((n,i) => setTimeout(()=>tone(330*Math.pow(2,n/12), 0, .3, 'triangle', .12), i*130)); },
+  lose(){ [0,-2,-5,-9].forEach((n,i) => setTimeout(()=>tone(300*Math.pow(2,n/12), 0, .34, 'sine', .12), i*160)); },
+  tick(){ tone(880, 0, .07, 'square', .05); },
+};
+$('#mute').textContent = soundOn ? '🔊 SOUND' : '🔇 MUTED';
+$('#mute').classList.toggle('off', !soundOn);
+$('#mute').addEventListener('click', () => {
+  soundOn = !soundOn; localStorage.setItem('headon_sound_on', soundOn ? '1':'0');
+  $('#mute').textContent = soundOn ? '🔊 SOUND' : '🔇 MUTED';
+  $('#mute').classList.toggle('off', !soundOn);
+  if (soundOn) SFX.pw();
+});
+
+/* ---- gentle background music (own toggle, so it can go without killing the sfx) ---- */
+let musicOn = localStorage.getItem(SK+'music') !== '0';
+$('#musicBtn').textContent = musicOn ? '🎵 MUSIC' : '🎵 MUSIC OFF';
+$('#musicBtn').classList.toggle('off', !musicOn);
+$('#musicBtn').addEventListener('click', () => {
+  musicOn = !musicOn; localStorage.setItem(SK+'music', musicOn ? '1':'0');
+  $('#musicBtn').textContent = musicOn ? '🎵 MUSIC' : '🎵 MUSIC OFF';
+  $('#musicBtn').classList.toggle('off', !musicOn);
+});
+// four lazy chords, one note every 620ms — quiet and out of the way
+const CHORDS = [[261.6,329.6,392.0],[220.0,277.2,329.6],[196.0,246.9,293.7],[174.6,220.0,261.6]];
+let mStep = 0;
+setInterval(() => {
+  if (!musicOn || !soundOn) return;
+  if (G.state !== 'play' || G.paused || !G.running) return;
+  const a = ac(); if (!a) return;
+  const chord = CHORDS[Math.floor(mStep/4) % CHORDS.length];
+  const note = chord[mStep % 3] * (mStep % 8 === 7 ? 2 : 1);
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'triangle'; o.frequency.value = note;
+  g.gain.setValueAtTime(0, a.currentTime);
+  g.gain.linearRampToValueAtTime(.028, a.currentTime + .18);
+  g.gain.exponentialRampToValueAtTime(.0008, a.currentTime + 1.1);
+  o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + 1.2);
+  if (mStep % 4 === 0){                       // soft bass under the chord
+    const b = a.createOscillator(), bg = a.createGain();
+    b.type = 'sine'; b.frequency.value = chord[0]/2;
+    bg.gain.setValueAtTime(0, a.currentTime);
+    bg.gain.linearRampToValueAtTime(.032, a.currentTime + .25);
+    bg.gain.exponentialRampToValueAtTime(.0008, a.currentTime + 2.2);
+    b.connect(bg); bg.connect(a.destination); b.start(); b.stop(a.currentTime + 2.3);
+  }
+  mStep++;
+}, 620);
+
+/* =========================================================
+   THREE BOOT
+   ========================================================= */
+const mobile = matchMedia('(pointer:coarse)').matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const renderer = new THREE.WebGLRenderer({ antialias: !mobile, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio||1, mobile?1.6:2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.domElement.id = 'gl';
+document.body.appendChild(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(56, innerWidth/innerHeight, .5, 4000);
+let scene = new THREE.Scene();
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* =========================================================
+   GEOMETRY KIT — every prop merges down to ONE mesh
+   (vertex colours, one shared material => fast)
+   ========================================================= */
+const propMat  = new THREE.MeshLambertMaterial({ vertexColors:true });
+const groundMat = new THREE.MeshLambertMaterial({ vertexColors:true });
+
+function mergeParts(parts){
+  const gs = []; let n = 0;
+  for (const p of parts){
+    const g = p.geo.index ? p.geo.toNonIndexed() : p.geo.clone();
+    g.applyMatrix4(p.m);
+    gs.push({ g, c: new THREE.Color(p.color) });
+    n += g.attributes.position.count;
+    p.geo.dispose();
+  }
+  const pos = new Float32Array(n*3), nor = new Float32Array(n*3), col = new Float32Array(n*3);
+  let o = 0;
+  for (const { g, c } of gs){
+    const cnt = g.attributes.position.count;
+    pos.set(g.attributes.position.array, o*3);
+    if (g.attributes.normal) nor.set(g.attributes.normal.array, o*3);
+    for (let i=0;i<cnt;i++){ col[(o+i)*3]=c.r; col[(o+i)*3+1]=c.g; col[(o+i)*3+2]=c.b; }
+    o += cnt; g.dispose();
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  out.setAttribute('normal',   new THREE.BufferAttribute(nor,3));
+  out.setAttribute('color',    new THREE.BufferAttribute(col,3));
+  out.computeBoundingSphere();
+  return out;
+}
+
+// builder: every call is (color, dims…, x,y,z, ry, rx, rz)
+function mk(){
+  const parts = [];
+  const _e = new THREE.Euler(), _q = new THREE.Quaternion();
+  const push = (geo, color, x,y,z, ry,rx,rz) => {
+    const m = new THREE.Matrix4();
+    _e.set(rx||0, ry||0, rz||0); _q.setFromEuler(_e);
+    m.makeRotationFromQuaternion(_q); m.setPosition(x||0, y||0, z||0);
+    parts.push({ geo, color, m });
+  };
+  return {
+    box:(c,w,h,d, x,y,z, ry,rx,rz) => push(new THREE.BoxGeometry(w,h,d), c, x,y,z, ry,rx,rz),
+    cyl:(c,rt,rb,h,seg, x,y,z, ry,rx,rz) => push(new THREE.CylinderGeometry(rt,rb,h,seg||10), c, x,y,z, ry,rx,rz),
+    sph:(c,r,seg, x,y,z) => push(new THREE.SphereGeometry(r,seg||10,Math.max(4,(seg||10)>>1)), c, x,y,z),
+    con:(c,r,h,seg, x,y,z, ry,rx,rz) => push(new THREE.ConeGeometry(r,h,seg||10), c, x,y,z, ry,rx,rz),
+    tor:(c,r,t,seg, x,y,z, ry,rx,rz) => push(new THREE.TorusGeometry(r,t,6,seg||14), c, x,y,z, ry,rx,rz),
+    disc:(c,r, x,y,z) => push(new THREE.CircleGeometry(r,18), c, x,y,z, 0, -Math.PI/2, 0),
+    out:() => mergeParts(parts),
+  };
+}
+
+/* bright palette */
+const C = { red:0xff5252, org:0xff9f3d, yel:0xffd93d, lime:0x8ee84a, grn:0x35c76a, teal:0x2fd0e0,
+  blu:0x3d8bff, navy:0x2a4d8f, pur:0x9b5bff, pink:0xff69b4, wht:0xf7fbff, gry:0xc3ced9, mgry:0x8b98a6,
+  dgry:0x5b6672, brn:0xa87345, dbrn:0x6b4726, sand:0xffe3a3, blk:0x3a4450, skin:0xffce9e,
+  glass:0x9fdcf5, roof:0xd8563f, roof2:0x4a7fc1, ice:0xdaf4ff, lava:0xff4b1f, gold:0xffc93c, silver:0xdde6ee };
+
+/* =========================================================
+   PROP ROSTER — tier 1 (tiny) → tier 5 (giant)
+   t = tier, f = footprint radius, h = rough height
+   ========================================================= */
+const PROPS = {
+  /* ---------- TIER 1 : beach litter, critters ---------- */
+  shell:   { t:1, f:1.0, b(m){ m.sph(C.pink,.55,8, 0,.4,0); m.con(0xffc0d8,.5,.7,8, 0,.75,0); } },
+  starfish:{ t:1, f:1.0, b(m){ for(let i=0;i<5;i++){ const a=i/5*6.283; m.box(C.org,.34,.16,1.0, Math.sin(a)*.42,.1,Math.cos(a)*.42, a); } m.sph(C.org,.3,7, 0,.14,0); } },
+  ball:    { t:1, f:1.0, b(m){ m.sph(C.wht,.62,10, 0,.62,0); m.box(C.red,.3,.7,.7, .42,.62,0); m.box(C.blu,.7,.7,.3, 0,.62,.42); } },
+  bucket:  { t:1, f:.9, b(m){ m.cyl(C.blu,.5,.36,.75,10, 0,.38,0); m.tor(C.yel,.44,.06,10, 0,.78,0, 0,Math.PI/2,0); } },
+  flipflop:{ t:1, f:1.0, b(m){ m.box(C.pur,.55,.12,1.25, 0,.06,0, .2); m.tor(C.yel,.2,.05,8, 0,.16,-.25, 0,0,0); } },
+  crab:    { t:1, f:1.0, b(m){ m.sph(C.red,.5,9, 0,.42,0); for(let i=0;i<4;i++){ const s=i<2?-1:1; m.box(C.red,.5,.1,.1, s*.55,.22,(i%2?.25:-.25), 0,0,s*.3); } m.sph(C.wht,.11,6, .2,.62,.36); m.sph(C.wht,.11,6, -.2,.62,.36); m.box(C.red,.34,.18,.18, .58,.42,.4, .5); } },
+  duck:    { t:1, f:.9, b(m){ m.sph(C.yel,.44,9, 0,.44,0); m.sph(C.yel,.26,8, 0,.86,.16); m.con(C.org,.13,.28,7, 0,.86,.42, 0,Math.PI/2,0); } },
+  cone:    { t:1, f:.8, b(m){ m.box(C.org,.85,.1,.85, 0,.05,0); m.con(C.org,.35,1.0,8, 0,.55,0); m.tor(C.wht,.22,.06,10, 0,.55,0, 0,Math.PI/2,0); } },
+  bin:     { t:1, f:.9, b(m){ m.cyl(C.grn,.44,.36,1.0,10, 0,.5,0); m.cyl(C.dgry,.48,.48,.1,10, 0,1.03,0); } },
+  towel:   { t:1, f:1.1, b(m){ m.box(C.pink,1.4,.08,2.0, 0,.04,0, .3); m.box(C.wht,1.4,.09,.4, 0,.05,.5, .3); } },
+  penguin: { t:1, f:.9, b(m){ m.sph(C.blk,.46,9, 0,.5,0); m.sph(C.wht,.36,9, 0,.48,.2); m.sph(C.blk,.3,8, 0,.98,0); m.con(C.org,.1,.24,6, 0,.98,.3, 0,Math.PI/2,0); m.box(C.org,.24,.06,.34, .18,.05,.08); m.box(C.org,.24,.06,.34, -.18,.05,.08); } },
+  gull:    { t:1, f:.9, b(m){ m.sph(C.wht,.34,8, 0,.5,0); m.sph(C.wht,.22,7, 0,.82,.14); m.con(C.yel,.07,.22,6, 0,.82,.32, 0,Math.PI/2,0); m.box(C.gry,.7,.06,.3, 0,.55,-.1, .4); } },
+
+  /* ---------- TIER 2 : beach furniture, people, pets ---------- */
+  chair:   { t:2, f:1.4, b(m){ m.box(C.wht,1.3,.14,1.3, 0,.75,0); m.box(C.teal,1.3,1.2,.14, 0,1.3,-.58, 0,-.35,0); [[-.5,-.5],[.5,-.5],[-.5,.5],[.5,.5]].forEach(p=>m.box(C.mgry,.12,.75,.12, p[0],.37,p[1])); } },
+  umbrella:{ t:2, f:1.8, b(m){ m.cyl(C.silver,.09,.09,3.1,8, 0,1.55,0); m.con(C.red,1.85,.9,12, 0,3.0,0); m.con(C.wht,1.55,.4,12, 0,2.86,0); m.sph(C.gold,.16,7, 0,3.5,0); } },
+  surfboard:{t:2, f:1.5, b(m){ m.box(C.lime,.95,.18,3.4, 0,.6,0, 0,0,.12); m.box(C.wht,.3,.2,3.0, 0,.7,0); m.cyl(C.mgry,.1,.1,1.2,7, .5,.3,-1.2, 0,0,.4); m.box(C.wht,.14,.4,.5, 0,.35,-1.4); } },
+  bush:    { t:2, f:1.5, b(m){ m.sph(C.grn,1.0,9, 0,.9,0); m.sph(0x49d97b,.72,8, .8,.7,.4); m.sph(0x2ba85a,.66,8, -.7,.75,-.3); } },
+  dog:     { t:2, f:1.4, b(m){ m.box(C.brn,.7,.7,1.6, 0,.95,0); m.sph(C.brn,.48,9, 0,1.25,1.0); m.box(C.dbrn,.2,.36,.2, .3,1.5,1.0, 0,0,.3); m.box(C.dbrn,.2,.36,.2, -.3,1.5,1.0, 0,0,-.3); m.sph(C.blk,.12,6, 0,1.15,1.4); [[-.26,.55],[.26,.55],[-.26,-.55],[.26,-.55]].forEach(p=>m.box(C.brn,.2,.62,.24, p[0],.31,p[1])); m.box(C.brn,.16,.16,.6, 0,1.3,-.9, 0,-.6,0); } },
+  person:  { t:2, f:1.3, b(m){ const sh=pick([C.red,C.blu,C.lime,C.pink,C.yel,C.pur]);
+             m.box(sh,.92,1.15,.55, 0,1.75,0); m.sph(C.skin,.42,10, 0,2.62,0); m.box(C.blk,.28,1.0,.28, .58,1.72,0); m.box(C.blk,.28,1.0,.28, -.58,1.72,0);
+             m.box(C.navy,.34,1.15,.34, .24,.6,0); m.box(C.navy,.34,1.15,.34, -.24,.6,0); m.box(C.blk,.4,.16,.6, .24,.08,.1); m.box(C.blk,.4,.16,.6, -.24,.08,.1); } },
+  bench:   { t:2, f:1.6, b(m){ m.box(C.brn,2.4,.16,.8, 0,.7,0); m.box(C.brn,2.4,.7,.14, 0,1.1,-.36); m.box(C.dgry,.16,.7,.7, -1.0,.35,0); m.box(C.dgry,.16,.7,.7, 1.0,.35,0); } },
+  hydrant: { t:2, f:1.0, b(m){ m.cyl(C.red,.34,.4,1.3,10, 0,.65,0); m.sph(C.red,.36,9, 0,1.32,0); m.cyl(C.red,.14,.14,.9,7, 0,.9,0, 0,0,Math.PI/2); m.cyl(C.gold,.1,.1,.3,6, 0,1.5,0); } },
+  scooter: { t:2, f:1.3, b(m){ m.tor(C.blk,.4,.12,10, 0,.4,.85); m.tor(C.blk,.4,.12,10, 0,.4,-.85); m.box(C.pur,.4,.16,1.7, 0,.42,0); m.cyl(C.silver,.07,.07,1.5,7, 0,1.1,.85, 0,0,-.14); m.box(C.blk,.8,.1,.12, 0,1.8,.78); } },
+  sign:    { t:2, f:1.0, b(m){ m.cyl(C.mgry,.1,.1,2.4,8, 0,1.2,0); m.box(C.lime,1.5,.9,.12, 0,2.2,0); m.box(C.wht,1.2,.2,.16, 0,2.2,0); } },
+  igloo:   { t:2, f:1.9, b(m){ m.sph(C.ice,1.7,12, 0,.2,0); m.box(C.wht,.9,.9,1.2, 0,.45,1.55); m.sph(C.wht,.5,8, 0,.9,1.7); } },
+  cart:    { t:2, f:1.5, b(m){ m.box(C.wht,2.0,1.1,1.2, 0,1.1,0); m.box(C.red,2.2,.2,1.4, 0,1.75,0); for(let i=0;i<4;i++) m.box(i%2?C.wht:C.red,.55,.5,1.42, -.72+i*.48,2.05,0); m.tor(C.blk,.34,.1,9, -.7,.34,.62); m.tor(C.blk,.34,.1,9, .7,.34,.62); m.sph(C.yel,.3,8, 0,2.5,0); } },
+
+  /* ---------- TIER 3 : cars, trees, boats ---------- */
+  car:     { t:3, f:2.6, b(m){ const c=pick([C.red,C.blu,C.lime,C.yel,C.pur,C.wht,C.org]);
+             m.box(c,2.5,1.1,5.2, 0,1.15,0); m.box(c,2.3,1.0,2.6, 0,2.05,-.3); m.box(C.glass,2.34,.7,2.3, 0,2.1,-.3);
+             m.box(C.blk,2.2,.5,.3, 0,1.5,2.6); m.box(C.yel,.5,.3,.16, .8,1.3,2.6); m.box(C.yel,.5,.3,.16, -.8,1.3,2.6);
+             m.box(C.red,.5,.3,.16, .8,1.3,-2.6); m.box(C.red,.5,.3,.16, -.8,1.3,-2.6);
+             [[1.28,1.7],[-1.28,1.7],[1.28,-1.7],[-1.28,-1.7]].forEach(p=>m.cyl(C.blk,.6,.6,.4,10, p[0],.6,p[1], 0,0,Math.PI/2)); } },
+  palm:    { t:3, f:2.2, b(m){ for(let i=0;i<5;i++) m.cyl(C.brn,.42-i*.04,.5-i*.04,1.5,8, i*.16,.75+i*1.4,0, 0,0,.09);
+             for(let i=0;i<7;i++){ const a=i/7*6.283; m.box(C.grn,.6,.16,3.4, Math.sin(a)*1.5+.7,7.3,Math.cos(a)*1.5, a, .38,0); }
+             m.sph(C.dbrn,.32,7, .5,6.8,.4); m.sph(C.dbrn,.32,7, 1.0,6.7,-.3); } },
+  pine:    { t:3, f:2.0, b(m){ m.cyl(C.dbrn,.35,.5,2.0,8, 0,1.0,0); m.con(0x2f9e5a,1.7,2.6,10, 0,2.6,0); m.con(0x35c76a,1.35,2.2,10, 0,4.0,0); m.con(0x49d97b,1.0,1.8,10, 0,5.2,0); } },
+  kiosk:   { t:3, f:2.4, b(m){ m.box(C.wht,4.0,2.6,3.2, 0,1.3,0); m.box(C.teal,4.6,.4,3.8, 0,2.75,0); for(let i=0;i<5;i++) m.box(i%2?C.red:C.wht,.9,.5,.3, -1.8+i*.9,2.4,1.7);
+             m.box(C.glass,3.0,1.2,.12, 0,1.7,1.62); m.box(C.brn,3.4,.2,.7, 0,1.05,1.9); m.sph(C.gold,.4,8, 0,3.2,0); } },
+  tent:    { t:3, f:2.3, b(m){ m.box(C.sand,3.4,.12,3.4, 0,.06,0); m.box(C.org,.2,2.6,3.6, 0,1.3,0);
+             m.box(C.red,2.6,.16,3.6, -1.0,1.0,0, 0,0,.9); m.box(C.red,2.6,.16,3.6, 1.0,1.0,0, 0,0,-.9); m.sph(C.yel,.2,6, 0,2.7,0); } },
+  boat:    { t:3, f:2.6, b(m){ m.box(C.wht,2.6,1.4,6.4, 0,.8,0); m.con(C.wht,1.3,2.2,4, 0,.8,4.0, .785,-Math.PI/2,0);
+             m.box(C.blu,2.4,.9,2.2, 0,1.9,-.6); m.box(C.glass,2.0,.5,2.0, 0,2.1,-.6); m.cyl(C.silver,.1,.1,3.4,7, 0,3.5,1.4); m.box(C.red,1.0,.6,.1, .5,4.6,1.4); } },
+  rock:    { t:3, f:2.4, b(m){ m.sph(C.mgry,2.0,6, 0,1.2,0); m.sph(C.gry,1.2,6, 1.5,.7,.8); m.sph(C.dgry,.9,6, -1.4,.6,-.7); } },
+  lamp:    { t:3, f:1.6, b(m){ m.cyl(C.dgry,.22,.3,5.6,8, 0,2.8,0); m.box(C.dgry,.2,.2,1.6, 0,5.5,.7, 0,.3,0); m.sph(C.yel,.5,9, 0,5.3,1.4); m.box(C.dgry,1.0,1.0,.2, 0,.1,0); } },
+  statue:  { t:3, f:2.2, b(m){ m.box(C.silver,3.0,.7,3.0, 0,.35,0); m.box(C.gry,2.2,.5,2.2, 0,.95,0);
+             m.box(C.silver,1.3,2.6,.9, 0,2.5,0); m.sph(C.silver,.6,10, 0,4.1,0); m.box(C.silver,.4,1.8,.4, .9,3.4,0, 0,0,-.5); m.con(C.gold,.4,1.2,7, 1.5,4.6,0); } },
+  totem:   { t:3, f:1.8, b(m){ for(let i=0;i<4;i++){ const c=[C.red,C.yel,C.teal,C.pur][i]; m.box(c,1.6,1.4,1.6, 0,.7+i*1.4,0, i*.4); m.sph(C.wht,.2,6, .5,1.0+i*1.4,.85); m.sph(C.wht,.2,6, -.5,1.0+i*1.4,.85); } m.con(C.org,1.2,1.4,7, 0,6.3,0); } },
+  hut:     { t:3, f:2.4, b(m){ m.cyl(C.sand,2.2,2.4,2.4,10, 0,1.2,0); m.con(C.brn,3.0,2.2,10, 0,3.4,0); m.box(C.dbrn,1.2,1.8,.2, 0,.9,2.3); } },
+
+  /* ---------- TIER 4 : trucks, houses, windmills ---------- */
+  truck:   { t:4, f:4.2, b(m){ m.box(C.red,3.4,3.0,4.0, 0,2.3,3.6); m.box(C.glass,3.2,1.3,.2, 0,3.2,5.55);
+             m.box(C.silver,3.6,4.0,9.0, 0,3.0,-2.6); m.box(C.blu,3.7,.5,9.2, 0,5.2,-2.6);
+             [[1.8,4.2],[-1.8,4.2],[1.8,-1.0],[-1.8,-1.0],[1.8,-5.4],[-1.8,-5.4]].forEach(p=>m.cyl(C.blk,.9,.9,.7,10, p[0],.9,p[1], 0,0,Math.PI/2)); } },
+  house:   { t:4, f:4.6, b(m){ const w=pick([C.wht,C.sand,0xffd0c0,0xd6f0ff]);
+             m.box(w,8.0,5.0,7.0, 0,2.5,0);
+             m.box(C.roof,5.2,.4,7.6, -2.1,5.9,0, 0,0,.72); m.box(C.roof,5.2,.4,7.6, 2.1,5.9,0, 0,0,-.72);
+             m.box(C.brn,1.6,2.8,.2, 0,1.4,3.55); m.sph(C.gold,.14,6, .5,1.6,3.7);
+             m.box(C.glass,1.6,1.6,.2, -2.5,3.0,3.55); m.box(C.glass,1.6,1.6,.2, 2.5,3.0,3.55);
+             m.box(C.glass,.2,1.6,1.6, -4.05,3.0,-1.5); m.box(C.glass,.2,1.6,1.6, 4.05,3.0,-1.5);
+             m.cyl(0xb0483a,.7,.8,2.4,8, 2.4,7.0,-1.6); m.box(C.grn,9.4,.1,8.4, 0,.05,0); } },
+  bus:     { t:4, f:4.4, b(m){ m.box(C.yel,3.4,3.4,11.0, 0,2.6,0); m.box(C.glass,3.44,1.4,8.0, 0,3.3,-.6);
+             m.box(C.glass,3.0,1.6,.2, 0,3.3,5.45); m.box(C.blk,3.5,.5,11.1, 0,1.0,0);
+             [[1.75,4.0],[-1.75,4.0],[1.75,-3.4],[-1.75,-3.4]].forEach(p=>m.cyl(C.blk,.85,.85,.6,10, p[0],.85,p[1], 0,0,Math.PI/2));
+             m.box(C.red,.6,.6,.2, 0,4.6,5.5); } },
+  silo:    { t:4, f:3.4, b(m){ m.cyl(C.silver,3.0,3.2,9.0,14, 0,4.5,0); for(let i=0;i<3;i++) m.tor(C.gry,3.15,.16,16, 0,2.2+i*2.4,0, 0,Math.PI/2,0);
+             m.con(C.roof2,3.4,2.4,14, 0,10.2,0); m.box(C.dgry,1.4,2.4,.3, 0,1.2,3.2); } },
+  windmill:{ t:4, f:3.6, b(m){ m.cyl(C.wht,1.8,3.0,10.0,12, 0,5.0,0); m.con(C.roof,2.2,1.8,12, 0,10.8,0);
+             m.box(C.brn,.7,.7,1.6, 0,9.0,2.6);
+             for(let i=0;i<4;i++){ const a=i/4*6.283; m.box(C.wht,1.4,.2,7.0, Math.sin(a)*0,9.0+Math.cos(a)*3.5,3.4+0, 0,0,a); }
+             m.box(C.grn,7.0,.1,7.0, 0,.05,0); } },
+  crane:   { t:4, f:3.0, b(m){ m.box(C.yel,2.4,.6,2.4, 0,.3,0); for(let i=0;i<5;i++) m.box(C.yel,.3,2.4,.3, i%2?1.0:-1.0,1.5+i*2.4,i%2?1.0:-1.0);
+             m.box(C.yel,.4,12.0,.4, 1.0,6.5,1.0); m.box(C.yel,.4,12.0,.4, -1.0,6.5,-1.0); m.box(C.yel,.4,12.0,.4, 1.0,6.5,-1.0); m.box(C.yel,.4,12.0,.4, -1.0,6.5,1.0);
+             m.box(C.org,1.6,1.2,14.0, 0,13.4,4.0); m.cyl(C.blk,.1,.1,4.0,6, 0,11.0,9.0); m.box(C.silver,1.0,1.0,1.0, 0,8.9,9.0); } },
+  pool:    { t:4, f:4.0, b(m){ m.box(C.wht,10.0,1.0,8.0, 0,.5,0); m.box(C.teal,8.6,.9,6.6, 0,.75,0); m.box(0x2fd0e0,8.4,.2,6.4, 0,1.05,0);
+             m.box(C.wht,1.2,.16,2.4, 4.4,1.2,0); m.cyl(C.silver,.1,.1,1.0,6, 5.2,1.6,.8); } },
+
+  /* ---------- TIER 5 : giants ---------- */
+  tower:   { t:5, f:6.0, b(m){ const c=pick([0x9fd8ee,0xd8e8f5,0xc0dff0]);
+             m.box(c,11,16,11, 0,8,0); m.box(c,9,12,9, 0,22,0); m.box(c,6.5,9,6.5, 0,32.5,0);
+             for(let y=0;y<9;y++) for(let s=0;s<4;s++){ const a=s/4*6.283, r=5.55; m.box(C.glass,s%2?9.0:.2,1.2,s%2?.2:9.0, Math.sin(a)*r,2.6+y*1.7,Math.cos(a)*r); }
+             m.cyl(C.silver,.3,.3,7,6, 0,40.5,0); m.sph(C.red,.6,7, 0,44.2,0); m.box(C.dgry,12,.4,12, 0,16.2,0); m.box(C.dgry,10,.4,10, 0,28.2,0); } },
+  hotel:   { t:5, f:7.0, b(m){ m.box(0xfff0d0,22,13,11, 0,6.5,0);
+             for(let y=0;y<4;y++) for(let x=0;x<8;x++) m.box(C.glass,1.7,1.8,.2, -8.6+x*2.45,2.6+y*3.0,5.55);
+             m.box(C.roof2,23,1.0,12, 0,13.4,0); m.box(0xfff0d0,8,4,8, 0,15.5,0); m.box(C.roof2,9,.8,9, 0,17.8,0);
+             m.box(C.red,7,2.4,.3, 0,3.2,5.7); m.box(C.wht,5.4,1.2,.4, 0,3.2,5.85); for(let i=0;i<4;i++) m.cyl(C.wht,.5,.5,4.4,8, -4.5+i*3,2.2,7.4); m.box(C.wht,14,.5,4.4, 0,4.6,7.4); } },
+  ship:    { t:5, f:8.0, b(m){ m.box(C.wht,10,6,34, 0,3,0); m.con(C.wht,5,10,4, 0,3,22, .785,-Math.PI/2,0);
+             m.box(C.navy,10.2,1.6,34.2, 0,1.0,0);
+             m.box(C.wht,8.6,4,20, 0,8,-2); m.box(C.wht,7,3.6,14, 0,11.8,-3);
+             for(let y=0;y<2;y++) for(let i=0;i<9;i++) m.box(C.glass,.2,1.2,1.6, 4.35,7.2+y*3.6,-10+i*2.4);
+             for(let y=0;y<2;y++) for(let i=0;i<9;i++) m.box(C.glass,.2,1.2,1.6, -4.35,7.2+y*3.6,-10+i*2.4);
+             m.cyl(C.red,2.0,2.4,6,12, -2.6,16.5,-6); m.cyl(C.red,2.0,2.4,6,12, 2.6,16.5,-6); m.cyl(C.blk,2.1,2.1,.8,12, -2.6,19.7,-6); m.cyl(C.blk,2.1,2.1,.8,12, 2.6,19.7,-6);
+             m.box(C.glass,7,1.6,3, 0,14.4,2.5); } },
+  ferris:  { t:5, f:7.0, b(m){ m.box(C.silver,3,.8,10, 0,.4,0);
+             m.box(C.silver,1.0,16,.8, -3.0,8,0, 0,0,.18); m.box(C.silver,1.0,16,.8, 3.0,8,0, 0,0,-.18);
+             m.tor(C.red,10,.5,26, 0,16,0); m.tor(C.red,9.2,.3,26, 0,16,0);
+             for(let i=0;i<12;i++){ const a=i/12*6.283; m.box(C.silver,.3,9.6,.3, Math.sin(a)*4.8,16+Math.cos(a)*4.8,0, 0,0,-a);
+               const c=[C.red,C.yel,C.teal,C.pink,C.lime,C.pur][i%6];
+               m.box(c,1.9,1.7,1.9, Math.sin(a)*10.2,16+Math.cos(a)*10.2-1.3,0); m.box(C.wht,2.0,.3,2.0, Math.sin(a)*10.2,16+Math.cos(a)*10.2-.4,0); }
+             m.cyl(C.gold,1.2,1.2,1.4,12, 0,16,0, 0,Math.PI/2,0); } },
+  lighthouse:{t:5, f:5.0, b(m){ m.cyl(C.gry,5.2,5.6,2.0,14, 0,1.0,0); m.cyl(C.wht,2.6,4.2,20,14, 0,12,0);
+             for(let i=0;i<4;i++) m.cyl(C.red,3.9-i*.35,3.7-i*.35,2.2,14, 0,3.6+i*4.6,0);
+             m.cyl(C.dgry,3.4,3.4,.5,14, 0,22.3,0); m.cyl(C.gold,2.4,2.4,3.0,10, 0,24,0); m.con(C.red,3.2,2.6,12, 0,26.7,0);
+             m.tor(C.dgry,3.3,.2,16, 0,22.9,0, 0,Math.PI/2,0); m.sph(C.yel,1.4,10, 0,24,0); } },
+  stadium: { t:5, f:9.0, b(m){ m.cyl(C.gry,15,16,7,20, 0,3.5,0); m.cyl(C.lime,12.6,12.6,7.4,20, 0,3.6,0);
+             for(let i=0;i<20;i++){ const a=i/20*6.283; m.box(i%2?C.blu:C.wht,3.2,3.0,2.0, Math.sin(a)*14,8.5,Math.cos(a)*14, a); }
+             for(let i=0;i<4;i++){ const a=i/4*6.283+.4; m.cyl(C.silver,.5,.5,14,8, Math.sin(a)*15,7,Math.cos(a)*15); m.box(C.yel,4,2.4,.6, Math.sin(a)*15,14,Math.cos(a)*15, -a); }
+             m.box(C.wht,.4,.1,16, 0,7.15,0); m.tor(C.wht,3,.3,18, 0,7.15,0, 0,Math.PI/2,0); } },
+  iceberg: { t:5, f:6.5, b(m){ m.con(C.ice,8,14,7, 0,6,0, .3); m.con(C.wht,5,9,6, 4,4,3, .8); m.con(C.ice,4,7,6, -4.5,3,-2.5, -.6);
+             m.sph(0xbfeeff,5,7, 0,-1,0); } },
+  volcano: { t:5, f:9.0, b(m){ m.cyl(C.dgry,11,15,14,14, 0,7,0); m.cyl(C.blk,7.4,7.4,1.0,14, 0,14.2,0); m.cyl(C.lava,6.6,6.6,.6,14, 0,14.5,0);
+             for(let i=0;i<5;i++){ const a=i/5*6.283+.3; m.box(C.lava,1.6,.5,9.0, Math.sin(a)*7,7.6,Math.cos(a)*7, a, .5,0); }
+             m.sph(C.dgry,4,6, 9,2,4); m.sph(C.dgry,3,6, -8,1.6,-6); } },
+  /* ---------- FARM ---------- */
+  chicken: { t:1, f:.8, b(m){ m.sph(C.wht,.38,9, 0,.42,0); m.sph(C.wht,.24,8, 0,.78,.14); m.con(C.yel,.09,.2,6, 0,.78,.34, 0,Math.PI/2,0); m.box(C.red,.16,.16,.1, 0,.95,.1); m.box(C.yel,.08,.3,.08, .12,.14,0); m.box(C.yel,.08,.3,.08, -.12,.14,0); } },
+  balloon: { t:1, f:.8, b(m){ const c=pick([C.red,C.blu,C.yel,C.lime,C.pink]); m.sph(c,.5,9, 0,1.5,0); m.con(c,.16,.3,7, 0,1.05,0, 0,3.14,0); m.cyl(C.wht,.03,.03,1.1,5, 0,.5,0); m.box(C.gry,.3,.06,.3, 0,.03,0); } },
+  snowman: { t:1, f:1.1, b(m){ m.sph(C.wht,.7,10, 0,.62,0); m.sph(C.wht,.5,10, 0,1.5,0); m.sph(C.wht,.36,9, 0,2.1,0); m.con(C.org,.1,.34,6, 0,2.1,.4, 0,Math.PI/2,0); m.sph(C.blk,.07,5, .13,2.2,.32); m.sph(C.blk,.07,5, -.13,2.2,.32); m.cyl(C.blk,.32,.32,.1,10, 0,2.42,0); m.cyl(C.blk,.2,.2,.34,10, 0,2.6,0); m.box(C.dbrn,.7,.06,.06, .5,1.5,0, 0,0,.4); m.box(C.dbrn,.7,.06,.06, -.5,1.5,0, 0,0,-.4); } },
+  cactus:  { t:1, f:1.0, b(m){ m.cyl(0x3fa85e,.34,.4,1.9,9, 0,.95,0); m.cyl(0x3fa85e,.18,.18,.8,7, .45,1.2,0, 0,0,Math.PI/2); m.cyl(0x3fa85e,.18,.18,.6,7, .78,1.5,0); m.sph(C.pink,.14,6, 0,1.95,0); } },
+  cow:     { t:2, f:1.7, b(m){ m.box(C.wht,1.1,1.1,2.2, 0,1.3,0); m.sph(C.blk,.42,8, .3,1.5,.5); m.sph(C.blk,.36,8, -.35,1.2,-.4); m.box(C.wht,.75,.75,.7, 0,1.5,1.4); m.sph(C.pink,.3,8, 0,1.35,1.72); m.box(C.wht,.2,.3,.2, .3,1.95,1.35); m.box(C.wht,.2,.3,.2, -.3,1.95,1.35); [[-.38,.75],[.38,.75],[-.38,-.75],[.38,-.75]].forEach(p=>m.box(C.wht,.26,.85,.26, p[0],.42,p[1])); m.box(C.pink,.5,.3,.4, 0,.75,-.4); } },
+  sheep:   { t:2, f:1.4, b(m){ m.sph(C.wht,.85,10, 0,1.2,0); m.sph(C.wht,.6,9, .3,1.5,.5); m.sph(C.wht,.55,9, -.4,1.35,-.4); m.box(C.blk,.5,.5,.55, 0,1.35,.85); m.sph(C.blk,.2,7, 0,1.5,1.1); [[-.3,.4],[.3,.4],[-.3,-.4],[.3,-.4]].forEach(p=>m.box(C.blk,.18,.7,.18, p[0],.35,p[1])); } },
+  haystack:{ t:2, f:1.6, b(m){ m.cyl(0xe8c24a,1.3,1.5,1.8,12, 0,.9,0); m.cyl(0xd9ad33,1.35,1.35,.15,12, 0,.6,0); m.cyl(0xd9ad33,1.2,1.2,.15,12, 0,1.4,0); m.con(0xe8c24a,1.2,.7,12, 0,2.1,0); } },
+  scarecrow:{t:2, f:1.2, b(m){ m.cyl(C.dbrn,.12,.14,2.6,7, 0,1.3,0); m.box(C.dbrn,2.0,.14,.14, 0,2.0,0); m.box(C.red,.9,1.0,.5, 0,1.9,0); m.sph(0xe8c24a,.42,9, 0,2.75,0); m.con(C.blk,.62,.5,10, 0,3.1,0); m.sph(C.blk,.07,5, .15,2.8,.35); m.sph(C.blk,.07,5, -.15,2.8,.35); } },
+  corn:    { t:2, f:1.0, b(m){ for(let i=0;i<4;i++){ const a=i/4*6.283; m.box(0x4fbf5e,.24,2.4,.24, Math.cos(a)*.2,1.2,Math.sin(a)*.2, 0,0,Math.cos(a)*.12); m.box(0x4fbf5e,.7,.1,1.4, Math.cos(a)*.7,1.9,Math.sin(a)*.7, a,.3,0); } m.cyl(C.yel,.16,.2,.7,7, .3,2.2,.1); } },
+  tractor: { t:3, f:2.4, b(m){ m.box(0x2f9e4a,1.8,1.2,3.0, 0,1.5,.2); m.box(0x2f9e4a,1.5,1.3,1.4, 0,2.6,-.5); m.box(C.glass,1.54,.8,1.44, 0,2.7,-.5); m.cyl(C.blk,1.15,1.15,.7,12, 1.0,1.15,-1.2, 0,0,Math.PI/2); m.cyl(C.blk,1.15,1.15,.7,12, -1.0,1.15,-1.2, 0,0,Math.PI/2); m.cyl(C.blk,.62,.62,.5,10, 1.0,.62,1.5, 0,0,Math.PI/2); m.cyl(C.blk,.62,.62,.5,10, -1.0,.62,1.5, 0,0,Math.PI/2); m.cyl(C.silver,.16,.16,.8,7, .5,2.4,1.5); m.box(C.yel,1.8,.2,.3, 0,1.0,1.9); } },
+  barn:    { t:4, f:4.4, b(m){ m.box(0xc9422f,9,5.5,7.5, 0,2.75,0); m.box(0xb03422,4.9,.5,8.0, -2.0,6.4,0, 0,0,.62); m.box(0xb03422,4.9,.5,8.0, 2.0,6.4,0, 0,0,-.62); m.box(C.wht,.5,5.5,.4, -3.2,2.75,3.8); m.box(C.wht,.5,5.5,.4, 3.2,2.75,3.8); m.box(C.wht,7.0,.5,.4, 0,5.2,3.8); m.box(C.wht,6.5,.5,.4, 0,2.8,3.8, 0,0,.5); m.box(C.dbrn,3.4,4.0,.3, 0,2.0,3.85); m.box(C.wht,2.0,1.4,.3, 0,6.6,3.6); m.cyl(C.silver,.1,.1,1.2,6, 0,8.4,0); m.box(C.gold,.9,.5,.1, .3,8.8,0); } },
+  /* ---------- CITY SERVICES ---------- */
+  taxi:    { t:3, f:2.6, b(m){ m.box(C.yel,2.5,1.1,5.0, 0,1.15,0); m.box(C.yel,2.3,1.0,2.5, 0,2.05,-.3); m.box(C.glass,2.34,.7,2.2, 0,2.1,-.3); m.box(C.blk,1.6,.35,.6, 0,2.72,-.3); m.box(C.blk,.7,.5,2.4, 1.28,1.5,0); m.box(C.blk,.7,.5,2.4, -1.28,1.5,0); [[1.28,1.6],[-1.28,1.6],[1.28,-1.6],[-1.28,-1.6]].forEach(p=>m.cyl(C.blk,.58,.58,.4,10, p[0],.58,p[1], 0,0,Math.PI/2)); } },
+  police:  { t:3, f:2.6, b(m){ m.box(C.wht,2.5,1.1,5.0, 0,1.15,0); m.box(C.navy,2.52,.55,2.2, 0,1.15,.6); m.box(C.wht,2.3,1.0,2.5, 0,2.05,-.3); m.box(C.glass,2.34,.7,2.2, 0,2.1,-.3); m.box(C.red,.6,.28,.5, -.4,2.75,-.3); m.box(C.blu,.6,.28,.5, .4,2.75,-.3); [[1.28,1.6],[-1.28,1.6],[1.28,-1.6],[-1.28,-1.6]].forEach(p=>m.cyl(C.blk,.58,.58,.4,10, p[0],.58,p[1], 0,0,Math.PI/2)); } },
+  firetruck:{t:4, f:4.0, b(m){ m.box(C.red,3.2,2.6,3.6, 0,2.1,3.2); m.box(C.glass,3.0,1.1,.2, 0,2.9,5.0); m.box(C.red,3.4,2.2,8.0, 0,1.9,-1.6); m.box(C.silver,3.5,.5,8.2, 0,3.1,-1.6); m.box(C.silver,1.0,.5,7.0, 0,3.7,-1.6, 0,0,0); m.box(C.silver,.8,.4,6.0, 0,4.2,-.6, 0,-.12,0); m.box(C.blu,1.6,.3,.5, 0,3.6,4.6); [[1.7,3.6],[-1.7,3.6],[1.7,-2.0],[-1.7,-2.0],[1.7,-4.6],[-1.7,-4.6]].forEach(p=>m.cyl(C.blk,.8,.8,.6,10, p[0],.8,p[1], 0,0,Math.PI/2)); } },
+  ambulance:{t:4, f:3.6, b(m){ m.box(C.wht,3.0,2.2,3.0, 0,1.9,2.8); m.box(C.glass,2.8,1.0,.2, 0,2.6,4.25); m.box(C.wht,3.2,3.0,6.4, 0,2.3,-1.8); m.box(C.red,3.24,.5,6.4, 0,1.6,-1.8); m.box(C.red,1.6,.4,.24, 0,2.6,-5.0); m.box(C.red,.4,1.6,.24, 0,2.6,-5.0); m.box(C.blu,1.4,.3,.5, 0,3.95,2.6); [[1.6,3.0],[-1.6,3.0],[1.6,-3.2],[-1.6,-3.2]].forEach(p=>m.cyl(C.blk,.72,.72,.5,10, p[0],.72,p[1], 0,0,Math.PI/2)); } },
+  gasstation:{t:4, f:5.0, b(m){ m.box(C.wht,7.0,3.4,5.0, -3.0,1.7,0); m.box(C.glass,5.6,1.6,.2, -3.0,2.0,2.55); m.box(C.red,7.4,.5,5.4, -3.0,3.6,0); for(let i=0;i<2;i++){ m.box(C.silver,1.0,2.2,1.4, 3.0,1.1,-2.5+i*5); m.box(C.red,.7,.7,.2, 3.0,1.6,-1.8+i*5); } m.cyl(C.silver,.4,.4,5.5,8, 1.0,2.75,-4.0); m.cyl(C.silver,.4,.4,5.5,8, 6.0,2.75,-4.0); m.cyl(C.silver,.4,.4,5.5,8, 1.0,2.75,4.0); m.cyl(C.silver,.4,.4,5.5,8, 6.0,2.75,4.0); m.box(C.roof2,7.0,.7,10.0, 3.5,5.6,0); m.box(C.yel,6.0,1.0,.2, 3.5,6.4,0); } },
+  helicopter:{t:4, f:3.4, b(m){ m.box(C.blu,2.2,2.0,4.6, 0,3.0,0); m.sph(C.glass,1.1,10, 0,3.2,2.2); m.box(C.blu,.6,.7,5.0, 0,3.4,-4.0); m.box(C.blu,2.0,.2,1.0, 0,4.4,-6.0); m.tor(C.silver,1.1,.12,10, 0,4.0,-6.2, 0,0,Math.PI/2); m.cyl(C.dgry,.2,.2,1.2,7, 0,4.5,0); for(let i=0;i<4;i++){ const a=i/4*6.283; m.box(C.dgry,.5,.12,9.0, 0,5.1,0, a); } m.box(C.silver,.2,1.2,3.0, 1.0,1.4,.5); m.box(C.silver,.2,1.2,3.0, -1.0,1.4,.5); m.cyl(C.silver,.14,.14,4.0,6, 1.0,.7,.5, 0,Math.PI/2,0); m.cyl(C.silver,.14,.14,4.0,6, -1.0,.7,.5, 0,Math.PI/2,0); } },
+  church:  { t:5, f:6.0, b(m){ m.box(0xf4ead6,9,9,18, 0,4.5,0); m.box(0xd8563f,6.4,.5,18.4, -2.6,10.6,0, 0,0,.72); m.box(0xd8563f,6.4,.5,18.4, 2.6,10.6,0, 0,0,-.72); m.box(0xf4ead6,5.0,17,5.0, 0,8.5,10.5); m.con(0xd8563f,3.9,6.0,4, 0,20,10.5, .785); m.cyl(C.gold,.22,.22,3.0,6, 0,24,10.5); m.box(C.gold,1.6,.3,.3, 0,23.5,10.5); m.tor(C.glass,1.5,.35,14, 0,13.5,13.0, 0,0,0); for(let i=0;i<4;i++){ m.box(C.glass,.3,3.4,1.6, 4.55,5.0,-6+i*4); m.box(C.glass,.3,3.4,1.6, -4.55,5.0,-6+i*4); } m.box(C.dbrn,2.6,4.4,.4, 0,2.2,13.2); } },
+  train:   { t:5, f:6.0, b(m){ m.box(C.red,3.4,3.0,7.0, 0,2.6,10); m.cyl(C.blk,1.5,1.5,6.0,12, 0,3.0,13.5, 0,Math.PI/2,0); m.cyl(C.blk,.7,.7,1.6,8, 0,5.6,15.0); m.box(C.blk,3.6,.6,7.2, 0,1.1,10); for(let c=0;c<3;c++){ const z=2-c*8.5; m.box([C.blu,C.grn,C.yel][c],3.2,3.2,7.6, 0,2.8,z); m.box(C.silver,3.3,.4,7.8, 0,4.5,z); for(let w=0;w<3;w++) m.box(C.glass,3.26,1.2,1.8, 0,3.4,z-2.4+w*2.4); m.box(C.blk,3.4,.6,7.8, 0,1.1,z); }
+             for(let i=0;i<8;i++) m.cyl(C.dgry,.8,.8,.5,10, i%2?1.6:-1.6,.8, 12-Math.floor(i/2)*8.5, 0,0,Math.PI/2);
+             m.box(C.dbrn,7.0,.4,40, 0,.2,-2); m.box(C.silver,.4,.5,40, -1.6,.5,-2); m.box(C.silver,.4,.5,40, 1.6,.5,-2); } },
+  plane:   { t:5, f:8.0, b(m){ m.cyl(C.wht,2.2,2.2,26,14, 0,5,0, 0,Math.PI/2,0); m.con(C.wht,2.2,4.0,14, 0,5,15, 0,-Math.PI/2,0); m.con(C.glass,1.6,2.4,10, 0,5.4,14.6, 0,-Math.PI/2,0);
+             m.box(C.silver,26,.7,4.6, 0,4.6,-1, 0,0,.04); m.box(C.silver,4.6,.6,10,  0,4.6,-1, 0,0,0);
+             m.box(C.blu,10,.6,3.0, 0,5.0,-11); m.box(C.blu,.6,6.0,4.0, 0,8.0,-12); m.con(C.blu,1.4,4.0,10, -7,3.6,0, 0,-Math.PI/2,0); m.con(C.blu,1.4,4.0,10, 7,3.6,0, 0,-Math.PI/2,0);
+             for(let i=0;i<10;i++) m.box(C.glass,.2,.9,1.2, 2.15,5.6,-8+i*2); for(let i=0;i<10;i++) m.box(C.glass,.2,.9,1.2, -2.15,5.6,-8+i*2);
+             m.cyl(C.dgry,.5,.5,3.0,8, 0,1.6,10, 0,0,Math.PI/2); m.cyl(C.blk,.9,.9,.6,10, 4,1.0,-2, 0,0,Math.PI/2); m.cyl(C.blk,.9,.9,.6,10, -4,1.0,-2, 0,0,Math.PI/2); } },
+  carousel:{ t:5, f:6.5, b(m){ m.cyl(0xf4e4c8,7.0,7.2,1.2,18, 0,.6,0); m.cyl(C.gold,.7,.7,9.0,10, 0,5,0);
+             for(let i=0;i<8;i++){ const a=i/8*6.283, r=5.2; m.cyl(C.silver,.16,.16,7.0,6, Math.cos(a)*r,4.2,Math.sin(a)*r);
+               const c=[C.red,C.wht,C.blu,C.yel,C.pink,C.lime,C.pur,C.org][i];
+               m.box(c,.7,1.2,1.8, Math.cos(a)*r,2.4,Math.sin(a)*r, -a); m.box(c,.6,.9,.7, Math.cos(a)*r,3.2,Math.sin(a)*r+.7, -a); }
+             m.con(0xd8563f,8.0,3.2,18, 0,9.4,0); m.cyl(C.gold,8.1,8.1,.3,18, 0,7.9,0); m.sph(C.gold,.8,9, 0,11.4,0);
+             for(let i=0;i<18;i++){ const a=i/18*6.283; m.box(i%2?C.red:C.wht,1.4,.5,.3, Math.cos(a)*7.6,7.9,Math.sin(a)*7.6, -a); } } },
+  waterslide:{t:5, f:6.0, b(m){ m.cyl(C.teal,7.5,7.8,1.6,18, 0,.8,0); m.cyl(0x2fd0e0,6.9,6.9,.4,18, 0,1.5,0);
+             m.box(C.silver,3.0,16,3.0, -5,8,-5); for(let i=0;i<7;i++) m.box(C.wht,3.2,.3,.7, -5,2.5+i*2.2,-5+1.4);
+             m.box(C.roof2,4.0,.5,4.0, -5,16.2,-5);
+             for(let i=0;i<11;i++){ const t=i/10, a=t*5.2, r=6.5-t*2.0; m.cyl([C.yel,C.org,C.pink][i%3],1.5,1.5,2.4,8, -5+Math.cos(a)*r+r*.2, 15.4-t*13, -5+Math.sin(a)*r, 0,0,1.2); }
+             m.box(C.wht,5.0,.4,3.0, 2.5,2.0,3.5, 0,0,.2); } },
+  bouncy:  { t:4, f:4.0, b(m){ m.box(0x3d8bff,8.0,.8,8.0, 0,.4,0); for(let i=0;i<4;i++){ const x=i%2?3.2:-3.2, z=i<2?3.2:-3.2; m.cyl(C.red,1.1,1.1,5.5,10, x,3.2,z); m.con(C.yel,1.4,2.0,10, x,6.6,z); }
+             m.box(C.pink,8.2,3.0,.7, 0,2.4,-3.9); m.box(C.pink,.7,3.0,8.2, -3.9,2.4,0); m.box(C.pink,.7,3.0,8.2, 3.9,2.4,0);
+             m.box(C.lime,8.2,.7,8.2, 0,4.4,0); m.tor(C.yel,2.2,.5,12, 0,3.0,4.0, 0,0,0); } },
+  satellite:{t:4, f:3.0, b(m){ m.box(C.silver,2.0,2.0,2.0, 0,1.0,0); m.cyl(C.gry,.5,.5,4.0,8, 0,3.0,0); m.box(C.navy,7.0,.2,2.4, -4.5,3.4,0, 0,0,.2); m.box(C.navy,7.0,.2,2.4, 4.5,3.4,0, 0,0,-.2);
+             m.con(C.wht,3.4,2.2,16, 0,6.4,0, 0,3.14,0); m.sph(C.red,.4,7, 0,5.6,0); m.cyl(C.silver,.14,.14,2.0,6, 0,6.0,0); } },
+  ufo:     { t:4, f:3.6, b(m){ m.sph(C.silver,3.2,14, 0,3.0,0); m.cyl(C.silver,3.6,2.2,.9,18, 0,3.0,0); m.sph(0x9bff2f,1.7,12, 0,4.2,0); m.tor(C.silver,3.5,.35,18, 0,2.8,0, 0,Math.PI/2,0);
+             for(let i=0;i<6;i++){ const a=i/6*6.283; m.sph([C.red,C.yel,C.lime][i%3],.42,7, Math.cos(a)*3.0,2.5,Math.sin(a)*3.0); }
+             m.cyl(C.silver,.4,.4,2.0,7, 0,1.0,0); m.cyl(0x9bff2f,2.4,.5,1.0,12, 0,.5,0); } },
+  robot:   { t:4, f:3.0, b(m){ m.box(C.silver,4.0,5.0,2.6, 0,5.5,0); m.box(C.navy,3.0,1.6,.3, 0,6.6,1.4); m.box(C.silver,2.6,2.2,2.2, 0,9.2,0); m.sph(C.red,.5,8, -.7,9.3,1.2); m.sph(C.red,.5,8, .7,9.3,1.2);
+             m.cyl(C.silver,.14,.14,1.2,6, 0,10.8,0); m.sph(C.yel,.34,7, 0,11.5,0);
+             m.box(C.gry,1.0,4.4,1.0, 2.6,5.6,0); m.box(C.gry,1.0,4.4,1.0, -2.6,5.6,0);
+             m.box(C.gry,1.4,3.2,1.4, 1.1,1.6,0); m.box(C.gry,1.4,3.2,1.4, -1.1,1.6,0); m.box(C.blk,1.8,.6,2.4, 1.1,.3,.3); m.box(C.blk,1.8,.6,2.4, -1.1,.3,.3); } },
+  /* ---------- CANDY / CARNIVAL ---------- */
+  donut:   { t:2, f:1.6, b(m){ m.cyl(C.dbrn,.3,.3,1.6,8, 0,.8,0); m.tor(0xe8a86a,1.3,.55,16, 0,1.7,0, 0,Math.PI/2,0); m.tor(C.pink,1.28,.5,16, 0,1.95,0, 0,Math.PI/2,0); for(let i=0;i<10;i++){ const a=i/10*6.283; m.box([C.yel,C.lime,C.wht,C.blu][i%4],.24,.08,.1, Math.cos(a)*1.3,2.42,Math.sin(a)*1.3, a); } } },
+  candycane:{t:2, f:.9, b(m){ for(let i=0;i<7;i++) m.cyl(i%2?C.red:C.wht,.24,.24,.5,8, 0,.25+i*.5,0); m.tor(C.red,.55,.24,10, 0,4.0,0, 0,0,0); m.tor(C.wht,.55,.2,10, .1,4.1,0, 0,0,.4); } },
+  lollipop:{ t:2, f:1.0, b(m){ m.cyl(C.wht,.12,.12,2.6,7, 0,1.3,0); m.cyl(C.pink,1.1,1.1,.34,16, 0,2.9,0, 0,Math.PI/2,0); m.cyl(C.wht,.75,.75,.36,14, 0,2.9,0, 0,Math.PI/2,0); m.cyl(C.pink,.42,.42,.38,12, 0,2.9,0, 0,Math.PI/2,0); } },
+  cupcake: { t:3, f:2.0, b(m){ m.cyl(0xe8a86a,1.5,1.9,2.0,16, 0,1.0,0); for(let i=0;i<16;i++){ const a=i/16*6.283; m.box(C.pink,.3,2.0,.12, Math.cos(a)*1.75,1.0,Math.sin(a)*1.75, a); }
+             m.sph(C.wht,1.9,14, 0,2.6,0); m.sph(C.wht,1.4,12, 0,3.6,0); m.sph(C.wht,.9,10, 0,4.4,0); m.sph(C.red,.6,9, 0,5.1,0); m.cyl(C.grn,.1,.1,.5,5, 0,5.6,0);
+             for(let i=0;i<12;i++){ const a=i*2.4; m.box([C.yel,C.blu,C.lime][i%3],.3,.1,.12, Math.cos(a)*1.5,2.9+Math.sin(i)*.4,Math.sin(a)*1.5, a); } } },
+  icecream:{ t:3, f:2.0, b(m){ m.con(0xe8c24a,1.6,4.6,14, 0,2.3,0, 0,3.14,0); for(let i=0;i<5;i++){ m.tor(0xd9ad33,1.5-i*.28,.08,14, 0,1.0+i*.8,0, 0,Math.PI/2,0); }
+             m.sph(C.pink,1.7,14, 0,5.4,0); m.sph(C.wht,1.4,12, 0,7.2,0); m.sph(0x8ee84a,1.1,12, 0,8.6,0); m.sph(C.red,.5,8, 0,9.6,0); } },
+  hotdog:  { t:3, f:2.2, b(m){ m.box(C.wht,4.4,2.4,3.0, 0,1.7,0); m.box(C.red,4.8,.4,3.4, 0,3.0,0); m.box(C.yel,4.8,.4,3.4, 0,3.4,0);
+             m.cyl(0xe8a86a,1.1,1.1,3.6,12, 0,5.2,0, 0,0,Math.PI/2); m.cyl(C.red,.62,.62,3.9,10, 0,5.5,0, 0,0,Math.PI/2); m.box(C.yel,3.6,.2,.4, 0,6.0,0);
+             m.box(C.wht,4.2,.2,2.6, 0,2.9,1.6); m.tor(C.blk,.4,.12,9, -1.8,.4,1.4); m.tor(C.blk,.4,.12,9, 1.8,.4,1.4); } },
+  /* ---------- DINO / SPACE / CASTLE ---------- */
+  dinoegg: { t:2, f:1.3, b(m){ m.sph(0xe8f0c8,.9,12, 0,.85,0); m.sph(0xe8f0c8,.65,10, 0,1.5,0); for(let i=0;i<6;i++){ const a=i/6*6.283; m.sph(0xa8c85a,.18,6, Math.cos(a)*.7,.9,Math.sin(a)*.7); } m.disc(0x8a6a3a,1.1, 0,.04,0); } },
+  dino:    { t:5, f:7.0, b(m){ const g=0x5aa84a;
+             m.sph(g,4.2,14, 0,7,0); m.sph(g,3.0,12, 0,7.6,3.4);
+             for(let i=0;i<6;i++){ const t=i/6; m.cyl(g,2.2-t*1.5,2.6-t*1.6,2.6,10, 0,9+i*1.9,3.4-i*.5, 0,0,-.06); }
+             m.sph(g,1.7,12, 0,20.4,1.4); m.box(g,2.0,1.2,3.0, 0,20.0,3.0); m.sph(C.blk,.3,7, .8,21.0,2.4); m.sph(C.blk,.3,7, -.8,21.0,2.4);
+             for(let i=0;i<7;i++){ const t=i/7; m.sph(g,3.0-t*2.4,10, 0,6.4-t*2.0,-4.0-i*2.6); }
+             m.box(g,1.8,3.4,1.8, 1.9,2.4,1.0); m.box(g,1.8,3.4,1.8, -1.9,2.4,1.0); m.box(g,2.4,.7,3.0, 1.9,.35,1.8); m.box(g,2.4,.7,3.0, -1.9,.35,1.8);
+             for(let i=0;i<6;i++) m.con(0x3d7a33,.5,1.2,6, 0,11.0+i*1.8,2.4-i*.5, 0,0,-.3); } },
+  rocket:  { t:5, f:5.0, b(m){ m.cyl(C.wht,2.6,3.2,20,16, 0,10,0); m.con(C.red,3.2,6.0,16, 0,23,0);
+             for(let i=0;i<4;i++){ const a=i/4*6.283; m.box(C.red,1.0,5.0,3.4, Math.cos(a)*3.0,2.5,Math.sin(a)*3.0, a); }
+             m.tor(C.navy,3.05,.3,16, 0,14,0, 0,Math.PI/2,0); m.tor(C.navy,3.0,.3,16, 0,6,0, 0,Math.PI/2,0);
+             m.sph(C.glass,1.3,10, 0,17.5,2.6); m.cyl(C.dgry,2.4,3.0,2.0,16, 0,-.5,0); m.box(C.silver,1.0,24,1.0, 6.0,12,0); m.box(C.silver,4.0,1.0,1.0, 4.0,23,0); } },
+  castle:  { t:5, f:8.0, b(m){ m.box(0xd8d2c4,20,10,20, 0,5,0);
+             for(let i=0;i<4;i++){ const x=i%2?9:-9, z=i<2?9:-9; m.cyl(0xc8c2b4,3.0,3.4,20,12, x,10,z); m.con(0x4a7fc1,3.6,5.0,12, x,22.5,z); m.cyl(C.gold,.14,.14,2.0,5, x,26,z); m.box(C.red,1.4,.8,.1, x+.7,26.4,z); }
+             for(let i=0;i<10;i++){ m.box(0xd8d2c4,1.4,2.0,1.4, -9+i*2,11,10); m.box(0xd8d2c4,1.4,2.0,1.4, -9+i*2,11,-10); m.box(0xd8d2c4,1.4,2.0,1.4, 10,11,-9+i*2); m.box(0xd8d2c4,1.4,2.0,1.4, -10,11,-9+i*2); }
+             m.box(C.dbrn,5.0,7.0,.6, 0,3.5,10.2); m.tor(C.dbrn,2.5,.4,12, 0,7.0,10.3, 0,0,0);
+             for(let i=0;i<3;i++){ m.box(C.glass,1.2,2.4,.3, -6+i*6,6.0,10.1); } } },
+  pyramid: { t:5, f:8.0, b(m){ for(let i=0;i<9;i++){ const s=20-i*2.2; m.box(0xe8c88a,s,2.2,s, 0,1.1+i*2.2,0); } m.box(0xd8b878,4.0,5.0,1.0, 0,2.5,9.6); m.sph(C.gold,1.4,10, 0,21,0);
+             m.cyl(0xd8b878,1.2,1.4,7.0,10, -11,3.5,7); m.cyl(0xd8b878,1.2,1.4,7.0,10, 11,3.5,7); } },
+  pier:    { t:5, f:7.5, b(m){ m.box(C.brn,12,.8,26, 0,3.6,0);
+             for(let x=0;x<3;x++) for(let z=0;z<7;z++) m.cyl(C.dbrn,.5,.5,4.0,7, -4.5+x*4.5,1.8,-11+z*3.7);
+             m.box(C.red,10,.4,10, 0,9.5,-6); for(let i=0;i<4;i++){ const a=i/4*6.283+.78; m.cyl(C.wht,.4,.4,5.6,8, Math.sin(a)*4.2,6.6,-6+Math.cos(a)*4.2); }
+             m.box(C.teal,7,3,7, 0,5.6,7); m.box(C.wht,7.6,.4,7.6, 0,7.3,7); m.box(C.gold,1.4,1.4,1.4, 0,8.3,7, .78); } },
+};
+const PROP_KEYS = Object.keys(PROPS);
+
+/* how many random colour variants of a prop to bake (cars aren't all one colour) */
+const VARIANTS = { car:5, person:6, house:4, tower:4, boat:2, ball:2, umbrella:2, hut:2, balloon:5 };
+const variantsOf = k => VARIANTS[k] || 1;
+const propKey = (k, v) => variantsOf(k) > 1 ? k + '@' + (v % variantsOf(k)) : k;
+const baseOf = key => { const i = key.indexOf('@'); return i < 0 ? key : key.slice(0, i); };
+
+/* geometry cache: build each prop's merged geometry once, add a soft ground shadow */
+/* every prop is built at this scale — big chunky stuff you have to grow into */
+const PSCALE = 1.75;
+/* real world footprint, and the wave size you need to swallow it.
+   gating is PER OBJECT (compare sizes) — not per tier — so it always matches what you see */
+const footOf = k => PROPS[k].f * PSCALE;
+const needOf = k => PROPS[k].f * PSCALE * 1.05;
+
+const geoCache = {};
+function propGeo(key){
+  if (geoCache[key]) return geoCache[key];
+  const p = PROPS[baseOf(key)], m = mk();
+  m.disc(0x2b6c85, p.f*1.05, 0, .035, 0);   // fake contact shadow
+  p.b(m);
+  const g = m.out();
+  g.scale(PSCALE, PSCALE, PSCALE);
+  return (geoCache[key] = g);
+}
+// pre-warm every prop + variant so the first frames never hitch
+PROP_KEYS.forEach(k => { for (let v=0; v<variantsOf(k); v++) propGeo(propKey(k, v)); });
+
+/* =========================================================
+   TIERS
+   ========================================================= */
+/* a tier is "cleared" once you're big enough for the BIGGEST thing in it.
+   this table is only for the HUD bar / banners — real eating is per object (needOf) */
+const TIER_R    = [0, 0, 0, 0, 0, 0];
+for (const _k in PROPS) TIER_R[PROPS[_k].t] = Math.max(TIER_R[PROPS[_k].t], needOf(_k));
+const TIER_NAME = ['', 'PUDDLE', 'RIPPLE', 'BREAKER', 'BIG WAVE', 'TSUNAMI'];
+const TIER_EATS = ['', 'shells, crabs & beach balls', 'chairs, dogs & people',
+                   'cars, palm trees & boats', 'houses, trucks & windmills', 'towers, ships & the ferris wheel'];
+const TIER_PTS  = [0, 12, 40, 130, 420, 1400];
+/* growth per bite. Kept deliberately low so getting big is a long climb instead
+   of a 30-second snowball — the rivals eat off the exact same table, so nobody
+   (you included) runs away with it early. */
+const TIER_GROW = [0, .056, .17, .43, 1.03, 2.29];
+
+/* sizes are shown in "drops" (x100) so the numbers climb into the thousands */
+const SZ    = r => Math.round(r * 1000);
+const szTxt = r => SZ(r).toLocaleString();
+const TIER_COL  = [0x000000, 0x8ee84a, 0x2fd0e0, 0x3d8bff, 0xff9f3d, 0xff5252];
+
+/* =========================================================
+   MAPS
+   ========================================================= */
+const MAPS = [
+  { id:'bay', name:'SUNNY BAY', lv:1, size:190, rivals:3, diff:.78,
+    d:'A tiny bright beach. Perfect for your first little wave.',
+    sky:0x9fe9ff, sun:0xfff6d8, sand:0xffe3a3, grass:0x86e07a, water:0x2fd0e0,
+    t1:['shell','starfish','ball','bucket','flipflop','crab','duck','towel','gull'],
+    t2:['chair','umbrella','surfboard','bush','dog','person','bench'],
+    t3:['palm','rock','boat','kiosk','tent','hut'],
+    t4:['house','pool','truck'],
+    t5:['lighthouse','ship'] },
+  { id:'resort', name:'PALM RESORT', lv:2, size:215, rivals:4, diff:.88,
+    d:'Pools, palms and a big fancy hotel in the middle.',
+    sky:0x8fe4ff, sun:0xfff0c0, sand:0xffdf9b, grass:0x6fdc74, water:0x22c8e6,
+    t1:['shell','ball','bucket','flipflop','duck','towel','cone','bin','gull'],
+    t2:['chair','umbrella','surfboard','bush','person','bench','cart','sign'],
+    t3:['palm','kiosk','statue','lamp','boat','pine'],
+    t4:['pool','house','truck','silo'],
+    t5:['hotel','ship','ferris'] },
+  { id:'city', name:'BEACH CITY', lv:3, size:250, rivals:4, diff:1.0,
+    d:'Streets, buses and glass towers. Downtown is huge.',
+    sky:0xa8ecff, sun:0xffffff, sand:0xf0e4c8, grass:0x7ddc82, water:0x2bb8e0,
+    t1:['cone','bin','ball','gull','shell','flipflop'],
+    t2:['hydrant','scooter','sign','bench','person','dog','bush','chair'],
+    t3:['car','taxi','police','lamp','kiosk','statue','pine','rock'],
+    t4:['bus','truck','house','crane','silo','ambulance','firetruck'],
+    t5:['tower','hotel','stadium','ferris','church'] },
+  { id:'coral', name:'CORAL COVE', lv:4, size:225, rivals:4, diff:.95,
+    d:'A bright turquoise reef. Sunbathers everywhere and a lighthouse on the point.',
+    sky:0x9ff0ff, sun:0xfffbe0, sand:0xffeec2, grass:0x7fe8c0, water:0x18d8e8,
+    t1:['shell','starfish','crab','duck','ball','bucket','gull','flipflop'],
+    t2:['umbrella','chair','surfboard','bush','person','dog','bench'],
+    t3:['palm','rock','boat','kiosk','statue','tent'],
+    t4:['house','pool','truck','bouncy'],
+    t5:['lighthouse','ship','pier'] },
+  { id:'volcano', name:'VOLCANO ISLE', lv:5, size:235, rivals:5, diff:1.12,
+    d:'Black rocks, huts and a smoking volcano. Rivals are mean here.',
+    sky:0xffd9a8, sun:0xfff2c0, sand:0xd8b48a, grass:0x6cae5a, water:0x1fb0d8,
+    t1:['shell','crab','starfish','bucket','cone','gull'],
+    t2:['bush','person','dog','sign','cart','bench'],
+    t3:['palm','rock','totem','hut','tent','statue'],
+    t4:['house','truck','silo','windmill'],
+    t5:['volcano','ship','lighthouse'] },
+  { id:'ice', name:'FROST FLOE', lv:6, size:250, rivals:5, diff:1.2,
+    d:'A bright frozen island. Penguins, igloos and icebergs.',
+    sky:0xd6f6ff, sun:0xffffff, sand:0xeaf9ff, grass:0xc8f0ff, water:0x37c6ef,
+    t1:['penguin','gull','ball','bucket','bin','cone','snowman'],
+    t2:['igloo','person','sign','bench','chair','dog','candycane'],
+    t3:['pine','rock','tent','lamp','totem'],
+    t4:['house','truck','silo','crane'],
+    t5:['iceberg','ship','tower'] },
+  { id:'pirate', name:'PIRATE COVE', lv:7, size:255, rivals:5, diff:1.22,
+    d:'Wrecked galleons, tumbledown huts and a fort on the headland. Rough crowd.',
+    sky:0xbfe0d8, sun:0xfff0c8, sand:0xe8d2a0, grass:0x5fa85f, water:0x1f9fc0,
+    t1:['shell','crab','starfish','bucket','gull','cone','bin'],
+    t2:['bush','person','dog','sign','cart','bench','chair'],
+    t3:['palm','rock','boat','totem','hut','tent','statue'],
+    t4:['house','truck','crane','silo'],
+    t5:['ship','lighthouse','castle','pier'] },
+  { id:'pier', name:'SUNSET PIER', lv:8, size:270, rivals:5, diff:1.3,
+    d:'The big carnival island. Everything is here — go get it.',
+    sky:0xffc8dd, sun:0xfff0b0, sand:0xffd9a0, grass:0x8ce07a, water:0x3ac0e8,
+    t1:['ball','cone','bin','duck','shell','towel','gull','flipflop','balloon'],
+    t2:['cart','person','bench','sign','chair','umbrella','scooter','dog','donut'],
+    t3:['car','kiosk','lamp','statue','palm','boat','hotdog'],
+    t4:['bus','truck','house','crane','pool','bouncy'],
+    t5:['ferris','pier','tower','hotel','stadium','carousel'] },
+  { id:'dunes', name:'GOLDEN DUNES', lv:9, size:260, rivals:5, diff:1.28,
+    d:'Baking desert coast. Cacti, a dusty town and a pyramid out in the sand.',
+    sky:0xffe2a8, sun:0xfff8d0, sand:0xf0d493, grass:0xc8bf7a, water:0x2fbcd8,
+    t1:['cactus','shell','bucket','cone','bin','gull','balloon'],
+    t2:['bush','person','sign','cart','scarecrow','corn','dog'],
+    t3:['rock','totem','tent','hut','statue','palm','lamp'],
+    t4:['truck','house','crane','silo','gasstation'],
+    t5:['pyramid','castle','tower','church'] },
+  { id:'farm', name:'FARM VALLEY', lv:10, size:265, rivals:5, diff:1.32,
+    d:'Cows, tractors and big red barns. Moo-ve over everything.',
+    sky:0xbff0ff, sun:0xfff6d0, sand:0xe8d8a8, grass:0x74d95e, water:0x35c6e8,
+    t1:['chicken','bin','cone','ball','gull','balloon'],
+    t2:['cow','sheep','haystack','scarecrow','corn','bush','person','dog','sign'],
+    t3:['tractor','pine','rock','hut','lamp','car'],
+    t4:['barn','silo','windmill','truck','house'],
+    t5:['church','train','stadium','tower'] },
+  { id:'spaceport', name:'SPACEPORT', lv:11, size:270, rivals:6, diff:1.36,
+    d:'A launch complex on the coast. Rockets, robots and something not from here.',
+    sky:0xc8d8ff, sun:0xffffff, sand:0xd8dce4, grass:0x9fb0c8, water:0x3a86d8,
+    t1:['cone','bin','ball','gull','balloon'],
+    t2:['person','sign','bench','scooter','hydrant','cart'],
+    t3:['lamp','kiosk','statue','car','police','rock'],
+    t4:['truck','crane','satellite','ufo','robot','helicopter','gasstation'],
+    t5:['rocket','tower','plane','stadium','train'] },
+  { id:'candy', name:'CANDY COAST', lv:12, size:275, rivals:6, diff:1.4,
+    d:'A whole island made of sweets. Try not to get a tummy ache.',
+    sky:0xffd6f0, sun:0xffffff, sand:0xffe8f4, grass:0xa8f0c0, water:0x5ad8f0,
+    t1:['balloon','ball','duck','shell','cone','gull'],
+    t2:['donut','candycane','lollipop','cart','person','bench','umbrella'],
+    t3:['cupcake','icecream','hotdog','kiosk','statue','lamp'],
+    t4:['bouncy','pool','house','truck','crane'],
+    t5:['carousel','waterslide','ferris','hotel','pier'] },
+  { id:'haunted', name:'HAUNTED HOLLOW', lv:13, size:268, rivals:6, diff:1.45,
+    d:'Grey fog, dead pines and an old church. Nobody has mowed the lawns in years.',
+    sky:0x8f8fb0, sun:0xd8d0e8, sand:0xa8a08c, grass:0x4a6a4a, water:0x2a7a8c,
+    t1:['gull','bin','cone','shell','balloon','snowman'],
+    t2:['bush','person','dog','sign','bench','haystack','scarecrow'],
+    t3:['pine','rock','totem','tent','hut','lamp','statue'],
+    t4:['house','barn','windmill','crane','truck'],
+    t5:['church','castle','tower','ferris'] },
+  { id:'dino', name:'DINO PARK', lv:14, size:280, rivals:6, diff:1.5,
+    d:'Giant dinosaurs, jungle and a volcano. The rivals are hungry.',
+    sky:0xffe0b0, sun:0xfff4c8, sand:0xd8bc90, grass:0x5fbf55, water:0x2ab8d8,
+    t1:['shell','crab','starfish','chicken','cactus','gull'],
+    t2:['dinoegg','bush','person','sign','dog','cart','corn'],
+    t3:['palm','rock','totem','hut','tent','pine','car'],
+    t4:['house','truck','crane','windmill','helicopter'],
+    t5:['dino','volcano','stadium','lighthouse','pyramid'] },
+  { id:'reef', name:'RAINBOW REEF', lv:15, size:285, rivals:6, diff:1.52,
+    d:'A candy-coloured holiday reef. Waterslides, ice cream and a big wheel.',
+    sky:0xffd8f8, sun:0xffffff, sand:0xffe8d0, grass:0x9ff0b8, water:0x30e0e8,
+    t1:['shell','starfish','crab','duck','ball','balloon','gull','flipflop'],
+    t2:['umbrella','chair','surfboard','donut','lollipop','candycane','person','cart'],
+    t3:['palm','boat','cupcake','icecream','hotdog','kiosk','statue'],
+    t4:['pool','bouncy','house','truck','crane'],
+    t5:['carousel','waterslide','ferris','pier','hotel'] },
+  { id:'mega', name:'MEGA CITY', lv:16, size:300, rivals:6, diff:1.6,
+    d:'The biggest island of all. Skyscrapers, planes, trains — everything.',
+    sky:0xa8ecff, sun:0xffffff, sand:0xe4dcc8, grass:0x7ddc82, water:0x2bb8e0,
+    t1:['cone','bin','ball','gull','balloon','flipflop','chicken'],
+    t2:['hydrant','scooter','sign','bench','person','dog','bush','donut','cart'],
+    t3:['car','taxi','police','lamp','kiosk','statue','pine','cupcake','hotdog'],
+    t4:['bus','truck','firetruck','ambulance','gasstation','crane','helicopter','robot','satellite','ufo'],
+    t5:['tower','hotel','stadium','church','train','plane','castle','rocket','ferris'] },
+  { id:'alpine', name:'ALPINE RESORT', lv:18, size:295, rivals:6, diff:1.62,
+    d:'A frozen mountain town on the water. Icebergs drifting past the hotels.',
+    sky:0xdff2ff, sun:0xffffff, sand:0xf0f8ff, grass:0xd8eef8, water:0x2fb8e0,
+    t1:['snowman','penguin','gull','bin','cone','ball','bucket'],
+    t2:['igloo','person','dog','bench','sign','chair','candycane'],
+    t3:['pine','rock','lamp','tent','totem','hut'],
+    t4:['house','crane','truck','silo','helicopter'],
+    t5:['iceberg','tower','hotel','church','train'] },
+  { id:'worldsend', name:"WORLD'S END", lv:20, size:320, rivals:7, diff:1.78,
+    d:'The last island. Every single thing in the game is on it, and so is everyone else.',
+    sky:0xffc0a8, sun:0xfff0c0, sand:0xd8c4a8, grass:0x6fae72, water:0x2a9fd0,
+    t1:['shell','starfish','crab','cactus','chicken','gull','balloon','cone','bin'],
+    t2:['person','dog','cow','sheep','dinoegg','cart','sign','bench','scooter'],
+    t3:['palm','pine','rock','totem','hut','car','taxi','statue','lamp'],
+    t4:['house','truck','bus','crane','robot','ufo','helicopter','satellite','gasstation'],
+    t5:['dino','volcano','rocket','castle','pyramid','tower','stadium','plane','train','ship'] },
+];
+/* the props got a lot bigger, so the islands grow with them — and then the
+   islands got a LOT bigger again, into proper city-sized maps */
+const ISLAND_SCALE = 3.6;
+const CAP_F = .17;                                   // biggest a wave can get on an island
+MAPS.forEach(m => { m.size = Math.round(m.size * ISLAND_SCALE); });
+let mapIdx = clamp(+localStorage.getItem(SK+'map') || 0, 0, MAPS.length-1);
+
+/* =========================================================
+   SKINS + UPGRADES + MISSIONS
+   ========================================================= */
+const SKINS = [
+  { n:'CLASSIC',   c1:0x2fd0e0, c2:0xf2feff, p:0 },
+  { n:'TROPICAL',  c1:0x00e5a0, c2:0xd8fff2, p:250 },
+  { n:'SUNSET',    c1:0xff8a3d, c2:0xffe6cc, p:450 },
+  { n:'BUBBLEGUM', c1:0xff5ea8, c2:0xffe2f1, p:700 },
+  { n:'TOXIC',     c1:0x9bff2f, c2:0xf2ffd8, p:1000 },
+  { n:'LAVA',      c1:0xff3b30, c2:0xffd2a8, p:1400 },
+  { n:'DEEP BLUE', c1:0x1650d8, c2:0xa8c8ff, p:1800 },
+  { n:'ICE',       c1:0xa8e9ff, c2:0xffffff, p:2300 },
+  { n:'VOID',      c1:0x7b4bff, c2:0xdcc8ff, p:3000 },
+  { n:'GOLD',      c1:0xffc93c, c2:0xfff6d0, p:4000 },
+  { n:'RAINBOW',   c1:0xff4bd8, c2:0x4bffd8, p:6000, rainbow:true },
+];
+/* =========================================================
+   GAME MODES
+   ========================================================= */
+/* No clock anywhere — every mode runs until you quit out of the pause menu
+   (SURVIVAL is the one exception: it still ends when your 3 lives are gone). */
+const MODES = [
+  { k:'classic',  n:'CLASSIC',   ic:'🌊', d:'No clock. Just keep eating until you own the island.',
+    rivals:0, mult:1,   grow:1,    pw:0, boss:false, lives:0 },
+  { k:'rush',     n:'RUSH',      ic:'⚡', d:'DOUBLE points and much faster growth. The quick way up.',
+    rivals:0, mult:2,   grow:1.7,  pw:5, boss:false, lives:0 },
+  { k:'marathon', n:'MARATHON',  ic:'⏳', d:'Two extra rival waves and powerups all over the map.',
+    rivals:2, mult:1,   grow:1,    pw:5, boss:false, lives:0 },
+  { k:'boss',     n:'BOSS HUNT', ic:'👹', d:'A giant MEGA WAVE turns up. Swallow it for a fortune.',
+    rivals:0, mult:1.3, grow:1.15, pw:3, boss:true,  lives:0 },
+  { k:'survival', n:'SURVIVAL',  ic:'💀', d:'Rivals start BIG and hunt you. You get 3 lives.',
+    rivals:1, mult:1.7, grow:1.25, pw:4, boss:false, lives:3 },
+];
+let modeIdx = clamp(+localStorage.getItem(SK+'mode') || 0, 0, MODES.length-1);
+const MODE = () => MODES[modeIdx];
+
+/* =========================================================
+   PETS  (a little buddy that swims around your wave)
+   ========================================================= */
+const PETS = [
+  { n:'NO PET',  p:0,    perk:'Just you and the water', c1:0xdddddd, c2:0xbbbbbb, b:null },
+  { n:'DUCKY',   m:'m1',  perk:'+5% points',            pts:.05, c1:0xffd93d, c2:0xff9f3d,
+    b:m=>{ m.sph(C.yel,.5,10, 0,.5,0); m.sph(C.yel,.3,9, 0,.95,.2); m.con(C.org,.15,.32,7, 0,.95,.5, 0,Math.PI/2,0);
+           m.sph(C.blk,.07,5, .12,1.02,.4); m.sph(C.blk,.07,5, -.12,1.02,.4); m.box(C.yel,.5,.1,.4, .45,.5,-.1, .4); m.box(C.yel,.5,.1,.4, -.45,.5,-.1, -.4); } },
+  { n:'CRABBY',  m:'m4',  perk:'+4 undertow reach',     mag:4,   c1:0xff5252, c2:0xff9f3d,
+    b:m=>{ m.sph(C.red,.55,9, 0,.5,0); m.sph(C.wht,.13,6, .2,.75,.42); m.sph(C.wht,.13,6, -.2,.75,.42);
+           m.sph(C.blk,.07,5, .2,.78,.5); m.sph(C.blk,.07,5, -.2,.78,.5);
+           for(let i=0;i<6;i++){ const s=i<3?1:-1; m.box(C.red,.55,.11,.11, s*.6,.3,(i%3-1)*.28, 0,0,s*.35); }
+           m.box(C.red,.4,.22,.22, .7,.55,.4, .5); m.box(C.red,.4,.22,.22, -.7,.55,.4, -.5); } },
+  { n:'DOLPHIN', m:'m5',  perk:'+7% wave speed',        spd:.07, c1:0x3d8bff, c2:0xa8e9ff,
+    b:m=>{ m.sph(0x5aa8e8,.62,11, 0,.7,0); m.con(0x5aa8e8,.4,1.1,9, 0,.7,.85, 0,-Math.PI/2,0);
+           m.con(0x5aa8e8,.35,.9,8, 0,.7,-.8, 0,Math.PI/2,0); m.box(0x5aa8e8,.14,.7,.7, 0,1.2,-.1, 0,0,.3);
+           m.box(0x5aa8e8,1.2,.12,.4, 0,.55,-.1); m.box(0x5aa8e8,.12,.5,.6, 0,.8,-1.3, 0,0,1.5);
+           m.sph(C.wht,.4,9, 0,.5,.1); m.sph(C.blk,.08,5, .28,.9,.52); m.sph(C.blk,.08,5, -.28,.9,.52); } },
+  { n:'SHARKY',  m:'m6', perk:'+8% growth',            grw:.08, c1:0x8b98a6, c2:0xf7fbff,
+    b:m=>{ m.sph(C.mgry,.72,11, 0,.8,0); m.con(C.mgry,.5,1.3,9, 0,.8,1.0, 0,-Math.PI/2,0);
+           m.sph(C.wht,.5,9, 0,.55,.2); m.box(C.mgry,.18,1.0,.9, 0,1.5,-.1, 0,0,.2);
+           m.box(C.mgry,1.7,.14,.5, 0,.6,0, 0,0,0); m.box(C.mgry,.14,.9,.8, 0,1.0,-1.2, 0,0,1.3);
+           m.box(C.wht,.5,.1,.14, .2,.55,1.05); m.box(C.wht,.5,.1,.14, -.2,.55,1.05);
+           m.sph(C.blk,.09,5, .3,1.0,.6); m.sph(C.blk,.09,5, -.3,1.0,.6); } },
+  { n:'SHELLDON',m:'m9', perk:'Shrink much less when smashed', tough:1, c1:0x35c76a, c2:0xa87345,
+    b:m=>{ m.sph(C.brn,.85,12, 0,.6,0); m.sph(0x8a5a2e,.6,10, 0,.85,0);
+           for(let i=0;i<6;i++){ const a=i/6*6.283; m.sph(0xc98f52,.22,6, Math.cos(a)*.55,.95,Math.sin(a)*.55); }
+           m.sph(C.grn,.34,9, 0,.6,.85); m.sph(C.blk,.07,5, .14,.68,1.1); m.sph(C.blk,.07,5, -.14,.68,1.1);
+           m.box(C.grn,.3,.2,.5, .55,.3,.5, .4); m.box(C.grn,.3,.2,.5, -.55,.3,.5, -.4); } },
+  { n:'DRAGON',  m:'m15', perk:'+12% points & +5% speed', pts:.12, spd:.05, c1:0xff3b30, c2:0xffc93c,
+    b:m=>{ m.sph(0x8ee84a,.7,11, 0,.85,0); m.sph(0x8ee84a,.42,9, 0,1.5,.55); m.box(0x8ee84a,.5,.4,.5, 0,1.45,.95);
+           m.con(C.yel,.1,.3,5, .15,1.72,.5, 0,0,.2); m.con(C.yel,.1,.3,5, -.15,1.72,.5, 0,0,-.2);
+           m.sph(C.blk,.08,5, .2,1.55,.85); m.sph(C.blk,.08,5, -.2,1.55,.85);
+           for(let i=0;i<5;i++) m.con(C.org,.16,.34,5, 0,1.3-i*.12,.1-i*.36, 0,0,-.4);
+           m.box(0x8ee84a,.16,.5,1.0, 0,.7,-1.1, 0,-.3,0); m.con(C.org,.3,.5,5, 0,.7,-1.7, 0,-Math.PI/2,0);
+           m.box(C.org,1.5,.12,.7, 0,1.1,0, 0,.35,0); m.box(C.org,1.5,.12,.7, 0,1.1,0, 0,-.35,0);
+           m.box(0x8ee84a,.24,.4,.24, .5,.25,.3); m.box(0x8ee84a,.24,.4,.24, -.5,.25,.3); } },
+];
+/* Pets are EARNED, never bought — each is tied to a mission and shows up the
+   moment that mission completes. (`p` prices on old saves are ignored.) */
+const petOwned = (p, i) => i === 0 || (p.m ? S.claimed.includes(p.m) : S.pets.includes(i));
+const petOf = () => {
+  const i = clamp(S.pet||0, 0, PETS.length-1);
+  return petOwned(PETS[i], i) ? PETS[i] : PETS[0];   // a pet you no longer own gives nothing
+};
+
+/* Permanent upgrades are GONE — they stacked up until every island was a
+   walkover. Everyone now plays every round on exactly the same stats as the
+   rivals do, and the only edge you can buy is a pet. */
+const UPG = [];
+const ug = k => 0;
+const U = {
+  speed:  () => (1 + ug('speed')*.085) * (1 + (petOf().spd||0)),
+  growth: () => (1 + ug('growth')*.105) * (1 + (petOf().grw||0)),
+  start:  () => ug('start')*.5,
+  magnet: () => ug('magnet')*2.7 + (petOf().mag||0),
+  surgeT: () => 1 + ug('surge')*.16,
+  surgeCd:() => 1 - ug('surge')*.09,
+  shield: () => ug('shield')*1.2,
+  comboT: () => 1.7 + ug('combo')*.4,
+  points: () => (1 + ug('points')*.07) * (1 + (petOf().pts||0)),
+  tough:  () => clamp(ug('tough')*.045 + (petOf().tough ? .1 : 0), 0, .21),
+  lucky:  () => ug('lucky'),
+};
+const MISSIONS = [
+  { k:'m1', n:'FIRST SPLASH',  d:'Eat 100 things',              g:100,   f:s=>s.eat,    r:150 },
+  { k:'m2', n:'BEACH CLEANER', d:'Eat 600 things',              g:600,   f:s=>s.eat,    r:450 },
+  { k:'m3', n:'HUNGRY TIDE',   d:'Eat 3000 things',             g:3000,  f:s=>s.eat,    r:1400 },
+  { k:'m4', n:'HOUSE WRECKER', d:'Swallow 40 giant things',     g:40,    f:s=>s.eatBig, r:700 },
+  { k:'m5', n:'WAVE EATER',    d:'Swallow 15 rival waves',      g:15,    f:s=>s.rivals, r:800 },
+  { k:'m6', n:'GET HUGE',      d:'Reach size 15,000 in one round', g:15000, f:s=>SZ(s.size||0), r:600 },
+  { k:'m7', n:'MONSTER WAVE',  d:'Reach size 30,000 in one round', g:30000, f:s=>SZ(s.size||0), r:1200 },
+  { k:'m8', n:'HIGH TIDE',     d:'Score 40,000 in one round',   g:40000, f:s=>s.score,  r:1000 },
+  { k:'m9', n:'CHAMPION',      d:'Win 10 rounds (be biggest)',  g:10,    f:s=>s.wins,   r:1500 },
+  { k:'m10',n:'COMBO KING',    d:'Hit a 5× combo',              g:5,     f:s=>s.combo||0, r:500 },
+  { k:'m11',n:'ISLAND HOPPER', d:'Play every island',           g:MAPS.length, f:s=>(s.maps||[]).length, r:900 },
+  { k:'m12',n:'TIDAL TITAN',   d:'Eat 10,000 things',           g:10000, f:s=>s.eat,    r:3000 },
+  { k:'m13',n:'CITY FLATTENER',d:'Swallow 150 giant things',    g:150,   f:s=>s.eatBig, r:2200 },
+  { k:'m14',n:'WAVE KING',     d:'Swallow 40 rival waves',      g:40,    f:s=>s.rivals, r:2000 },
+  { k:'m15',n:'ISLAND EATER',  d:'Reach size 60,000 in one round', g:60000, f:s=>SZ(s.size||0), r:2600 },
+  { k:'m16',n:'SCORE MACHINE', d:'Score 120,000 in one round',  g:120000,f:s=>s.score,  r:2800 },
+  { k:'m17',n:'BOSS SLAYER',   d:'Swallow 3 MEGA WAVE bosses',  g:3,     f:s=>s.bosses||0, r:2500 },
+  { k:'m18',n:'SURVIVOR',      d:'Finish Survival with a life left', g:1, f:s=>s.survived||0, r:1800 },
+  { k:'m19',n:'COMBO MASTER',  d:'Hit a x5 combo',              g:5,     f:s=>s.combo||0, r:700 },
+  { k:'m20',n:'VETERAN',       d:'Play 50 rounds',              g:50,    f:s=>s.rounds, r:2400 },
+  { k:'m21',n:'POWER ADDICT',  d:'Grab 200 powerups',           g:200,   f:s=>s.pw,     r:1600 },
+  { k:'m22',n:'CHAMPION II',   d:'Win 30 rounds',               g:30,    f:s=>s.wins,   r:3200 },
+];
+
+/* =========================================================
+   GAME STATE
+   ========================================================= */
+const CELL = 26;
+const G = {
+  state:'lobby', map:MAPS[0], size:190, half:95, cap:38,
+  props:[], grid:new Map(), swirl:[], trail:[], pws:[],
+  P:null, rivals:[], all:[],
+  t:0, time:0, score:0, eaten:0, eatBig:0, rivalsEaten:0, pwGot:0,
+  combo:1, comboT:0, running:false, maxR:0, initSmall:0, respawnT:0, hintT:0,
+  scene:null, ocean:null, oceanBase:null, clouds:null,
+};
+
+const gkey = (cx,cz) => cx*4096 + cz;
+function gAdd(o){
+  o.cx = Math.floor(o.x/CELL); o.cz = Math.floor(o.z/CELL);
+  const k = gkey(o.cx,o.cz); let a = G.grid.get(k); if (!a) G.grid.set(k, a=[]); a.push(o);
+}
+function gDel(o){
+  const a = G.grid.get(gkey(o.cx,o.cz)); if (!a) return;
+  const i = a.indexOf(o); if (i>=0) a.splice(i,1);
+}
+function gMove(o){
+  const cx = Math.floor(o.x/CELL), cz = Math.floor(o.z/CELL);
+  if (cx!==o.cx || cz!==o.cz){ gDel(o); gAdd(o); }
+}
+function gQuery(x,z,r,fn){
+  const a0 = Math.floor((x-r)/CELL), a1 = Math.floor((x+r)/CELL);
+  const b0 = Math.floor((z-r)/CELL), b1 = Math.floor((z+r)/CELL);
+  for (let cx=a0; cx<=a1; cx++) for (let cz=b0; cz<=b1; cz++){
+    const a = G.grid.get(gkey(cx,cz)); if (!a) continue;
+    for (let i=a.length-1; i>=0; i--) fn(a[i]);
+  }
+}
+
+/* =========================================================
+   THE WAVE  (player + rivals use the same builder)
+   ========================================================= */
+function buildWave(c1hex, c2hex){
+  const g = new THREE.Group();
+  const c1 = new THREE.Color(c1hex), c2 = new THREE.Color(c2hex);
+
+  const body = new THREE.Mesh(new THREE.CircleGeometry(1, 46),
+    new THREE.MeshBasicMaterial({ color:c1, transparent:true, opacity:.52, depthWrite:false }));
+  body.rotation.x = -Math.PI/2; body.position.y = .10; body.renderOrder = 3; g.add(body);
+
+  const inner = new THREE.Mesh(new THREE.RingGeometry(.28, .78, 30, 1),
+    new THREE.MeshBasicMaterial({ color:c2, transparent:true, opacity:.26, depthWrite:false }));
+  inner.rotation.x = -Math.PI/2; inner.position.y = .14; inner.renderOrder = 4; g.add(inner);
+
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(1, .055, 6, 48),
+    new THREE.MeshBasicMaterial({ color:c2, transparent:true, opacity:.95, depthWrite:false }));
+  rim.rotation.x = -Math.PI/2; rim.position.y = .15; rim.renderOrder = 5; g.add(rim);
+
+  // curling crest that faces the way you're going
+  const crestG = new THREE.Group(); g.add(crestG);
+  const crest = new THREE.Mesh(new THREE.TorusGeometry(.92, .2, 8, 24, Math.PI*1.15),
+    new THREE.MeshLambertMaterial({ color:c1, transparent:true, opacity:.9 }));
+  crest.rotation.x = -Math.PI/2; crest.scale.set(1, 2.2, 1); crest.position.y = .18; crestG.add(crest);
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(.92, .085, 6, 24, Math.PI*1.15),
+    new THREE.MeshBasicMaterial({ color:c2, transparent:true, opacity:.95, depthWrite:false }));
+  lip.rotation.x = -Math.PI/2; lip.scale.set(1, 2.2, 1); lip.position.y = .62; lip.renderOrder = 5; crestG.add(lip);
+
+  // spray
+  const N = 80, sp = new Float32Array(N*3), sv = [];
+  for (let i=0;i<N;i++){
+    const a = Math.random()*6.283, d = rnd(.55,1.05);
+    sp[i*3] = Math.cos(a)*d; sp[i*3+1] = rnd(.1,.9); sp[i*3+2] = Math.sin(a)*d;
+    sv.push({ a, d, y:sp[i*3+1], vy:rnd(.5,1.6) });
+  }
+  const sg = new THREE.BufferGeometry();
+  sg.setAttribute('position', new THREE.BufferAttribute(sp,3));
+  const spray = new THREE.Points(sg, new THREE.PointsMaterial({
+    color:c2, size:.17, transparent:true, opacity:.9, depthWrite:false, sizeAttenuation:true }));
+  spray.renderOrder = 6; g.add(spray);
+
+  // spawn-shield bubble — hidden until the wave respawns
+  const bubble = new THREE.Mesh(new THREE.SphereGeometry(1.32, 18, 12),
+    new THREE.MeshBasicMaterial({ color:0x8ef0ff, transparent:true, opacity:.3,
+      depthWrite:false, side:THREE.DoubleSide }));
+  bubble.position.y = .45; bubble.scale.y = .8; bubble.renderOrder = 7;
+  bubble.visible = false; g.add(bubble);
+
+  g.userData = { body, inner, rim, crestG, crest, lip, spray, sv, c1, c2, bubble };
+  return g;
+}
+
+function animWave(w, dt, t, moving){
+  const u = w.mesh.userData;
+  u.inner.rotation.z += dt * (1.4 + (moving?1.6:0));
+  u.crestG.position.y = Math.sin(t*4.5)*.03;
+  // the whole wave is scaled by its radius, so flatten the crest as it grows —
+  // otherwise a big wave becomes a wall of water you can't see past
+  const flat = 1 / (1 + (w.r||1)*.05);
+  u.crest.scale.y = (2.2 + Math.sin(t*5.2)*.25) * flat;
+  u.lip.scale.y = u.crest.scale.y;
+  u.lip.position.y = .18 + u.crest.scale.y*.2;
+  u.rim.material.opacity = .78 + Math.sin(t*6)*.18;
+  if (w.dirx || w.dirz) u.crestG.rotation.y = Math.atan2(w.dirx, w.dirz);
+  // spray
+  const P = u.spray.geometry.attributes.position, arr = P.array;
+  for (let i=0;i<u.sv.length;i++){
+    const s = u.sv[i];
+    s.y += s.vy*dt; s.a += dt*(moving?2.2:.7);
+    if (s.y > 1.15){ s.y = .05; s.d = rnd(.5,1.06); s.a = Math.random()*6.283; s.vy = rnd(.5,1.6); }
+    arr[i*3] = Math.cos(s.a)*s.d; arr[i*3+1] = s.y; arr[i*3+2] = Math.sin(s.a)*s.d;
+  }
+  P.needsUpdate = true;
+  if (u.rainbow){
+    const h = (t*.14) % 1; u.body.material.color.setHSL(h, .95, .6);
+    u.crest.material.color.setHSL(h, .95, .62);
+    u.rim.material.color.setHSL((h+.4)%1, 1, .85);
+    u.lip.material.color.copy(u.rim.material.color);
+    u.spray.material.color.copy(u.rim.material.color);
+  }
+}
+
+/* Floating name tag over a rival wave: their name on top, how big they are
+   right now underneath, so you can tell at a glance who you can swallow. */
+function drawLabel(sp, name, colHex, sizeTxt){
+  const cv = sp.userData.cv, x = cv.getContext('2d');
+  x.clearRect(0, 0, cv.width, cv.height);
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.lineWidth = 9; x.strokeStyle = 'rgba(6,41,60,.92)';
+  x.font = '900 40px system-ui';
+  x.strokeText(name, 256, 36);
+  x.fillStyle = '#' + colHex.toString(16).padStart(6,'0'); x.fillText(name, 256, 36);
+  if (sizeTxt){
+    x.font = '900 54px system-ui';
+    x.strokeText(sizeTxt, 256, 92);
+    x.fillStyle = '#ffffff'; x.fillText(sizeTxt, 256, 92);
+  }
+  sp.material.map.needsUpdate = true;
+}
+function labelSprite(text, colHex){
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 128;
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:tex, transparent:true, depthWrite:false }));
+  s.userData = { cv, name:text, col:colHex, shown:-1, t:0 };
+  drawLabel(s, text, colHex, '');
+  s.scale.set(14, 3.5, 1); return s;
+}
+
+/* =========================================================
+   WORLD BUILD
+   ========================================================= */
+/* Seconds of "can't be touched" on spawn and on every respawn.
+   You get a full minute to get back on your feet. The rivals only get a few
+   seconds, so they stay fair game for each other — otherwise half the field
+   would be untouchable at any moment and nobody would ever get eaten. */
+const SPAWN_SAFE = 60;
+const RIVAL_SAFE = 5;
+const RIVAL_NAMES = ['RIPTIDE','SPLASHY','BIG BLUE','FOAMY','WHIRLPOOL','SWIRLY','TIDAL','SOAKER','DRENCH','GUSH'];
+const RIVAL_COLS  = [0xff5252, 0x9b5bff, 0x67e87a, 0xffc93c, 0xff69b4];
+
+/* cached prop geometry is reused forever — everything else gets freed between rounds */
+const cachedGeo = new Set();
+function markCached(){ for (const k in geoCache) cachedGeo.add(geoCache[k]); }
+markCached();
+
+function disposeScene(sc){
+  if (!sc) return;
+  sc.traverse(o => {
+    if (o.geometry && !cachedGeo.has(o.geometry)) o.geometry.dispose();
+    const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+    for (const m of mats){
+      if (m === propMat || m === groundMat) continue;
+      if (m.map) m.map.dispose();
+      m.dispose();
+    }
+  });
+}
+function clearScene(){
+  disposeScene(G.scene);
+  G.scene = null; G.ocean = null; G.clouds = null;
+  G.props.length = 0; G.grid.clear(); G.swirl.length = 0;
+  G.trail.length = 0; G.pws.length = 0; G.rivals.length = 0; G.all.length = 0;
+}
+
+/* The island is laid out like a real city: a grid of streets cutting it into
+   blocks, two wide avenues through the middle, a ring road and a downtown
+   plaza. Both the road mesh and the prop scatter read from this, so nothing
+   ever gets built in the middle of a street. */
+function cityGrid(map){
+  const span = map.size*.94;
+  const pitch = 74*PSCALE;                            // one block + its street
+  const n = Math.max(4, Math.round(span/pitch));      // blocks across
+  const lines = [];
+  for (let i=0;i<=n;i++) lines.push(-span/2 + i*(span/n));
+  return { span, lines, block:span/n, rw:10*PSCALE, aw:17*PSCALE };
+}
+/* true if (x,z) sits on tarmac — `pad` widens the check by a prop's footprint */
+function onRoad(CG, x, z, pad){
+  pad = pad || 0;
+  if (Math.abs(x) < CG.aw*.5 + pad || Math.abs(z) < CG.aw*.5 + pad) return true;   // the two avenues
+  for (let i=0;i<CG.lines.length;i++){
+    const L = CG.lines[i];
+    if (Math.abs(x-L) < CG.rw*.5 + pad || Math.abs(z-L) < CG.rw*.5 + pad) return true;
+  }
+  return false;
+}
+
+/* Fallback ring per tier, only used for anything not given a zone below. */
+const PROP_BAND = [null, [.60,.99], [.42,.90], [.26,.72], [.12,.48], [0,.28]];
+
+/* Where things actually live, like a real seaside town laid out from the water
+   inwards: sand → seafront → parks and farmland → houses → downtown towers.
+   Each zone is a ring given as a fraction of the island's half-width, 0 being
+   the middle and 1 the shoreline. Placement reads this instead of the prop's
+   tier, so a beach ball is on the beach and a skyscraper is downtown whatever
+   size they happen to be. */
+const ZONE_BAND = {
+  litter:     [.18, .99],   // odds and ends that turn up anywhere
+  shore:      [.82, .99],   // towels, shells, crabs, parasols — on the sand
+  waterfront: [.80, .97],   // boats, the pier, the lighthouse
+  promenade:  [.62, .86],   // palms, food carts, benches, the funfair
+  park:       [.44, .74],   // grass, trees, dogs, people, statues
+  farm:       [.46, .80],   // fields out past the parks
+  wild:       [.50, .86],   // volcanos, dinosaurs and other landmarks
+  suburb:     [.24, .56],   // houses and traffic
+  downtown:   [0,   .34],   // the towers in the middle
+};
+const ZONE_OF = {};
+for (const [zone, keys] of Object.entries({
+  litter:     'cone bin gull balloon ball',
+  shore:      'shell starfish crab towel flipflop bucket duck surfboard umbrella chair penguin snowman',
+  waterfront: 'boat ship lighthouse pier iceberg',
+  promenade:  'palm kiosk cart hotdog icecream donut lollipop candycane cupcake bench sign lamp waterslide carousel ferris bouncy cactus',
+  park:       'bush pine dog person statue totem rock tent hut igloo dinoegg pool',
+  farm:       'cow sheep chicken corn haystack scarecrow barn silo windmill tractor',
+  wild:       'volcano dino pyramid castle',
+  suburb:     'house car hydrant scooter truck gasstation ambulance firetruck church crane',
+  downtown:   'tower hotel stadium bus taxi police train plane rocket satellite ufo robot helicopter',
+})) for (const k of keys.split(' ')) ZONE_OF[k] = ZONE_BAND[zone];
+/* which ring a given prop belongs in */
+const bandOf = (kb, tier) => ZONE_OF[kb] || PROP_BAND[tier];
+
+function makeIsland(map){
+  const S2 = map.size, m = mk();
+  const beach = map.sand, land = map.grass;
+  // NB: keep these two tops at different heights or they z-fight into stripes
+  m.box(beach, S2+20, 3.0, S2+20, 0,-1.8,0);                  // beach shelf (top at -0.3)
+  m.box(land,  S2, 1.6, S2, 0,-0.8,0);                        // island top  (top at  0.0)
+  // bright patches so the ground isn't flat colour
+  for (let i=0;i<30;i++){
+    const r = rnd(6, S2*.46), a = rnd(0,6.283), s = rnd(9, 26)*PSCALE;
+    m.box(i%3 ? 0xffffff : beach, s, .12, s*rnd(.6,1.4), Math.cos(a)*r, .02, Math.sin(a)*r, rnd(0,3.14));
+  }
+  // ── street grid: every block boundary gets a road, both ways. Layers are
+  //    stacked in increasing y (kerb → street → avenue → dashes) so they never
+  //    z-fight into stripes. ──
+  const CG = cityGrid(map);
+  for (const L of CG.lines){                                   // pale pavement kerbs
+    m.box(0xe6ecf0, CG.rw*1.4, .14, CG.span, L, .03, 0);
+    m.box(0xe6ecf0, CG.span, .14, CG.rw*1.4, 0, .03, L);
+  }
+  for (const L of CG.lines){                                   // the streets themselves
+    m.box(0x707d8a, CG.rw, .16, CG.span, L, .05, 0);
+    m.box(0x707d8a, CG.span, .16, CG.rw, 0, .05, L);
+  }
+  m.box(0x66727e, CG.aw, .18, CG.span, 0,.07,0);               // the two main avenues
+  m.box(0x66727e, CG.span, .18, CG.aw, 0,.07,0);
+  const dash = Math.max(6, Math.round(CG.span/(11*PSCALE)));
+  for (let i=-dash;i<=dash;i++){
+    const p = i*(CG.span/(dash*2))*.99;
+    m.box(0xffffff, 1.1*PSCALE, .2, 4.4*PSCALE, 0,.09, p);
+    m.box(0xffffff, 4.4*PSCALE, .2, 1.1*PSCALE, p,.09, 0);
+  }
+  // ring road: each segment's long (Z) axis must lie along the tangent, so ry = -a
+  const rw = CG.rw;
+  const rr = S2*.31;
+  for (let i=0;i<96;i++){ const a=i/96*6.283;
+    m.box(0x707d8a, rw*.9, .15, rr*6.283/96*1.3, Math.cos(a)*rr, .11, Math.sin(a)*rr, -a); }
+  for (let i=0;i<48;i++){ const a=(i+.5)/48*6.283;
+    m.box(0xffffff, 1.0*PSCALE, .2, 3.0*PSCALE, Math.cos(a)*rr, .13, Math.sin(a)*rr, -a); }
+  // central plaza — sits on top of the avenues where they cross downtown
+  m.cyl(0xd9e6ee, S2*.10, S2*.10, .2, 26, 0,.15,0);
+  m.cyl(map.water, S2*.035, S2*.035, .22, 20, 0,.19,0);
+  return new THREE.Mesh(m.out(), groundMat);
+}
+
+function makeClouds(){
+  const m = mk();
+  for (let i=0;i<14;i++){
+    const x = rnd(-500,500), y = rnd(90,170), z = rnd(-500,500), s = rnd(11,26);
+    m.sph(0xffffff, s, 7, x, y, z);
+    m.sph(0xf4fbff, s*.72, 7, x+s*1.1, y-s*.2, z+s*.2);
+    m.sph(0xeef8ff, s*.62, 7, x-s*1.0, y-s*.15, z-s*.3);
+  }
+  return new THREE.Mesh(m.out(), new THREE.MeshLambertMaterial({ vertexColors:true, fog:false }));
+}
+
+function buildWorld(map){
+  clearScene();
+  const sc = new THREE.Scene();
+  G.scene = sc; G.map = map; G.size = map.size; G.half = map.size/2; G.cap = map.size*CAP_F;
+  sc.background = new THREE.Color(map.sky);
+  sc.fog = new THREE.Fog(map.sky, map.size*.95, map.size*2.4);
+
+  // keep the lighting white so the island colours stay bright and poppy
+  sc.add(new THREE.AmbientLight(0xffffff, .55));
+  sc.add(new THREE.HemisphereLight(0xffffff, 0xcfe0d8, .75));
+  const dl = new THREE.DirectionalLight(0xffffff, .62); dl.position.set(90,160,60); sc.add(dl);
+  const dl2 = new THREE.DirectionalLight(map.sun, .22); dl2.position.set(-80,60,-90); sc.add(dl2);
+
+  // sun + clouds
+  const sun = new THREE.Mesh(new THREE.SphereGeometry(26, 14, 10),
+    new THREE.MeshBasicMaterial({ color:map.sun, fog:false }));
+  sun.position.set(-260, 210, -420); sc.add(sun);
+  G.clouds = makeClouds(); sc.add(G.clouds);
+
+  // ocean (animated) + foam edge
+  const og = new THREE.PlaneGeometry(map.size*7, map.size*7, 46, 46);
+  og.rotateX(-Math.PI/2);
+  const ocean = new THREE.Mesh(og, new THREE.MeshLambertMaterial({ color:map.water }));
+  ocean.position.y = -1.0; sc.add(ocean);
+  G.ocean = ocean; G.oceanBase = Float32Array.from(og.attributes.position.array);
+  const foam = new THREE.Mesh(new THREE.BoxGeometry(map.size+44, .5, map.size+44),
+    new THREE.MeshLambertMaterial({ color:0xffffff, transparent:true, opacity:.6 }));
+  foam.position.y = -.72; sc.add(foam);
+
+  sc.add(makeIsland(map));
+
+  /* ---- scatter props into the city blocks: small stuff out on the beach,
+         giants downtown, and nothing ever standing in a street ---- */
+  const CG = cityGrid(map);
+  // 1.5× the old per-metre density on a map that's several times bigger, so
+  // there is a LOT more to eat even though it's all spread much further apart
+  const f = map.size/190*1.5/PSCALE;
+  const COUNT = [0, Math.round(150*f), Math.round(96*f), Math.round(56*f), Math.round(27*f), Math.round(11*f)];
+  // the respawner keeps topping the island back up to these numbers
+  G.cityGrid = CG; G.propTarget = COUNT;
+  // bucketed overlap test — there are thousands of props on the big maps now,
+  // so a flat O(n) scan per placement attempt would hitch for seconds
+  const CELL = 40*PSCALE, buckets = new Map();
+  const bk = (cx,cz) => cx + ',' + cz;
+  const fits = (x,z,r) => {
+    const x0 = Math.floor((x-r-8)/CELL), x1 = Math.floor((x+r+8)/CELL);
+    const z0 = Math.floor((z-r-8)/CELL), z1 = Math.floor((z+r+8)/CELL);
+    for (let cx=x0;cx<=x1;cx++) for (let cz=z0;cz<=z1;cz++){
+      const arr = buckets.get(bk(cx,cz)); if (!arr) continue;
+      for (let i=0;i<arr.length;i++){
+        const p = arr[i], dx = p.x-x, dz = p.z-z;
+        if (dx*dx+dz*dz < (p.r+r+3.5)*(p.r+r+3.5)) return false;
+      }
+    }
+    return true;
+  };
+  const remember = (x,z,r) => {
+    const p = { x, z, r };
+    const x0 = Math.floor((x-r)/CELL), x1 = Math.floor((x+r)/CELL);
+    const z0 = Math.floor((z-r)/CELL), z1 = Math.floor((z+r)/CELL);
+    for (let cx=x0;cx<=x1;cx++) for (let cz=z0;cz<=z1;cz++){
+      const k = bk(cx,cz); let a = buckets.get(k);
+      if (!a) buckets.set(k, a = []);
+      a.push(p);
+    }
+  };
+  for (let t=5; t>=1; t--){
+    const keys = map['t'+t]; if (!keys || !keys.length) continue;
+    for (let i=0;i<COUNT[t];i++){
+      const kb = pick(keys), pf = footOf(kb);
+      // towers and stadiums are allowed to sit right up against the kerb; the
+      // small stuff has to keep its whole footprint out of the road
+      const pad = t >= 4 ? 1 : pf*.7, band = bandOf(kb, t);
+      let x=0, z=0, ok=false;
+      for (let tries=0; tries<40; tries++){
+        const rr = rnd(band[0], band[1]) * (G.half-12), a = rnd(0,6.283);
+        x = Math.cos(a)*rr; z = Math.sin(a)*rr;
+        if (Math.abs(x) > G.half-10 || Math.abs(z) > G.half-10) continue;
+        if (onRoad(CG, x, z, pad)) continue;
+        if (fits(x,z,pf)){ ok=true; break; }
+      }
+      if (!ok) continue;
+      remember(x, z, pf);
+      addProp(kb, x, z);
+    }
+  }
+  G.initSmall = G.props.filter(o => o.tier<=2).length;
+
+  /* ---- powerups: none. The spinning pickups were free upgrades lying on the
+         ground and they made islands a walkover, so nothing spawns any more. ---- */
+
+  /* ---- player + rivals ---- */
+  const skin = SKINS[clamp(S.equip,0,SKINS.length-1)];
+  const P = {
+    isP:true, name:NAME, x:0, z:G.half*.70, r:2.2 + U.start(), er:2.2, vx:0, vz:0, dirx:0, dirz:-1,
+    score:0, eaten:0, col:skin.c1, alive:true, surge:0, surgeCd:0, hurt:0,
+    safe:SPAWN_SAFE + U.shield(), spawn:{ x:0, z:G.half*.70 },
+    fx:{ magnet:0, x2:0, giant:0, shield:0 },
+    mesh:buildWave(skin.c1, skin.c2),
+  };
+  if (skin.rainbow) P.mesh.userData.rainbow = true;
+  sc.add(P.mesh); G.P = P;
+
+  G.rivals = [];
+  const names = RIVAL_NAMES.slice().sort(()=>Math.random()-.5);
+  const nRivals = Math.min(names.length, map.rivals + MODE().rivals);
+  const survival = MODE().k === 'survival';
+  for (let i=0;i<nRivals;i++){
+    const col = RIVAL_COLS[i % RIVAL_COLS.length];
+    const a = (i+1)/(nRivals+1) * 6.283 + rnd(-.3,.3);
+    const r0 = survival ? rnd(6, 11) + i*1.4 : 2.2;
+    const R = {
+      isP:false, name:names[i], x:Math.cos(a)*G.half*.8, z:Math.sin(a)*G.half*.8,
+      r:r0, er:r0, vx:0, vz:0, dirx:0, dirz:1, score:0, eaten:0, col, alive:true,
+      surge:0, surgeCd:0, think:0, tgt:null, mode:'feed', dead:0,
+      safe:RIVAL_SAFE, spawn:{ x:Math.cos(a)*G.half*.8, z:Math.sin(a)*G.half*.8 },
+      trait:TRAIT_KEYS[i % TRAIT_KEYS.length],
+      fx:{ magnet:0, x2:0, giant:0, shield:0 },
+      mesh:buildWave(col, 0xffffff),
+      label:labelSprite(names[i], col),
+    };
+    R.mesh.scale.setScalar(r0);
+    sc.add(R.mesh); sc.add(R.label); G.rivals.push(R);
+  }
+  G.all = [P, ...G.rivals];
+
+  /* ---- your pet ---- */
+  G.pet = null;
+  const pet = petOf();
+  if (pet.b){
+    if (!pet.geo){ const pm = mk(); pet.b(pm); pet.geo = pm.out(); cachedGeo.add(pet.geo); }
+    const pmesh = new THREE.Mesh(pet.geo, propMat);
+    pmesh.scale.setScalar(1.6);
+    sc.add(pmesh);
+    G.pet = { mesh:pmesh, ang:0 };
+  }
+
+  // wake trail pool
+  const tmat = new THREE.MeshBasicMaterial({ color:skin.c2, transparent:true, opacity:.4, depthWrite:false });
+  for (let i=0;i<16;i++){
+    const t = new THREE.Mesh(new THREE.CircleGeometry(1, 16), tmat.clone());
+    t.rotation.x = -Math.PI/2; t.visible = false; t.renderOrder = 2; sc.add(t);
+    G.trail.push({ mesh:t, life:0, r:1 });
+  }
+  G.trailI = 0; G.trailT = 0;
+
+  scene = sc;
+}
+
+function addProp(kb, x, z, variant){
+  const pr = PROPS[kb];
+  const key = propKey(kb, variant==null ? ri(0,9) : variant);
+  const mesh = new THREE.Mesh(propGeo(key), propMat);
+  mesh.position.set(x, 0, z);
+  mesh.rotation.y = rnd(0, 6.283);
+  G.scene.add(mesh);
+  const o = { mesh, x, z, tier:pr.t, f:footOf(kb), need:needOf(kb), key:kb, swirl:null, shake:0, sy:0 };
+  G.props.push(o); gAdd(o);
+  return o;
+}
+
+/* Drop one fresh prop of tier `t` back onto the island, obeying the same rules
+   the initial scatter used: in its own ring, never in a street, never clipping
+   something else, and never popping into existence on top of a wave. */
+function respawnProp(t){
+  const map = G.map, CG = G.cityGrid, keys = map && map['t'+t];
+  if (!keys || !keys.length || !CG) return false;
+  const kb = pick(keys), pf = footOf(kb);
+  const pad = t >= 4 ? 1 : pf*.7, band = bandOf(kb, t);
+  for (let tries=0; tries<26; tries++){
+    const rr = rnd(band[0], band[1]) * (G.half-12), a = rnd(0,6.283);
+    const x = Math.cos(a)*rr, z = Math.sin(a)*rr;
+    if (Math.abs(x) > G.half-10 || Math.abs(z) > G.half-10) continue;
+    if (onRoad(CG, x, z, pad)) continue;
+    let clash = false;
+    for (const wv of G.all){
+      if (wv.gone) continue;
+      if (Math.hypot(wv.x-x, wv.z-z) < wv.er + pf + 12){ clash = true; break; }
+    }
+    if (clash) continue;
+    gQuery(x, z, pf + 16, o => {
+      if (!clash && Math.hypot(o.x-x, o.z-z) < o.f + pf + 3.5) clash = true;
+    });
+    if (clash) continue;
+    addProp(kb, x, z);
+    return true;
+  }
+  return false;
+}
+
+const PWT = [
+  { k:'magnet', ic:'🧲', n:'MAGNET',        col:0x9b5bff, dur:11 },
+  { k:'x2',     ic:'✖2', n:'DOUBLE POINTS', col:0xffc93c, dur:13 },
+  { k:'giant',  ic:'💪', n:'GIANT WAVE',    col:0xff5252, dur:9  },
+  { k:'shield', ic:'🛡',  n:'SHIELD',        col:0x35c76a, dur:16 },
+  { k:'surge',  ic:'⚡',  n:'SURGE READY',   col:0x12cdf0, dur:0  },
+  { k:'vacuum', ic:'🌀', n:'WHIRLPOOL!',    col:0xff69b4, dur:0  },
+];
+function pwSprite(t){
+  const cv = document.createElement('canvas'); cv.width = cv.height = 96;
+  const x = cv.getContext('2d');
+  x.beginPath(); x.arc(48,48,44,0,6.283);
+  x.fillStyle = '#' + t.col.toString(16).padStart(6,'0'); x.fill();
+  x.lineWidth = 6; x.strokeStyle = '#fff'; x.stroke();
+  x.font = '54px system-ui'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(t.ic, 48, 54);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:tex, transparent:true, depthWrite:false }));
+  s.scale.set(8.5, 8.5, 1); return s;
+}
+function addPowerup(){
+  const t = pick(PWT), s = pwSprite(t);
+  const a = rnd(0,6.283), rr = rnd(.12,.92) * (G.half-12);
+  const p = { t, x:Math.cos(a)*rr, z:Math.sin(a)*rr, sprite:s, live:true, wait:0, bob:rnd(0,6.283) };
+  s.position.set(p.x, 6.2, p.z); G.scene.add(s);
+  G.pws.push(p); return p;
+}
+function movePowerup(p){
+  const a = rnd(0,6.283), rr = rnd(.12,.92) * (G.half-12);
+  p.x = Math.cos(a)*rr; p.z = Math.sin(a)*rr;
+  p.sprite.position.set(p.x, 6.2, p.z);
+}
+
+/* =========================================================
+   EATING
+   ========================================================= */
+/* how big a wave counts as right now — surging and GIANT both make you count bigger */
+const eatSize = a => a.er * (a.surge > 0 ? 1.45 : 1);
+const eatTier = (r) => {
+  let t = 1;
+  for (let i=5;i>=1;i--) if (r >= TIER_R[i]) { t = i; break; }
+  return t;
+};
+/* The size brake — the single thing keeping anyone from running away with a
+   round, applied to you and the rivals identically.
+   It has to be steeper than the square. A wave's mouth scales with its radius,
+   so the ground it sweeps per second — and therefore the number of things it
+   swallows — goes up with r². A squared brake exactly cancels that out and
+   everyone climbs at a dead-flat rate straight to max size (measured: +17
+   radius a minute, all the way up, whatever the coefficient). Cubing it means
+   the sweep can't keep up with the cost, every step up is dearer than the last,
+   and max size is a genuine long haul rather than a five-minute stroll.
+   The exponent is between 2 and 3: a full cube stalls you dead around a third
+   of max size, a plain square never slows you down at all. */
+function growBrake(actor){
+  const b = 1 + actor.r*.060;
+  return 1 / (b*b*Math.sqrt(b));
+}
+function growthFor(o, actor){
+  if (actor.boss) return 0;      // the boss never grows, so you can always catch it up
+  const g = TIER_GROW[o.tier] * (actor.isP ? U.growth() : 1) * MODE().grow;
+  return g * growBrake(actor);
+}
+/* a wave can never outgrow its island — spare growth turns into score */
+function grow(actor, amount){
+  const cap = G.cap;
+  if (actor.r + amount <= cap){ actor.r += amount; return; }
+  const used = Math.max(0, cap - actor.r);
+  actor.r = cap;
+  if (actor.isP) G.score += Math.round((amount-used) * 260);
+}
+function absorb(actor, o){
+  gDel(o);
+  const i = G.props.indexOf(o); if (i>=0) G.props.splice(i,1);
+  o.swirl = { t:0, a:Math.atan2(o.z-actor.z, o.x-actor.x), d:Math.hypot(o.x-actor.x, o.z-actor.z), actor };
+  G.swirl.push(o);
+  grow(actor, growthFor(o, actor));
+  actor.eaten++;
+  if (actor.isP){
+    const pts = Math.round(TIER_PTS[o.tier] * G.combo * (actor.fx.x2>0 ? 2 : 1)
+                           * MODE().mult * U.points());
+    G.score += pts; G.eaten++;
+    if (o.tier >= 4) G.eatBig++;
+    G.combo = Math.min(5, G.combo + (o.tier>=3 ? .5 : .22)); G.comboT = U.comboT();
+    G.maxCombo = Math.max(G.maxCombo||1, G.combo);
+    showCombo(); popText('+'+pts, o.x, o.z, o.tier);
+    if (o.tier >= 4){ SFX.big(); G.shake = Math.max(G.shake||0, o.tier === 5 ? .55 : .32); }
+    else SFX.eat(o.tier);
+    checkTier();
+  } else {
+    actor.score += TIER_PTS[o.tier];
+  }
+}
+function updateSwirl(dt){
+  for (let i=G.swirl.length-1; i>=0; i--){
+    const o = G.swirl[i], s = o.swirl;
+    s.t += dt/.44;
+    const e = Math.min(1, s.t);
+    s.a += dt*13; const d = s.d*(1-e)*(1-e*.3);
+    const ax = s.actor.x, az = s.actor.z;
+    o.mesh.position.set(ax + Math.cos(s.a)*d, -e*e*7, az + Math.sin(s.a)*d);
+    o.mesh.rotation.y += dt*7; o.mesh.rotation.z = e*1.4;
+    const sc = Math.max(.05, 1 - e*.85); o.mesh.scale.setScalar(sc);
+    if (e >= 1){ G.scene.remove(o.mesh); G.swirl.splice(i,1); }
+  }
+}
+
+function actorEat(a, dt){
+  const R = eatSize(a);
+  const reach = R*.92;
+  const mag = a.isP ? U.magnet() + (a.fx.magnet>0 ? 13 : 0) : 0;
+  gQuery(a.x, a.z, reach + Math.max(14, mag) + 12, o => {
+    if (o.swirl) return;
+    const dx = o.x-a.x, dz = o.z-a.z;
+    const d = Math.sqrt(dx*dx+dz*dz) || .001;
+    if (R >= o.need){
+      if (d < reach + o.f*.35){ absorb(a, o); return; }
+      if (mag > 0 && d < reach + mag){
+        const pull = (1 - (d-reach)/mag) * 15 * dt;
+        o.x -= dx/d*pull; o.z -= dz/d*pull;
+        o.mesh.position.set(o.x, o.mesh.position.y, o.z); gMove(o);
+      }
+    } else if (d < reach*.9 + o.f*.6){
+      // too big to swallow — you wash straight through it, it just rattles
+      o.shake = Math.max(o.shake, .22);
+    }
+  });
+}
+
+function eatWave(win, lose){
+  // Swallowing another wave runs through the same brake as everything else.
+  // Without this, camping the rivals' spawn as they respawn tiny was worth more
+  // than eating a skyscraper, and whoever got ahead first just never stopped.
+  grow(win, Math.max(.02, lose.r*.34*growBrake(win)));
+  win.score += Math.round(400 + lose.r*140);
+  if (win.isP){
+    let pts = Math.round((900 + lose.r*220) * (win.fx.x2>0?2:1) * MODE().mult * U.points());
+    if (lose.boss){
+      pts += Math.round(9000 * MODE().mult);
+      G.bosses++;
+      banner('👹 BOSS SWALLOWED!', 'You ate the MEGA WAVE!  +' + pts.toLocaleString());
+      SFX.win();
+    } else {
+      banner('WAVE EATEN!', 'You swallowed ' + lose.name + '  +' + pts);
+      SFX.rival();
+    }
+    G.score += pts; G.rivalsEaten++;
+    popText('+'+pts, lose.x, lose.z, 5);
+  }
+  lose.mesh.visible = false; if (lose.label) lose.label.visible = false;
+  if (lose.boss){ lose.gone = true; return; }
+  // loser respawns small at the shore
+  lose.dead = 2.6;
+  lose.r = 2.2; lose.er = 2.2; lose.eaten = 0; lose.vx = lose.vz = 0;
+  lose.mesh.scale.setScalar(2.2);
+}
+function hurtPlayer(by){
+  const P = G.P;
+  if (P.hurt > 0 || P.safe > 0) return;
+  if (P.fx.shield > 0){
+    P.fx.shield = 0; P.hurt = 1.6;
+    const dx0 = P.x-by.x, dz0 = P.z-by.z, d0 = Math.hypot(dx0,dz0)||1;
+    P.vx = dx0/d0*70; P.vz = dz0/d0*70;
+    banner('🛡 SHIELD SAVED YOU!', 'That one was free — now run!');
+    SFX.pw(); return;
+  }
+  // eaten → straight back to your spawn, shrunk, with a few seconds of shield.
+  // You never lose the run for this; you just start the climb again from there.
+  const safeT = SPAWN_SAFE + U.shield();
+  P.hurt = 2.0; P.safe = safeT;
+  P.r = Math.max(2.2 + U.start(), P.r * (.70 + U.tough()));
+  P.er = P.r;
+  P.x = P.spawn.x; P.z = P.spawn.z; P.vx = 0; P.vz = 0;
+  G.combo = 1;
+  // braked like every other kind of growth, or a rival that catches you once
+  // just parks on your spawn and farms you all the way to max size
+  grow(by, Math.max(.02, 1.4*growBrake(by))); by.score += 260;
+  flash(); SFX.hurt(); G.shake = .8;
+  moveActor(P, 0, 0, 0); updateCamera(0, true);   // snap the camera to the spawn
+  if (MODE().lives > 0){
+    G.lives--;
+    if (G.lives <= 0){ banner('💀 WIPED OUT!', by.name + ' finished you off'); endRound(); return; }
+    banner('💀 EATEN BY ' + by.name, 'Back at spawn · 🛡 ' + Math.round(safeT) + 's shield · ' +
+      G.lives + (G.lives === 1 ? ' life' : ' lives') + ' left');
+  } else {
+    banner('💀 EATEN BY ' + by.name, 'Back at spawn · 🛡 ' + Math.round(safeT) + 's shield — go again!');
+  }
+}
+function waveVsWave(){
+  const A = G.all;
+  for (let i=0;i<A.length;i++) for (let j=i+1;j<A.length;j++){
+    const a = A[i], b = A[j];
+    if (a.dead>0 || b.dead>0 || a.gone || b.gone) continue;
+    if (a.safe>0 || b.safe>0) continue;   // spawn shield — no eating either way
+    const d = Math.hypot(a.x-b.x, a.z-b.z);
+    if (d > (a.er+b.er)*.6) continue;
+    // one drop bigger is enough — no 15% head start needed any more
+    if (a.er > b.er){ if (b.isP) hurtPlayer(a); else eatWave(a,b); }
+    else if (b.er > a.er){ if (a.isP) hurtPlayer(b); else eatWave(b,a); }
+  }
+}
+
+/* =========================================================
+   MOVEMENT
+   ========================================================= */
+function moveActor(a, dt, dx, dz){
+  const len = Math.hypot(dx,dz);
+  if (len > .01){ a.dirx = dx/len; a.dirz = dz/len; }
+  // a bit quicker across the board — the islands are several times wider now
+  let spd = (39 + a.r*.46) * (a.isP ? U.speed() : a.boss ? .78
+            : G.map.diff*.93 * ((TRAITS[a.trait]||TRAITS.steady).speed));
+  if (a.surge > 0) spd *= 2.2;
+  const tx = len > .01 ? a.dirx*spd : 0, tz = len > .01 ? a.dirz*spd : 0;
+  const k = 1 - Math.exp(-dt*7);
+  a.vx = lerp(a.vx, tx, k); a.vz = lerp(a.vz, tz, k);
+  a.x += a.vx*dt; a.z += a.vz*dt;
+  const lim = G.half + 6;
+  a.x = clamp(a.x, -lim, lim); a.z = clamp(a.z, -lim, lim);
+  a.er = a.r * (a.fx.giant > 0 ? 1.45 : 1);
+  a.mesh.position.set(a.x, 0, a.z);
+  a.mesh.scale.setScalar(a.er);
+  if (a.label){
+    const w = Math.min(a.er*1.1 + 10, 30);       // don't let a huge wave own the whole screen
+    a.label.position.set(a.x, Math.min(5 + a.er*.85, 22), a.z);
+    a.label.scale.set(w, w/4, 1);
+    // keep the size on the tag current, but only redraw when the number you'd
+    // actually read has changed — repainting the canvas every frame is dear
+    const u = a.label.userData;
+    u.t -= dt;
+    if (u.t <= 0){
+      u.t = .2;
+      const n = Math.round(SZ(a.er)/100)*100;
+      if (n !== u.shown){ u.shown = n; drawLabel(a.label, u.name, u.col, n.toLocaleString()); }
+    }
+  }
+  if (a.surge > 0) a.surge -= dt;
+  if (a.surgeCd > 0) a.surgeCd -= dt;
+  for (const k2 in a.fx) if (a.fx[k2] > 0) a.fx[k2] -= dt;
+  if (a.hurt > 0) a.hurt -= dt;
+  // spawn shield: nothing can eat you (and you can't eat anyone) while it's up
+  if (a.safe > 0){
+    a.safe -= dt;
+    const b = a.mesh.userData.bubble;
+    if (b){ b.visible = true; b.material.opacity = a.safe < 1 ? .3*a.safe : .22 + Math.abs(Math.sin(G.t*5))*.16; }
+  } else {
+    const b = a.mesh.userData.bubble;
+    if (b && b.visible) b.visible = false;
+  }
+}
+
+/* rival brains */
+/* each rival has a personality so they don't all behave the same */
+const TRAITS = {
+  // ANYTHING bigger can now swallow you, so `caution` is no longer a size
+  // ratio — it scales how far away a rival starts running from a bigger wave.
+  // `huntRange` is in old-island units and gets scaled up to the real map size
+  // in rivalThink — on a 1000-wide island a 40-unit hunt range meant two rivals
+  // basically never noticed each other and nobody ever got eaten.
+  greedy: { caution:.85, huntRange:60,  greed:2.6, speed:.95 },   // wants the big stuff, notices late
+  hunter: { caution:.80, huntRange:120, greed:.8,  speed:1.0 },   // lives to chase other waves
+  coward: { caution:1.6, huntRange:52,  greed:1.0, speed:1.06 },  // bolts early, feeds safe
+  racer:  { caution:1.0, huntRange:80,  greed:1.0, speed:1.14 },  // just fast
+  steady: { caution:1.15, huntRange:85, greed:1.4, speed:1.0 },
+};
+const TRAIT_KEYS = Object.keys(TRAITS);
+
+function rivalThink(R){
+  const P = G.P;
+  // the boss only ever wants you
+  if (R.boss){ R.mode = 'hunt'; R.tgt = P; return; }
+  const T = TRAITS[R.trait] || TRAITS.steady;
+  // hunt ranges were written for the old small islands — scale them to this map
+  const huntR = T.huntRange * (G.half/160);
+  // 1. run from anything bigger (a shielded wave can't touch anyone, so ignore it)
+  let flee = null, fleeD = 1e9;
+  for (const o of G.all){
+    if (o === R || o.dead>0 || o.gone || o.safe>0) continue;
+    const d = Math.hypot(o.x-R.x, o.z-R.z);
+    if (o.er > R.er && d < (30 + o.er*1.6)*T.caution && d < fleeD){ flee = o; fleeD = d; }
+  }
+  if (flee){ R.mode='flee'; R.tgt = { x:R.x*2-flee.x, z:R.z*2-flee.z }; return; }
+  // 2. hunt a smaller wave
+  let hunt = null, huntD = 1e9;
+  for (const o of G.all){
+    // no point chasing something shielded — it can't be eaten yet
+    if (o === R || o.dead>0 || o.gone || o.safe>0) continue;
+    const d = Math.hypot(o.x-R.x, o.z-R.z);
+    // only commit to a chase you're clearly winning, even though a single drop
+    // of margin would be enough to actually swallow them
+    if (R.er > o.er*1.04 && d < huntR && d < huntD){ hunt = o; huntD = d; }
+  }
+  if (hunt){ R.mode='hunt'; R.tgt = hunt; return; }
+  // 3. feed — best prop nearby (greed decides how much it prefers big things)
+  const rs = eatSize(R);
+  let best = null, bestScore = -1;
+  gQuery(R.x, R.z, 78, o => {
+    if (o.swirl || o.need > rs) return;
+    const d = Math.hypot(o.x-R.x, o.z-R.z);
+    const sc = Math.pow(TIER_PTS[o.tier], T.greed*.55) / (6 + d);
+    if (sc > bestScore){ bestScore = sc; best = o; }
+  });
+  if (best){ R.mode='feed'; R.tgt = best; return; }
+  // 4. nothing close: head for the middle (where the giants are)
+  R.mode='roam';
+  R.tgt = { x:rnd(-1,1)*G.half*.35, z:rnd(-1,1)*G.half*.35 };
+}
+function updateRivals(dt){
+  for (const R of G.rivals){
+    if (R.gone) continue;
+    if (R.dead > 0){
+      R.dead -= dt;
+      if (R.dead <= 0){
+        // straight back to its own spawn corner, shielded like you are
+        R.x = R.spawn.x; R.z = R.spawn.z; R.vx = R.vz = 0;
+        R.safe = RIVAL_SAFE;
+        R.mesh.visible = true; if (R.label) R.label.visible = true;
+        R.mesh.scale.setScalar(R.r);
+      }
+      continue;
+    }
+    R.think -= dt;
+    if (R.think <= 0){ R.think = rnd(.28,.5); rivalThink(R); }
+    let dx = 0, dz = 0;
+    if (R.tgt){
+      dx = R.tgt.x - R.x; dz = R.tgt.z - R.z;
+      if (R.tgt.swirl){ R.tgt = null; R.think = 0; }
+    }
+    // surge now and then
+    if (R.surgeCd <= 0 && Math.random() < dt*.35 && (R.mode==='hunt'||R.mode==='flee')){
+      R.surge = 1.1; R.surgeCd = 7;
+    }
+    moveActor(R, dt, dx, dz);
+    actorEat(R, dt);
+    animWave(R, dt, G.t, Math.hypot(R.vx,R.vz) > 6);
+  }
+}
+
+/* the MEGA WAVE boss — turns up part way through BOSS HUNT and chases you */
+function spawnBoss(){
+  const col = 0xff2f6d;
+  const a = rnd(0, 6.283);
+  const r0 = Math.max(13, G.P.r * 1.35);
+  const B = {
+    isP:false, boss:true, name:'MEGA WAVE', x:Math.cos(a)*G.half*.92, z:Math.sin(a)*G.half*.92,
+    r:r0, er:r0, vx:0, vz:0, dirx:0, dirz:1, score:0, eaten:0, col, alive:true,
+    surge:0, surgeCd:0, think:0, tgt:null, mode:'hunt', dead:0, gone:false,
+    fx:{ magnet:0, x2:0, giant:0 },
+    mesh:buildWave(col, 0xffe0ec),
+    label:labelSprite('MEGA WAVE', 0xffffff),
+  };
+  B.mesh.scale.setScalar(r0);
+  G.scene.add(B.mesh); G.scene.add(B.label);
+  G.rivals.push(B); G.all.push(B);
+  banner('👹 MEGA WAVE INCOMING!', 'It hunts YOU. Get bigger, then swallow it!');
+  SFX.big();
+}
+
+/* pet swims around your wave */
+function updatePet(dt){
+  if (!G.pet) return;
+  const P = G.P;
+  G.pet.ang += dt * 1.5;
+  const r = P.er*1.0 + 1.6;
+  G.pet.mesh.position.set(P.x + Math.cos(G.pet.ang)*r,
+                          1.9 + Math.sin(G.t*3)*.45,
+                          P.z + Math.sin(G.pet.ang)*r);
+  G.pet.mesh.rotation.y = -G.pet.ang;
+  G.pet.mesh.scale.setScalar(clamp(2.5 + P.er*.085, 2.5, 7.5));
+}
+
+/* =========================================================
+   POWERUPS
+   ========================================================= */
+function pwPick(p){
+  const P = G.P, t = p.t;
+  G.pwGot++;
+  let extra = '';
+  if (t.k === 'surge'){ P.surgeCd = 0; P.surge = Math.max(P.surge, 1.3*U.surgeT()); }
+  else if (t.k === 'vacuum'){
+    // suck in everything you're allowed to eat, in one go
+    const rs = P.er * 1.6;
+    let n = 0;
+    const hits = [];
+    gQuery(P.x, P.z, P.er*3.4 + 14, o => {
+      if (o.swirl || o.need > rs) return;
+      if (Math.hypot(o.x-P.x, o.z-P.z) < P.er*3.0 + 12) hits.push(o);
+    });
+    for (const o of hits){ absorb(P, o); n++; }
+    extra = n + ' things at once!';
+    G.shake = .7;
+  }
+  else { P.fx[t.k] = t.dur; }
+  p.live = false; p.wait = 9; p.sprite.visible = false;
+  SFX.pw();
+  banner(t.n, extra || (t.k==='giant' ? 'Your wave counts as way bigger for a bit!' :
+    t.k==='magnet' ? 'Stuff comes to you!' :
+    t.k==='shield' ? 'One free hit from a big wave!' : ''));
+}
+function updatePowerups(dt){
+  const P = G.P;
+  for (const p of G.pws){
+    if (!p.live){
+      p.wait -= dt;
+      if (p.wait <= 0){ p.live = true; p.t = pick(PWT); p.sprite.material.map.dispose();
+        const ns = pwSprite(p.t); p.sprite.material.map = ns.material.map; p.sprite.material.needsUpdate = true;
+        movePowerup(p); p.sprite.visible = true; }
+      continue;
+    }
+    p.bob += dt*3;
+    p.sprite.position.y = 6.2 + Math.sin(p.bob)*.9;
+    if (Math.hypot(p.x-P.x, p.z-P.z) < P.er*.95 + 5.0) pwPick(p);
+  }
+}
+
+/* =========================================================
+   FX / HUD helpers
+   ========================================================= */
+const bEl = $('#banner'), b1 = $('#b1'), b2 = $('#b2');
+let bT = 0;
+function banner(a, b){ b1.textContent = a; b2.textContent = b||''; bEl.classList.add('on'); bT = 2.1; }
+const cEl = $('#combo');
+let cT = 0;
+const COMBO_WORDS = [[2,'TASTY!'], [2.75,'YUM!'], [3.5,'BIG GULP!'], [4.25,'MEGA GULP!'], [5,'UNSTOPPABLE!']];
+function showCombo(){
+  if (G.combo < 1.6) return;
+  let word = '';
+  for (const [t,w] of COMBO_WORDS) if (G.combo >= t) word = w;
+  cEl.textContent = 'x' + G.combo.toFixed(1) + (word ? '  ' + word : ' COMBO');
+  cEl.classList.add('on'); cT = .7;
+}
+const flashEl = $('#flash');
+function flash(){ flashEl.style.opacity = .95; setTimeout(()=>flashEl.style.opacity = 0, 130); }
+
+const popPool = [];
+for (let i=0;i<10;i++){ const d = document.createElement('div'); d.className='pop'; $('#hud').appendChild(d); popPool.push(d); }
+let popI = 0;
+const _v = new THREE.Vector3();
+function popText(txt, x, z, tier){
+  const d = popPool[popI++ % popPool.length];
+  _v.set(x, 2 + tier*1.6, z).project(camera);
+  if (_v.z > 1) return;
+  d.textContent = txt;
+  d.style.color = '#' + TIER_COL[tier].toString(16).padStart(6,'0');
+  d.style.left = ((_v.x*.5+.5)*innerWidth) + 'px';
+  d.style.top  = ((-_v.y*.5+.5)*innerHeight) + 'px';
+  d.style.transition = 'none'; d.style.transform = 'translate(-50%,0) scale(1.15)'; d.style.opacity = 1;
+  requestAnimationFrame(()=>{ d.style.transition = 'transform .75s linear, opacity .75s linear';
+    d.style.transform = 'translate(-50%,-46px) scale(.85)'; d.style.opacity = 0; });
+}
+/* floating "you need THIS much size" tags on everything too big to swallow.
+   the pool is fixed size — we re-pick the closest few a few times a second,
+   but re-project them every frame so the tags stick to their prop */
+const needsEl = $('#needs'), needPool = [];
+for (let i=0;i<16;i++){ const d = document.createElement('div'); d.className='need'; needsEl.appendChild(d); needPool.push(d); }
+let needList = [], needT = 0;
+const _nv = new THREE.Vector3();
+function updateNeeds(dt){
+  const P = G.P, rs = eatSize(P), range = P.er*2 + 85;
+  needT -= dt;
+  if (needT <= 0){
+    needT = .13;
+    const found = [];
+    gQuery(P.x, P.z, range, o => {
+      if (o.swirl || o.need <= rs) return;
+      const d = Math.hypot(o.x-P.x, o.z-P.z);
+      if (d < range) found.push({ o, d });
+    });
+    found.sort((a,b) => a.d - b.d);
+    needList = found.slice(0, needPool.length).map(x => x.o);
+  }
+  for (let i=0;i<needPool.length;i++){
+    const el = needPool[i], o = needList[i];
+    if (!o || o.swirl || o.need <= rs){ if (el.style.display !== 'none') el.style.display = 'none'; continue; }
+    _nv.set(o.x, o.f*1.35 + 2.6, o.z).project(camera);
+    if (_nv.z > 1 || Math.abs(_nv.x) > 1.1 || Math.abs(_nv.y) > 1.1){ el.style.display = 'none'; continue; }
+    const txt = '🔒 ' + szTxt(o.need);
+    if (el.textContent !== txt){ el.textContent = txt; el.style.borderColor = MINI_COL[o.tier]; }
+    el.style.left = ((_nv.x*.5+.5)*innerWidth) + 'px';
+    el.style.top  = ((-_nv.y*.5+.5)*innerHeight) + 'px';
+    el.style.display = 'block';
+  }
+}
+function hideNeeds(){ needList = []; for (const el of needPool) el.style.display = 'none'; }
+
+function checkTier(){
+  const P = G.P, t = eatTier(P.r);
+  if (t > (G.shownTier||1)){
+    G.shownTier = t;
+    banner('TIER ' + t + '  —  ' + TIER_NAME[t] + '!', 'You can now swallow ' + TIER_EATS[t]);
+    SFX.tier();
+  }
+}
+
+/* =========================================================
+   INPUT
+   ========================================================= */
+const keys = new Set();
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  keys.add(k);
+  if (k === ' ' || k === 'spacebar'){ e.preventDefault(); doSurge(); }
+  if ((k === 'escape' || k === 'p') && G.state === 'play') togglePause();
+  ac();
+});
+addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+addEventListener('blur', () => keys.clear());
+
+let dragId = null, dOx = 0, dOy = 0, dvx = 0, dvy = 0;
+const joy = $('#joy'), knob = joy.querySelector('i');
+const cvEl = renderer.domElement;
+cvEl.style.touchAction = 'none';
+cvEl.addEventListener('pointerdown', e => {
+  ac();
+  if (G.state !== 'play') return;
+  dragId = e.pointerId; dOx = e.clientX; dOy = e.clientY;
+  joy.style.display = 'block'; joy.style.bottom = 'auto';
+  joy.style.left = (dOx-63) + 'px'; joy.style.top = (dOy-63) + 'px';
+});
+addEventListener('pointermove', e => {
+  if (e.pointerId !== dragId) return;
+  let dx = e.clientX-dOx, dy = e.clientY-dOy;
+  const len = Math.hypot(dx,dy), MAX = 58;
+  if (len > MAX){ dx = dx/len*MAX; dy = dy/len*MAX; }
+  dvx = dx/MAX; dvy = dy/MAX;
+  knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+});
+const endDrag = e => {
+  if (dragId !== null && e.pointerId !== dragId) return;
+  dragId = null; dvx = dvy = 0; joy.style.display = 'none';
+  knob.style.transform = '';
+};
+addEventListener('pointerup', endDrag);
+addEventListener('pointercancel', endDrag);
+
+function togglePause(force){
+  if (G.state !== 'play') return;
+  G.paused = force == null ? !G.paused : force;
+  $('#pause').style.display = G.paused ? 'flex' : 'none';
+  if (G.paused){
+    $('#pauseInfo').textContent = 'Size ' + szTxt(G.P.er) + ' · ' +
+      G.score.toLocaleString() + ' points · ' + fmtT(G.time) + ' played';
+    keys.clear(); dvx = dvy = 0;
+  }
+}
+$('#pResume').addEventListener('click', () => togglePause(false));
+$('#pQuit').addEventListener('click', () => { togglePause(false); endRound(); });
+$('#time').addEventListener('click', () => togglePause());
+
+function doSurge(){
+  const P = G.P;
+  if (G.state !== 'play' || !G.running || !P) return;
+  if (P.surgeCd > 0){ SFX.no(); return; }
+  P.surge = 1.15 * U.surgeT();
+  P.surgeCd = 7 * U.surgeCd();
+  SFX.surge();
+}
+$('#surge').addEventListener('pointerdown', e => { e.preventDefault(); doSurge(); });
+$('#surgeK').textContent = mobile ? 'TAP' : 'SPACE';
+
+/* =========================================================
+   CAMERA
+   ========================================================= */
+const camLook = new THREE.Vector3();
+function updateCamera(dt, snap){
+  const P = G.P, er = P.er;
+  const d = 36 + er*2.4, h = 29 + er*2.45;
+  const k = snap ? 1 : 1-Math.exp(-dt*3.4);
+  camera.position.x = lerp(camera.position.x, P.x, k);
+  camera.position.y = lerp(camera.position.y, h, k);
+  camera.position.z = lerp(camera.position.z, P.z + d, k);
+  if (G.shake > 0){
+    G.shake = Math.max(0, G.shake - dt*2.2);
+    const s = G.shake * (1.4 + er*.05);
+    camera.position.x += rnd(-s, s); camera.position.y += rnd(-s, s); camera.position.z += rnd(-s, s);
+  }
+  camLook.set(P.x, 0, P.z - er*.25);
+  camera.lookAt(camLook);
+}
+
+/* =========================================================
+   HUD
+   ========================================================= */
+const H = { time:$('#time'), timeV:$('#timeV'), scoreV:$('#scoreV'), sizeV:$('#sizeV'), tierV:$('#tierV'),
+  szfill:$('#szfill'), nextV:$('#nextV'), brows:$('#brows'), pw:$('#pw'), surgeCd:$('#surgeCd'),
+  surge:$('#surge'), hint:$('#hint'), mini:$('#mini'), lives:$('#lives'), modeV:$('#modeV'),
+  danger:$('#danger') };
+const MINI_COL = TIER_COL.map(c => '#' + c.toString(16).padStart(6,'0'));
+const fmtT = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); };
+let hudT = 0;
+
+function updateHUD(dt){
+  const P = G.P;
+  H.timeV.textContent = fmtT(G.time);          // time played, not time left
+  H.time.classList.remove('low');
+  H.scoreV.textContent = G.score.toLocaleString();
+  H.sizeV.textContent = szTxt(P.er);
+  const t = eatTier(P.r), nt = Math.min(5, t+1);
+  H.tierV.textContent = 'TIER ' + t + ' · ' + TIER_NAME[t];
+  const lo = t === 1 ? 2.0 : TIER_R[t], hi = TIER_R[nt];
+  H.szfill.style.width = (t >= 5 ? 100 : clamp((P.r-lo)/(hi-lo)*100, 0, 100)) + '%';
+  H.nextV.textContent = P.r >= G.cap - .01 ? '🏆 MAX SIZE — every bite is bonus points!'
+    : t >= 5 ? 'BIGGEST TIER — eat everything!'
+    : 'AT SIZE ' + szTxt(hi) + ': ' + TIER_EATS[nt];
+  H.surgeCd.style.transform = 'scaleY(' + clamp(P.surgeCd / (7*U.surgeCd()), 0, 1) + ')';
+  H.surge.classList.toggle('ready', P.surgeCd <= 0);
+
+  hudT -= dt;
+  if (hudT <= 0){
+    hudT = .18;
+    H.lives.textContent = MODE().lives > 0 ? '❤️'.repeat(Math.max(0, G.lives)) : '';
+    // leaderboard
+    const A = G.all.filter(a => !a.gone).sort((a,b) => b.er - a.er);
+    let html = '';
+    for (let i=0;i<A.length;i++){
+      const a = A[i];
+      html += '<div class="brow' + (a.isP?' me':'') + '"><i class="dot" style="background:#' +
+        a.col.toString(16).padStart(6,'0') + '"></i><span class="nm">' + (i+1) + '. ' + a.name +
+        '</span><span class="sz">' + szTxt(a.er) + '</span></div>';
+    }
+    H.brows.innerHTML = html;
+    // powerup chips
+    let pw = '';
+    for (const k in P.fx) if (P.fx[k] > 0){
+      const T = PWT.find(x => x.k === k);
+      pw += '<div class="pwc">' + T.ic + ' ' + T.n + ' ' + Math.ceil(P.fx[k]) + 's</div>';
+    }
+    if (P.safe > 0) pw += '<div class="pwc">🛡 SPAWN SHIELD ' + Math.ceil(P.safe) + 's</div>';
+    if (P.surge > 0) pw += '<div class="pwc">⚡ SURGING</div>';
+    H.pw.innerHTML = pw;
+    // red glow round the screen when something bigger is closing in
+    let danger = 0;
+    for (const a of G.all){
+      if (a.isP || a.dead > 0 || a.gone) continue;
+      if (a.er <= P.er) continue;   // anything bigger at all is now a threat
+      const d = Math.hypot(a.x-P.x, a.z-P.z);
+      danger = Math.max(danger, clamp(1 - (d - (a.er+P.er)) / 55, 0, 1));
+    }
+    H.danger.style.opacity = (danger * .8).toFixed(2);
+    drawMini();
+  }
+}
+function drawMini(){
+  const cv = H.mini, x = cv.getContext('2d'), W = 130;
+  const s = W / (G.size + 26), M = v => W/2 + v*s;
+  x.clearRect(0,0,W,W);
+  const half = G.half*s;
+  x.fillStyle = 'rgba(255,255,255,.13)';
+  x.fillRect(W/2-half, W/2-half, half*2, half*2);
+  x.strokeStyle = 'rgba(255,255,255,.4)'; x.lineWidth = 1;
+  x.strokeRect(W/2-half, W/2-half, half*2, half*2);
+  for (let i=0;i<G.props.length;i+=2){
+    const o = G.props[i];
+    x.fillStyle = MINI_COL[o.tier];
+    const sz = o.tier >= 4 ? 3 : o.tier === 3 ? 2 : 1.4;
+    x.fillRect(M(o.x)-sz/2, M(o.z)-sz/2, sz, sz);
+  }
+  for (const p of G.pws) if (p.live){
+    x.fillStyle = '#fff'; x.beginPath(); x.arc(M(p.x), M(p.z), 2.4, 0, 6.283); x.fill();
+  }
+  for (const a of G.all){
+    if (a.dead > 0 || a.gone) continue;
+    x.beginPath(); x.arc(M(a.x), M(a.z), clamp(a.er*s, 2.5, 22), 0, 6.283);
+    x.fillStyle = a.isP ? 'rgba(255,255,255,.85)' : 'rgba(' + [(a.col>>16)&255,(a.col>>8)&255,a.col&255].join(',') + ',.75)';
+    x.fill();
+    if (a.isP){ x.lineWidth = 2; x.strokeStyle = '#ffc93c'; x.stroke(); }
+  }
+}
+
+/* =========================================================
+   ROUND FLOW
+   ========================================================= */
+let cdTimer = null;
+function startRound(){
+  const map = MAPS[mapIdx];
+  if (LV < map.lv){ SFX.no(); return; }
+  localStorage.setItem(SK+'map', mapIdx);
+  buildWorld(map);
+  G.time = 0; G.timeMax = 0;   // counts UP — there is no round clock any more
+  G.score = 0; G.eaten = 0; G.eatBig = 0; G.rivalsEaten = 0; G.pwGot = 0;
+  G.combo = 1; G.comboT = 0; G.shownTier = 1; G.maxR = G.P.r; G.lastTick = 99;
+  G.maxCombo = 1; G.bosses = 0; G.bossSpawned = false; G.lives = MODE().lives;
+  G.running = false; G.state = 'play'; G.paused = false; G.shake = 0;
+  $('#pause').style.display = 'none';
+  $('#lobby').classList.add('hide'); $('#end').style.display = 'none';
+  $('#hud').style.display = 'block'; $('#home').classList.add('hide');
+  document.body.classList.add('playing');
+  moveActor(G.P, 0, 0, 0);
+  updateCamera(0, true);
+  H.modeV.textContent = MODE().n;
+  updateHUD(0);
+  H.hint.textContent = mobile ? 'DRAG anywhere to move · tap SURGE to dash'
+                              : 'WASD or drag to move · SPACE to SURGE';
+  H.hint.style.transition = 'none'; H.hint.style.opacity = 1;
+  setTimeout(() => { H.hint.style.transition = 'opacity 1s'; H.hint.style.opacity = 0; }, 5200);
+  // 3 · 2 · 1 · GO
+  const cd = $('#cdown'); cd.classList.remove('hide');
+  let n = 3;
+  const step = () => {
+    if (G.state !== 'play'){ cd.classList.add('hide'); return; }
+    if (n > 0){ cd.textContent = n; tone(520, 0, .16, 'triangle', .12); n--; cdTimer = setTimeout(step, 700); }
+    else { cd.textContent = 'GO!'; tone(880, 0, .3, 'triangle', .14); G.running = true;
+           cdTimer = setTimeout(() => cd.classList.add('hide'), 550); }
+  };
+  step();
+}
+
+function endRound(){
+  if (G.state !== 'play') return;
+  G.state = 'end'; G.running = false;
+  clearTimeout(cdTimer); $('#cdown').classList.add('hide');
+  const P = G.P, map = G.map, mode = MODE();
+  const rank = 1 + G.all.filter(a => !a.isP && !a.gone && a.er > P.er).length;
+  const wiped = mode.lives > 0 && G.lives <= 0;
+  const first = rank === 1 && !wiped;
+
+  // ---- rewards ----
+  const bonus = [0, 220, 130, 80, 45, 30][Math.min(rank, 5)] || 30;
+  const cr = Math.round(G.score/55) + bonus;
+  const xp = Math.round(G.score/22) + (first ? 60 : 0);
+  S.credits += cr; S.xp += xp;
+
+  const st = S.stat;
+  st.eat = (st.eat||0) + G.eaten;
+  st.eatBig = (st.eatBig||0) + G.eatBig;
+  st.rivals = (st.rivals||0) + G.rivalsEaten;
+  st.pw = (st.pw||0) + G.pwGot;
+  st.rounds = (st.rounds||0) + 1;
+  if (first) st.wins = (st.wins||0) + 1;
+  st.size = Math.max(st.size||0, G.maxR);
+  st.score = Math.max(st.score||0, G.score);
+  st.combo = Math.max(st.combo||0, G.maxCombo||1);
+  st.bosses = (st.bosses||0) + (G.bosses||0);
+  st.secs = (st.secs||0) + Math.round(G.time);
+  if (mode.lives > 0 && G.lives > 0) st.survived = (st.survived||0) + 1;
+  st.maps = st.maps || [];
+  if (!st.maps.includes(map.id)) st.maps.push(map.id);
+
+  const prevBest = S.best[map.id] || 0;
+  const newBest = G.score > prevBest;
+  if (newBest) S.best[map.id] = G.score;
+  S.scores[map.id] = [...(S.scores[map.id] || []), G.score].sort((a,b) => b-a).slice(0,5);
+
+  // ---- missions auto-claim ----
+  const done = [];
+  for (const m of MISSIONS){
+    if (S.claimed.includes(m.k)) continue;
+    if (m.f(st) >= m.g){ S.claimed.push(m.k); S.credits += m.r; done.push(m); }
+  }
+  const oldLV = LV; LV = lvlOf(S.xp);
+  save();
+
+  // ---- results ----
+  $('#eTitle').textContent = wiped ? '💀 WIPED OUT!' : first ? '🏆 YOU WON!' : 'RUN OVER';
+  $('#eRank').textContent = mode.n + ' · ' + map.name + ' — ' +
+    (wiped ? 'eaten by a bigger wave'
+      : ['', '1st, biggest wave on the island!', '2nd biggest wave', '3rd biggest wave',
+         '4th biggest wave', '5th biggest wave', '6th biggest wave', '7th biggest wave',
+         '8th biggest wave'][Math.min(rank,8)]);
+  $('#eScore').textContent = G.score.toLocaleString();
+  $('#eSize').textContent = szTxt(G.maxR);
+  $('#eEat').textContent = G.eaten;
+  $('#eRival').textContent = G.rivalsEaten;
+  $('#eBest').textContent = (S.best[map.id]||0).toLocaleString() + (newBest ? ' ★' : '');
+  $('#eEarn').textContent = '+' + cr + ' 💧   +' + xp + ' XP' + (LV > oldLV ? '   ⬆ LEVEL ' + LV + '!' : '');
+  $('#eMiss').innerHTML = done.map(m => '🎯 ' + m.n + ' complete  +' + m.r + ' 💧').join('<br>') +
+    (LV > oldLV ? (done.length ? '<br>' : '') + newUnlockText(oldLV, LV) : '');
+  $('#end').style.display = 'flex';
+  $('#hud').style.display = 'none';
+  if (first) SFX.win(); else SFX.lose();
+}
+function newUnlockText(a, b){
+  const u = MAPS.filter(m => m.lv > a && m.lv <= b);
+  return u.length ? '🏝️ NEW ISLAND: ' + u.map(m => m.name).join(', ') : '';
+}
+function toLobby(){
+  G.state = 'lobby';
+  $('#end').style.display = 'none'; $('#hud').style.display = 'none';
+  $('#lobby').classList.remove('hide'); $('#home').classList.remove('hide');
+  document.body.classList.remove('playing');
+  buildLobby(); renderLobby();
+}
+// swallow the press so the canvas underneath never sees it as the start of a drag
+$('#lobbyBtn').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); });
+$('#lobbyBtn').addEventListener('click', e => {
+  e.preventDefault(); e.stopPropagation();
+  if (G.state === 'play') endRound(); else toLobby();
+});
+$('#eLobby').addEventListener('click', toLobby);
+$('#eAgain').addEventListener('click', () => { $('#end').style.display = 'none'; startRound(); });
+$('#playBtn').addEventListener('click', () => { ac(); startRound(); });
+
+/* =========================================================
+   GAME TICK
+   ========================================================= */
+function updateOcean(dt){
+  if (!G.ocean) return;
+  G.oceanF = (G.oceanF||0) + 1;
+  if (G.oceanF % 2) return;
+  const at = G.ocean.geometry.attributes.position, a = at.array, b = G.oceanBase, t = G.t;
+  for (let i=0;i<a.length;i+=3){
+    a[i+1] = b[i+1] + Math.sin(b[i]*.075 + t*1.6)*.85 + Math.cos(b[i+2]*.095 - t*1.15)*.65;
+  }
+  at.needsUpdate = true;
+  G.ocean.geometry.computeVertexNormals();
+  if (G.clouds){ G.clouds.position.x = Math.sin(t*.02)*40; G.clouds.position.z = t*.7 % 400 - 200; }
+}
+function updateTrail(dt){
+  const P = G.P, moving = Math.hypot(P.vx,P.vz) > 9;
+  G.trailT -= dt;
+  if (G.trailT <= 0 && moving && G.running){
+    G.trailT = .09;
+    const tr = G.trail[G.trailI++ % G.trail.length];
+    tr.mesh.position.set(P.x, .07, P.z);
+    tr.mesh.scale.setScalar(P.er*.82);
+    tr.mesh.visible = true; tr.life = 1;
+  }
+  for (const tr of G.trail){
+    if (tr.life > 0){
+      tr.life -= dt*1.6;
+      tr.mesh.material.opacity = Math.max(0, tr.life)*.32;
+      tr.mesh.scale.multiplyScalar(1 + dt*.55);
+      if (tr.life <= 0) tr.mesh.visible = false;
+    }
+  }
+}
+function updateShakes(dt){
+  gQuery(G.P.x, G.P.z, 140, o => {
+    if (o.shake > 0){
+      o.shake -= dt;
+      o.mesh.position.x = o.x + Math.sin(G.t*45)*o.shake*.6;
+      if (o.shake <= 0) o.mesh.position.x = o.x;
+    }
+  });
+}
+function gameTick(dt){
+  const P = G.P;
+  if (G.running && !G.paused){
+    // no clock — G.time just counts up so the HUD can show how long you've run
+    G.time += dt;
+
+    let ix = 0, iz = 0;
+    if (keys.has('w') || keys.has('arrowup'))    iz -= 1;
+    if (keys.has('s') || keys.has('arrowdown'))  iz += 1;
+    if (keys.has('a') || keys.has('arrowleft'))  ix -= 1;
+    if (keys.has('d') || keys.has('arrowright')) ix += 1;
+    ix += dvx; iz += dvy;
+
+    moveActor(P, dt, ix, iz);
+    actorEat(P, dt);
+    updateRivals(dt);
+    waveVsWave();
+    updatePowerups(dt);
+    updateTrail(dt);
+    updateShakes(dt);
+    updatePet(dt);
+    G.maxR = Math.max(G.maxR, P.r);
+
+    // boss shows up once ~40% of the clock has gone
+    if (MODE().boss && !G.bossSpawned && G.time > 70){ G.bossSpawned = true; spawnBoss(); }
+
+    if (G.comboT > 0){ G.comboT -= dt; if (G.comboT <= 0) G.combo = 1; }
+    if (G.hintT > 0) G.hintT -= dt;
+
+    // The island rebuilds itself. With no clock a run can go on forever, so
+    // every tier is topped back up towards its starting count — fast for the
+    // beach junk, slowly for the towers and ships, so the big stuff is still
+    // worth racing the rivals for.
+    G.respawnT -= dt;
+    if (G.respawnT <= 0 && G.propTarget){
+      G.respawnT = .8;
+      const have = [0,0,0,0,0,0];
+      for (const o of G.props) have[o.tier]++;
+      for (let t=1;t<=5;t++){
+        const short = (G.propTarget[t]||0) - have[t];
+        if (short <= 0) continue;
+        const n = t === 1 ? Math.min(6, short)
+                : t === 2 ? Math.min(5, short)
+                : t === 3 ? Math.min(2, short)
+                : Math.random() < (t === 4 ? .25 : .12) ? 1 : 0;
+        for (let i=0;i<n;i++) respawnProp(t);
+      }
+    }
+  }
+  animWave(P, dt, G.t, Math.hypot(P.vx,P.vz) > 6);
+  updateSwirl(dt);
+  updateOcean(dt);
+  updateCamera(dt);
+  if (G.running && !G.paused) updateNeeds(dt); else hideNeeds();
+  updateHUD(dt);
+  if (bT > 0){ bT -= dt; if (bT <= 0) bEl.classList.remove('on'); }
+  if (cT > 0){ cT -= dt; if (cT <= 0) cEl.classList.remove('on'); }
+}
+
+/* =========================================================
+   LOBBY  (little rotating diorama of the island you picked)
+   ========================================================= */
+const LOB = { scene:null, wave:null, ang:0, orbit:0 };
+function buildLobby(){
+  disposeScene(LOB.scene);
+  const map = MAPS[mapIdx];
+  const sc = new THREE.Scene();
+  sc.background = new THREE.Color(map.sky);
+  sc.fog = new THREE.Fog(map.sky, 240, 640);
+  sc.add(new THREE.AmbientLight(0xffffff, .55));
+  sc.add(new THREE.HemisphereLight(0xffffff, 0xcfe0d8, .78));
+  const dl = new THREE.DirectionalLight(0xffffff, .62); dl.position.set(40,90,50); sc.add(dl);
+
+  const m = mk();
+  m.box(map.sand, 96, 3, 96, 0,-1.8,0);
+  m.box(map.grass, 76, 1.7, 76, 0,-.85,0);
+  m.cyl(0xd9e6ee, 9, 9, .2, 22, 0,.05,0);
+  sc.add(new THREE.Mesh(m.out(), groundMat));
+
+  const om = new THREE.Mesh(new THREE.PlaneGeometry(1400,1400),
+    new THREE.MeshLambertMaterial({ color:map.water }));
+  om.rotation.x = -Math.PI/2; om.position.y = -1.0; sc.add(om);
+
+  // showcase props: small in front, giants at the back
+  const show = [];
+  const grab = (arr, n) => { for (let i=0;i<n && i<arr.length;i++) show.push(arr[i]); };
+  grab(map.t1, 4); grab(map.t2, 4); grab(map.t3, 4); grab(map.t4, 3); grab(map.t5, 2);
+  show.forEach((k, i) => {
+    const pr = PROPS[k];
+    const ring = pr.t <= 1 ? 13 : pr.t === 2 ? 20 : pr.t === 3 ? 27 : pr.t === 4 ? 34 : 41;
+    const a = (i*2.399) % 6.283;
+    const mesh = new THREE.Mesh(propGeo(propKey(k, i)), propMat);
+    mesh.scale.setScalar(1/PSCALE);   // the showcase keeps the old cosy diorama scale
+    mesh.position.set(Math.cos(a)*ring, 0, Math.sin(a)*ring);
+    mesh.rotation.y = -a + Math.PI/2;
+    sc.add(mesh);
+  });
+
+  const skin = SKINS[clamp(S.equip,0,SKINS.length-1)];
+  const w = buildWave(skin.c1, skin.c2);
+  if (skin.rainbow) w.userData.rainbow = true;
+  w.scale.setScalar(5.5);
+  sc.add(w);
+  LOB.wave = { mesh:w, dirx:0, dirz:1, vx:0, vz:0, r:5.5 };
+  LOB.scene = sc; LOB.ang = 0; LOB.orbit = 0;
+}
+function lobbyTick(dt){
+  LOB.ang += dt*.075; LOB.orbit += dt*.5;
+  // aim above the island so the diorama sits low in frame, under the menu panel
+  const R = innerWidth < 620 ? 118 : 98;
+  camera.position.set(Math.sin(LOB.ang)*R, 44, Math.cos(LOB.ang)*R);
+  camera.lookAt(0, 30, 0);
+  const w = LOB.wave;
+  if (w){
+    const r = 30;
+    const x = Math.cos(LOB.orbit)*r, z = Math.sin(LOB.orbit)*r;
+    w.mesh.position.set(x, 0, z);
+    w.dirx = -Math.sin(LOB.orbit); w.dirz = Math.cos(LOB.orbit);
+    animWave(w, dt, G.t, true);
+  }
+}
+
+/* =========================================================
+   LOBBY UI
+   ========================================================= */
+$('#who').textContent = NAME;
+$('#howName').textContent = NAME;
+function renderHeader(){
+  LV = lvlOf(S.xp);
+  $('#lvl').textContent = 'LV ' + LV;
+  $('#cr').textContent = '💧 ' + S.credits.toLocaleString();
+  const a = xpFor(LV), b = xpFor(LV+1);
+  $('#xpfill').style.width = clamp((S.xp-a)/Math.max(1,b-a)*100, 0, 100) + '%';
+}
+function renderMap(){
+  const m = MAPS[mapIdx], locked = LV < m.lv;
+  $('#mName').textContent = m.name;
+  $('#mDesc').textContent = m.d;
+  const best = S.best[m.id] || 0;
+  let c = '';
+  c += '<div class="chip">🏝️ ' + m.size + '×' + m.size + '</div>';
+  c += '<div class="chip">🌊 ' + (m.rivals + MODE().rivals) + ' rivals</div>';
+  c += '<div class="chip">♾️ no clock</div>';
+  c += '<div class="chip">📏 max size ' + szTxt(m.size*CAP_F) + '</div>';
+  c += best ? '<div class="chip best">★ BEST ' + best.toLocaleString() + '</div>'
+            : '<div class="chip">no score yet</div>';
+  if (locked) c += '<div class="chip lock">🔒 UNLOCKS AT LV ' + m.lv + '</div>';
+  $('#mChips').innerHTML = c;
+  const b = $('#playBtn');
+  b.disabled = locked;
+  b.textContent = locked ? '🔒 LOCKED' : '▶ PLAY';
+}
+function renderSkins(){
+  const g = $('#skinGrid');
+  g.innerHTML = SKINS.map((s,i) => {
+    const own = S.owned.includes(i), on = S.equip === i;
+    const c1 = '#' + s.c1.toString(16).padStart(6,'0'), c2 = '#' + s.c2.toString(16).padStart(6,'0');
+    const bg = s.rainbow ? 'linear-gradient(120deg,#ff4bd8,#ffc93c,#4bffd8,#7b4bff)'
+                         : 'linear-gradient(160deg,' + c2 + ',' + c1 + ')';
+    return '<div class="cell ' + (on?'on':own?'own':'no') + '" data-i="' + i + '">' +
+      '<div class="sw" style="background:' + bg + '"></div>' +
+      '<div class="cn">' + s.n + '</div>' +
+      '<div class="cp">' + (on ? '✓ EQUIPPED' : own ? 'TAP TO USE' : '💧 ' + s.p) + '</div></div>';
+  }).join('');
+  g.querySelectorAll('.cell').forEach(el => el.addEventListener('click', () => {
+    const i = +el.dataset.i;
+    if (S.owned.includes(i)){ S.equip = i; SFX.buy(); }
+    else if (S.credits >= SKINS[i].p){ S.credits -= SKINS[i].p; S.owned.push(i); S.equip = i; SFX.buy(); }
+    else { SFX.no(); banner2('Not enough 💧 — play a round!'); return; }
+    save(); renderHeader(); renderSkins(); buildLobby();
+  }));
+}
+function renderUpg(){
+  $('#upgList').innerHTML = UPG.map(u => {
+    const l = ug(u.k), maxed = l >= u.max, cost = u.c(l);
+    let pips = '';
+    for (let i=0;i<u.max;i++) pips += '<i class="' + (i<l?'on':'') + '"></i>';
+    return '<div class="row"><div class="rt"><div class="rn">' + u.n + '</div>' +
+      '<div class="rd">' + u.d + '</div><div class="pips">' + pips + '</div></div>' +
+      (maxed ? '<div class="chip best">MAX</div>'
+             : '<button class="btn sm buy" data-k="' + u.k + '">💧 ' + cost + '</button>') + '</div>';
+  }).join('');
+  $('#upgList').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    const u = UPG.find(x => x.k === b.dataset.k), l = ug(u.k), cost = u.c(l);
+    if (S.credits < cost){ SFX.no(); banner2('Not enough 💧 — play a round!'); return; }
+    S.credits -= cost; S.upg[u.k] = l+1; save(); SFX.buy();
+    renderHeader(); renderUpg(); renderMap();
+  }));
+}
+/* ---- daily gift ---- */
+const GIFT_GAP = 20*3600*1000;
+const giftReady = () => Date.now() - (S.daily.last||0) > GIFT_GAP;
+function renderGift(){
+  const b = $('#gift'), ready = giftReady();
+  b.classList.toggle('hide', !ready);
+  if (ready){
+    const next = 200 + (Math.min(7, (S.daily.streak||0)+1))*150;
+    b.textContent = '🎁 DAILY GIFT  +' + next + ' 💧';
+  }
+}
+$('#gift').addEventListener('click', () => {
+  if (!giftReady()) return;
+  const gap = Date.now() - (S.daily.last||0);
+  S.daily.streak = gap < GIFT_GAP*2.6 ? Math.min(7, (S.daily.streak||0)+1) : 1;
+  const amt = 200 + S.daily.streak*150;
+  S.credits += amt; S.daily.last = Date.now(); save();
+  SFX.buy(); banner2('🎁 +' + amt + ' 💧  ·  day ' + S.daily.streak + ' streak');
+  renderHeader(); renderGift(); renderSkins(); renderPets(); renderUpg();
+});
+
+function renderModes(){
+  $('#modeRow').innerHTML = MODES.map((m,i) =>
+    '<div class="chip mode' + (i===modeIdx ? ' best' : '') + '" data-i="' + i + '">' +
+    m.ic + ' ' + m.n + '</div>').join('');
+  $('#modeDesc').textContent = MODE().d;
+  $('#modeRow').querySelectorAll('.chip').forEach(el => el.addEventListener('click', () => {
+    modeIdx = +el.dataset.i; localStorage.setItem(SK+'mode', modeIdx);
+    SFX.pw(); renderModes(); renderMap();
+  }));
+}
+function renderPets(){
+  const g = $('#petGrid');
+  g.innerHTML = PETS.map((p,i) => {
+    const own = petOwned(p, i), on = (S.pet||0) === i;
+    const ms = p.m && MISSIONS.find(m => m.k === p.m);
+    const bg = 'linear-gradient(160deg,#' + p.c2.toString(16).padStart(6,'0') +
+               ',#' + p.c1.toString(16).padStart(6,'0') + ')';
+    return '<div class="cell ' + (on?'on':own?'own':'no') + '" data-i="' + i + '">' +
+      '<div class="sw" style="background:' + bg + '"></div>' +
+      '<div class="cn">' + p.n + '</div>' +
+      '<div class="cp">' + (on ? '✓ ACTIVE' : own ? 'TAP TO USE'
+                              : ms ? '🎯 ' + ms.d : '🔒 LOCKED') + '</div>' +
+      '<div class="cp" style="color:#3d7f9a;font-weight:700">' + p.perk + '</div></div>';
+  }).join('');
+  g.querySelectorAll('.cell').forEach(el => el.addEventListener('click', () => {
+    const i = +el.dataset.i, p = PETS[i];
+    if (!petOwned(p, i)){
+      const ms = p.m && MISSIONS.find(m => m.k === p.m);
+      SFX.no(); banner2(ms ? 'Locked — finish the mission: ' + ms.d : 'Locked');
+      return;
+    }
+    S.pet = i; SFX.buy();
+    save(); renderHeader(); renderPets(); buildLobby();
+  }));
+}
+function renderStats(){
+  const st = S.stat, n = v => (v||0).toLocaleString();
+  const rows = [
+    ['Rounds played', n(st.rounds)], ['Rounds won', n(st.wins)],
+    ['Things eaten', n(st.eat)], ['Giant things eaten', n(st.eatBig)],
+    ['Rival waves eaten', n(st.rivals)], ['Bosses eaten', n(st.bosses)],
+    ['Best size', szTxt(st.size||0)],
+    ['Best score', n(st.score)], ['Best combo', 'x' + (st.combo||1).toFixed(1)],
+    ['Time in the water', Math.floor((st.secs||0)/60) + 'm ' + ((st.secs||0)%60) + 's'],
+    ['Level', LV + '  (' + n(S.xp) + ' XP)'],
+  ];
+  let h = '<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">';
+  for (const [k,v] of rows)
+    h += '<div class="cell no" style="cursor:default;opacity:1"><div class="cn" style="font-size:16px">' +
+         v + '</div><div class="cp">' + k + '</div></div>';
+  h += '</div><div class="sub" style="margin-top:14px">YOUR TOP 5 PER ISLAND</div>';
+  for (const m of MAPS){
+    const b = S.best[m.id] || 0, locked = LV < m.lv;
+    const top = (S.scores[m.id] || []);
+    h += '<div class="row"><div class="rt"><div class="rn">' + m.name + '</div>' +
+      '<div class="rd">' + (locked ? '🔒 unlocks at LV ' + m.lv
+        : top.length ? top.map((s,i) => (i+1) + '. ' + n(s)).join('  ·  ')
+        : m.size + '×' + m.size + ' island — no score yet') +
+      '</div></div><div class="chip ' + (b?'best':'') + '">' + (b ? '★ ' + n(b) : '—') + '</div></div>';
+  }
+  $('#statBody').innerHTML = h;
+}
+function renderMiss(){
+  const st = S.stat;
+  $('#missList').innerHTML = MISSIONS.map(m => {
+    const v = m.f(st) || 0, done = S.claimed.includes(m.k) || v >= m.g;
+    const pct = clamp(v/m.g*100, 0, 100);
+    return '<div class="row ' + (done?'done':'') + '"><div class="rt">' +
+      '<div class="rn">' + (done?'✅ ':'') + m.n + '</div>' +
+      '<div class="rd">' + m.d + '</div>' +
+      '<div class="mbar"><i style="width:' + pct + '%"></i></div></div>' +
+      '<div class="chip ' + (done?'best':'') + '">' + (done ? '+' + m.r + ' 💧'
+        : Math.floor(Math.min(v,m.g)).toLocaleString() + '/' + m.g.toLocaleString()) + '</div></div>';
+  }).join('');
+}
+function renderLobby(){
+  renderHeader(); renderGift(); renderMap(); renderModes(); renderSkins();
+  renderPets(); renderUpg(); renderMiss(); renderStats();
+}
+
+/* tiny toast that works in the lobby too (the HUD banner is hidden there) */
+const toast = document.createElement('div');
+toast.style.cssText = 'position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(14px);' +
+  'z-index:50;padding:12px 20px;border-radius:14px;font:900 13px/1 system-ui;letter-spacing:2px;' +
+  'color:#04283a;background:linear-gradient(90deg,#fff,#ffc93c);box-shadow:0 8px 26px rgba(6,41,60,.4);' +
+  'opacity:0;transition:.25s;pointer-events:none;';
+document.body.appendChild(toast);
+let toastT = null;
+function banner2(txt){
+  toast.textContent = txt;
+  toast.style.opacity = 1; toast.style.transform = 'translateX(-50%) translateY(0)';
+  clearTimeout(toastT);
+  toastT = setTimeout(() => { toast.style.opacity = 0;
+    toast.style.transform = 'translateX(-50%) translateY(14px)'; }, 1500);
+}
+
+$('#mPrev').addEventListener('click', () => { mapIdx = (mapIdx-1+MAPS.length)%MAPS.length; SFX.pw(); renderMap(); buildLobby(); });
+$('#mNext').addEventListener('click', () => { mapIdx = (mapIdx+1)%MAPS.length; SFX.pw(); renderMap(); buildLobby(); });
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+  ['maps','skins','pets','upg','miss','stats','how'].forEach(p =>
+    $('#p-' + p).classList.toggle('hide', p !== t.dataset.t));
+  SFX.pw();
+}));
+
+/* =========================================================
+   MAIN LOOP
+   ========================================================= */
+let last = performance.now();
+function frame(now){
+  requestAnimationFrame(frame);
+  let dt = (now-last)/1000; last = now;
+  if (dt > .06) dt = .06;
+  G.t += dt;
+  if (G.state === 'lobby'){
+    if (!LOB.scene) buildLobby();
+    lobbyTick(dt);
+    renderer.render(LOB.scene, camera);
+  } else {
+    gameTick(dt);
+    if (G.scene) renderer.render(G.scene, camera);
+  }
+}
+
+/* =========================================================
+   BOOT
+   ========================================================= */
+buildLobby();
+renderLobby();
+$('#lobby').classList.remove('hide');
+$('#load').style.display = 'none';
+requestAnimationFrame(frame);
+window.__TSUNAMI__ = { G, S, MAPS, startRound, endRound, buildWorld, PROPS, SKINS, MISSIONS, UPG,
+  eatTier, lvlOf, xpFor, TIER_R, propGeo, buildLobby };
+</script>
+</body>
+</html>

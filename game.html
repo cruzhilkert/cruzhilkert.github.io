@@ -1805,7 +1805,7 @@ function updatePvpLobby(dt) {
   }
   // walk onto the armory station → open the weapon gallery (edge-triggered)
   const onArm = Math.hypot(pvpCar.x - PVP_ARMORY.x, pvpCar.z - PVP_ARMORY.z) < 2.6;
-  if (onArm && !pvpArmoryWasOn) pvpArmory = true;
+  if (onArm && !pvpArmoryWasOn) { pvpArmory = true; pvpWpnScroll = 0; }
   pvpArmoryWasOn = onArm;
 }
 // Body colour of your fighter — your equipped SKIN, or team blue by default.
@@ -1870,15 +1870,40 @@ function drawPvpWeaponDetail(id, px, py, pw) {
   for (const kv of lines) { ctx.textAlign = 'left'; ctx.fillStyle = '#9fb0c4'; ctx.font = '12px system-ui'; ctx.fillText(kv[0], px + 22, sy); ctx.textAlign = 'right'; ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui'; ctx.fillText(kv[1], px + pw - 22, sy); sy += 19; }
   if (PVP_SKINNABLE.includes(id)) {
     sy += 8; ctx.textAlign = 'left'; ctx.fillStyle = '#9fb0c4'; ctx.font = 'bold 10px system-ui'; ctx.fillText('SKINS', px + 22, sy);
-    const mine = PVP_SKINS.filter(s => s.weapon === id && pvpOwnedSkins.has(s.id));
-    const items = [{ id: null, body: '#5a6273', rarity: null }].concat(mine), swz = 26, sgap = 6, ssy = sy + 8;
-    items.slice(0, 10).forEach((s, i) => {
-      const bx2 = px + 22 + i * (swz + sgap), eq = (pvpEquippedSkins[id] || null) === s.id;
-      ctx.fillStyle = s.body; ctx.beginPath(); ctx.roundRect(bx2, ssy, swz, swz, 5); ctx.fill();
-      ctx.strokeStyle = eq ? '#33e8ff' : (s.id ? PVP_RARITY[s.rarity].col : '#4a5266'); ctx.lineWidth = eq ? 2.4 : 1.3; ctx.beginPath(); ctx.roundRect(bx2, ssy, swz, swz, 5); ctx.stroke();
-      pvpArmoryButtons.push({ x: bx2, y: ssy, w: swz, h: swz, action: () => { if (s.id) pvpEquipSkin(s.id); else { delete pvpEquippedSkins[id]; savePvpSkins(); } } });
+    // Show EVERY skin for this weapon — owned ones are pickable, locked ones show a
+    // 🔒 (won from crates). Each swatch is drawn to actually look different.
+    const all = PVP_SKINS.filter(s => s.weapon === id);
+    const items = [{ id: null, body: '#5a6273', rarity: null }].concat(all);
+    const swz = 28, sgap = 6, ssy = sy + 8, cols = Math.max(4, Math.floor((pw - 44 + sgap) / (swz + sgap)));
+    items.forEach((s, i) => {
+      const bx2 = px + 22 + (i % cols) * (swz + sgap), by2 = ssy + Math.floor(i / cols) * (swz + sgap);
+      const own = !s.id || pvpOwnedSkins.has(s.id), eq = (pvpEquippedSkins[id] || null) === s.id;
+      // body colour
+      ctx.save();
+      if (s.glow && own) { ctx.shadowColor = s.accent || s.body; ctx.shadowBlur = 9; }
+      ctx.fillStyle = s.body; ctx.beginPath(); ctx.roundRect(bx2, by2, swz, swz, 5); ctx.fill();
+      ctx.restore();
+      // accent wedge so two-tone skins read differently
+      if (s.accent) { ctx.fillStyle = s.accent; ctx.beginPath(); ctx.moveTo(bx2 + swz, by2); ctx.lineTo(bx2 + swz, by2 + swz); ctx.lineTo(bx2 + swz * 0.42, by2 + swz); ctx.closePath(); ctx.fill(); }
+      // special-form skins get a star; the default "none" gets a slash
+      if (s.form) { ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center'; ctx.fillText('★', bx2 + swz / 2, by2 + swz / 2 + 4); }
+      if (!s.id) { ctx.strokeStyle = '#8a93a4'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(bx2 + 7, by2 + swz - 7); ctx.lineTo(bx2 + swz - 7, by2 + 7); ctx.stroke(); }
+      // border by state
+      ctx.strokeStyle = eq ? '#33e8ff' : (s.id ? (PVP_RARITY[s.rarity] || {}).col || '#4a5266' : '#4a5266');
+      ctx.lineWidth = eq ? 2.6 : 1.3; ctx.beginPath(); ctx.roundRect(bx2, by2, swz, swz, 5); ctx.stroke();
+      // lock overlay for skins you don't own yet
+      if (!own) {
+        ctx.fillStyle = 'rgba(6,8,15,0.62)'; ctx.beginPath(); ctx.roundRect(bx2, by2, swz, swz, 5); ctx.fill();
+        drawLockIcon(bx2 + swz / 2, by2 + swz / 2 + 2, '#c9d2e0');
+      }
+      pvpArmoryButtons.push({ x: bx2, y: by2, w: swz, h: swz, action: () => {
+        if (!s.id) { delete pvpEquippedSkins[id]; savePvpSkins(); }
+        else if (pvpOwnedSkins.has(s.id)) pvpEquipSkin(s.id);   // locked → not equippable (win from crates)
+      } });
     });
-    if (!mine.length) { ctx.fillStyle = '#7a8190'; ctx.font = '10px system-ui'; ctx.fillText('win skins from crates', px + 22 + swz + 12, ssy + 17); }
+    const rows = Math.ceil(items.length / cols);
+    ctx.textAlign = 'left'; ctx.fillStyle = '#7a8190'; ctx.font = '9px system-ui';
+    ctx.fillText('🔒 = win from crates', px + 22, ssy + rows * (swz + sgap) + 6);
   }
   // action / unlock button at the bottom
   const bw = pw - 44, bh = 34, bx = px + 22, byA = py + ph - 46;
@@ -1922,25 +1947,47 @@ function drawPvpArmoryWeapons() {
     ['MELEE',     ['fists', 'knife', 'katana', 'scythe', 'energyblade', 'warhammer']],
     ['UTILITY',   ['grenade', 'molotov', 'flash', 'mine', 'freeze', 'medkit', 'clusterbomb']],
   ];
-  // ── LEFT: every weapon in order (primary→secondary→melee→utility), locked ones show a lock ──
-  const lx = 12, lw = Math.min(196, W * 0.34), rowH = 16, top = 70;
-  let ly = top;
+  // ── LEFT: every weapon in order (primary→secondary→melee→utility), locked ones show a lock.
+  //    The full list is taller than the screen, so it scrolls (mouse wheel / drag). ──
+  const lx = 12, lw = Math.min(196, W * 0.34), rowH = 16, top = 70, listBottom = H - 22;
+  // measure total content height so we can clamp the scroll
+  let contentH = 0;
+  for (const cat of CATS) contentH += 13 + cat[1].length * rowH + 5;
+  const maxScroll = Math.max(0, contentH - (listBottom - top));
+  pvpWpnScroll = Math.max(0, Math.min(maxScroll, pvpWpnScroll));
+  ctx.save();
+  ctx.beginPath(); ctx.rect(lx - 2, top - 2, lw + 4, listBottom - top + 4); ctx.clip();
+  let ly = top - pvpWpnScroll;
   for (const cat of CATS) {
-    ctx.textAlign = 'left'; ctx.fillStyle = '#9fb'; ctx.font = 'bold 9px system-ui'; ctx.fillText(cat[0], lx + 2, ly + 8); ly += 13;
+    if (ly + 13 > top - 16 && ly < listBottom) { ctx.textAlign = 'left'; ctx.fillStyle = '#9fb'; ctx.font = 'bold 9px system-ui'; ctx.fillText(cat[0], lx + 2, ly + 8); }
+    ly += 13;
     for (const id of cat[1]) {
-      const w = PVP_WEAPONS[id], owned = pvpUnlocked.has(id), sel = pvpArmorySel === id;
-      ctx.fillStyle = sel ? 'rgba(51,232,255,0.18)' : 'rgba(255,255,255,0.04)'; ctx.beginPath(); ctx.roundRect(lx, ly, lw, rowH - 2, 4); ctx.fill();
-      if (sel) { ctx.strokeStyle = '#33e8ff'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.roundRect(lx, ly, lw, rowH - 2, 4); ctx.stroke(); }
-      ctx.globalAlpha = owned ? 1 : 0.55; drawWeaponIcon(id, lx + 15, ly + (rowH - 2) / 2, 0.42, owned ? pvpWeaponSkin(id) : null); ctx.globalAlpha = 1;
-      ctx.fillStyle = owned ? '#dfe6f0' : '#8a92a0'; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'left'; ctx.fillText(w.name, lx + 30, ly + 10);
-      if (!owned) { if (w.legendary) { ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 8px system-ui'; ctx.textAlign = 'right'; ctx.fillText('★', lx + lw - 8, ly + 10); } else drawLockIcon(lx + lw - 12, ly + (rowH - 2) / 2, '#8a92a0'); }
-      if (!pvpUnlockAnim) pvpArmoryButtons.push({ x: lx, y: ly, w: lw, h: rowH - 2, action: () => { pvpArmorySel = id; } });
+      const vis = ly + rowH > top && ly < listBottom;   // only draw / click rows in view
+      if (vis) {
+        const w = PVP_WEAPONS[id], owned = pvpUnlocked.has(id), sel = pvpArmorySel === id;
+        ctx.fillStyle = sel ? 'rgba(51,232,255,0.18)' : 'rgba(255,255,255,0.04)'; ctx.beginPath(); ctx.roundRect(lx, ly, lw, rowH - 2, 4); ctx.fill();
+        if (sel) { ctx.strokeStyle = '#33e8ff'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.roundRect(lx, ly, lw, rowH - 2, 4); ctx.stroke(); }
+        ctx.globalAlpha = owned ? 1 : 0.55; drawWeaponIcon(id, lx + 15, ly + (rowH - 2) / 2, 0.42, owned ? pvpWeaponSkin(id) : null); ctx.globalAlpha = 1;
+        ctx.fillStyle = owned ? '#dfe6f0' : '#8a92a0'; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'left'; ctx.fillText(w.name, lx + 30, ly + 10);
+        if (!owned) { if (w.legendary) { ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 8px system-ui'; ctx.textAlign = 'right'; ctx.fillText('★', lx + lw - 8, ly + 10); } else drawLockIcon(lx + lw - 12, ly + (rowH - 2) / 2, '#8a92a0'); }
+        if (!pvpUnlockAnim) pvpArmoryButtons.push({ x: lx, y: ly, w: lw, h: rowH - 2, action: () => { pvpArmorySel = id; } });
+      }
       ly += rowH;
     }
     ly += 5;
   }
+  ctx.restore();
+  // slim scrollbar so it's clear there's more below/above
+  if (maxScroll > 0) {
+    const trackH = listBottom - top, thumbH = Math.max(24, trackH * (trackH / contentH));
+    const thumbY = top + (trackH - thumbH) * (pvpWpnScroll / maxScroll);
+    ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.roundRect(lx + lw + 2, top, 4, trackH, 2); ctx.fill();
+    ctx.fillStyle = 'rgba(51,232,255,0.55)'; ctx.beginPath(); ctx.roundRect(lx + lw + 2, thumbY, 4, thumbH, 2); ctx.fill();
+    ctx.textAlign = 'center'; ctx.fillStyle = '#6f7a8c'; ctx.font = '8px system-ui';
+    if (pvpWpnScroll < maxScroll) ctx.fillText('▾ scroll for more', lx + lw / 2, listBottom + 10);
+  }
   // ── RIGHT: the selected weapon's detail + skins + unlock ──
-  drawPvpWeaponDetail(pvpArmorySel, lx + lw + 14, top, W - (lx + lw + 14) - 12);
+  drawPvpWeaponDetail(pvpArmorySel, lx + lw + 12, top, W - (lx + lw + 12) - 12);
 }
 // Draw a face expression centred on a head of radius r (used on the preview + face cards).
 function drawFace(cx, cy, r, id) {
@@ -4243,6 +4290,7 @@ let pvpArmoryTab = 'weapons';   // ARMORY view: 'weapons' | 'skins' | 'crates'
 let pvpLookCat = 'skin';        // AVATAR sub-tab: 'skin' | 'helmet' | 'aura'
 let pvpArmoryInfo = null;       // (legacy) weapon id for the old overlay
 let pvpArmorySel = 'rifle';     // weapon selected in the two-pane WEAPONS view
+let pvpWpnScroll = 0;           // vertical scroll (px) for the armory weapon list
 let pvpPreviewSel = null;       // { kind, id } a LOCKED cosmetic you're just LOOKING at (not equipped)
 let pvpUnlockAnim = null;       // { id, start, wx, wy } key-fly unlock animation
 let pvpCrateAnim = null;        // {start, type, skin, dupe, refund} while a crate is opening
@@ -7256,6 +7304,10 @@ canvas3d.addEventListener('wheel', e => {
   if (state === STATE.MISSIONS) { e.preventDefault(); missionsScroll = Math.max(0, missionsScroll + (e.deltaY > 0 ? 40 : -40)); return; }
   // Battle pass horizontal scroll
   if (state === STATE.BATTLE_PASS) { e.preventDefault(); bpScroll = Math.max(0, bpScroll + (e.deltaY > 0 ? 60 : -60)); return; }
+  // ARMORY weapon list scroll (clamped inside drawPvpArmoryWeapons)
+  if (state === STATE.PVP_LOBBY && pvpArmory && pvpArmoryTab === 'weapons' && !pvpCrateAnim) {
+    e.preventDefault(); pvpWpnScroll = Math.max(0, pvpWpnScroll + (e.deltaY > 0 ? 40 : -40)); return;
+  }
   // Inline leaderboard scroll: only when hovering the panel
   const _lbV = _toVirtual(e.clientX, e.clientY, canvas3d.getBoundingClientRect());
   const _mx = _lbV[0], _my = _lbV[1];
